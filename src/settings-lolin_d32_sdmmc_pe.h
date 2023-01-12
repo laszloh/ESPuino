@@ -46,6 +46,11 @@
         #define RFID_IRQ                    99          // Depending on your configuration this needs to be adjusted to 32.
     #endif
 
+    #ifdef RFID_READER_TYPE_PN532_I2C
+        #define RFID_IRQ                    33
+        #define RFID_RST                    22
+    #endif
+
     // I2S (DAC)
     #define I2S_DOUT                        25          // Digital out (I2S)
     #define I2S_BCLK                        27          // BCLK (I2S)

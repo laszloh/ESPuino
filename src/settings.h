@@ -68,14 +68,24 @@
 	//#define SINGLE_SPI_ENABLE             // If only one SPI-instance should be used instead of two (not yet working!)
 
 
-	//################## select RFID reader ##############################
-	#define RFID_READER_TYPE_MFRC522_SPI    // use MFRC522 via SPI
-	//#define RFID_READER_TYPE_MFRC522_I2C  // use MFRC522 via I2C
-	//#define RFID_READER_TYPE_PN5180       // use PN5180 via SPI
+    //################## select RFID reader ##############################
+    //#define RFID_READER_TYPE_MFRC522_SPI    // use MFRC522 via SPI
+    //#define RFID_READER_TYPE_MFRC522_I2C  // use MFRC522 via I2C
+    #define RFID_READER_TYPE_PN5180       // use PN5180 via SPI
+    #define RFID_READER_TYPE_PN532_I2C
+    //#define RFID_READER_TYPE_PN532_SPI    // not yet supported
 
-	#ifdef RFID_READER_TYPE_MFRC522_I2C
-		#define MFRC522_ADDR 0x28           // default I2C-address of MFRC522
-	#endif
+    #ifdef RFID_READER_TYPE_MFRC522_I2C
+        #define MFRC522_ADDR 0x28           // default I2C-address of MFRC522
+    #endif
+
+    #ifdef RFID_READER_TYPE_PN532_I2C
+        #define PN532_ADDR  0x48            // default I2C-address of PN532
+    #endif
+
+    #if defined(RFID_READER_TYPE_PN532_I2C) || defined(RFID_READER_TYPE_PN532_SPI)
+        //#define PN532_ENABLE_LPCD         // not implemented yet
+    #endif
 
 	#ifdef RFID_READER_TYPE_PN5180
 		//#define PN5180_ENABLE_LPCD        // Wakes up ESPuino if RFID-tag was applied while deepsleep is active. Only ISO-14443-tags are supported for wakeup!
