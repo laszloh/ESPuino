@@ -37,6 +37,87 @@
 	#include "HTMLmanagement_EN.h"
 #endif
 
+constexpr const char* JSON_MIMETYPE = "application/json";
+
+typedef std::function<void(AsyncWebServerRequest *request, JsonVariant &json)> ArJsonRequestHandlerFunction;
+
+// copied and modified due to final 
+class AsyncCallbackJsonWebHandler: public AsyncWebHandler {
+protected:
+	const String _uri;
+	WebRequestMethodComposite _method;
+	ArRequestHandlerFunction _onGetRequest;
+	ArJsonRequestHandlerFunction _onUpdateRequest;
+	size_t _contentLength;
+	const size_t maxJsonBufferSize;
+	size_t _maxContentLength;
+
+public:
+	AsyncCallbackJsonWebHandler(const String& uri, ArRequestHandlerFunction onGetRequest, ArJsonRequestHandlerFunction onUpdateRequest, size_t maxJsonBufferSize=1024) 
+	: _uri(uri), _method(HTTP_GET|HTTP_POST|HTTP_PUT|HTTP_PATCH), _onGetRequest(onGetRequest), _onUpdateRequest(onUpdateRequest), maxJsonBufferSize(maxJsonBufferSize), _maxContentLength(16384) {}
+
+	void setMethod(WebRequestMethodComposite method){ _method = method; }
+	void setMaxContentLength(int maxContentLength){ _maxContentLength = maxContentLength; }
+	void onGetRequest(ArRequestHandlerFunction fn){ _onGetRequest = fn; }
+	void onUpdateRequest(ArJsonRequestHandlerFunction fn){ _onUpdateRequest = fn; }
+
+	virtual bool canHandle(AsyncWebServerRequest *request) override final{
+		if(!_onGetRequest && !_onUpdateRequest)
+			return false;
+
+		if(!(_method & request->method()))
+			return false;
+
+		if(_uri.length() && (_uri != request->url() && !request->url().startsWith(_uri+"/")))
+			return false;
+
+		if ( !request->contentType().equalsIgnoreCase(JSON_MIMETYPE) )
+			return false;
+
+		request->addInterestingHeader("ANY");
+		return true;
+	}
+
+	virtual void handleRequest(AsyncWebServerRequest *request) override final {
+		if(_method == HTTP_GET) {
+			// call the get request
+			if(_onGetRequest)
+				_onGetRequest(request);
+			else
+				request->send(500);
+			return;
+		}
+		// everything else (HTTP_POST|HTTP_PUT|HTTP_PATCH)
+		if(_onUpdateRequest) {
+			if (request->_tempObject != NULL) {
+				DynamicJsonDocument jsonBuffer(this->maxJsonBufferSize);
+				DeserializationError error = deserializeJson(jsonBuffer, (uint8_t*)(request->_tempObject));
+				if(!error) {
+					JsonVariant json = jsonBuffer.as<JsonVariant>();
+					_onUpdateRequest(request, json);
+					return;
+				}
+			}
+				request->send(_contentLength > _maxContentLength ? 413 : 400);
+		} else
+			request->send(500);
+	}
+
+  virtual void handleUpload(AsyncWebServerRequest *request, const String& filename, size_t index, uint8_t *data, size_t len, bool final) override final { }
+
+  virtual void handleBody(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) override final {
+		if (_onUpdateRequest) {
+			_contentLength = total;
+			if (total > 0 && request->_tempObject == NULL && total < _maxContentLength)
+				request->_tempObject = malloc(total);
+
+			if (request->_tempObject != NULL) 
+				memcpy((uint8_t*)(request->_tempObject) + index, data, len);
+		}
+  }
+
+  virtual bool isRequestHandlerTrivial() override final {return false;}
+};
 
 typedef struct {
 	char nvsKey[13];
@@ -74,6 +155,16 @@ static void onWebsocketEvent(AsyncWebSocket *server, AsyncWebSocketClient *clien
 static String templateProcessor(const String &templ);
 static void webserverStart(void);
 void Web_DeleteCachefile(const char *fileOrDirectory);
+
+static void handleGetSystemSettings(AsyncWebServerRequest *request);
+static void handleUpdateSystemSettings(AsyncWebServerRequest *request, JsonVariant &json);
+
+static void handleTagList(AsyncWebServerRequest *request);
+// static void handlePostTagList(AsyncWebServerRequest *request);
+// static void handleInsertTagList(AsyncWebServerRequest *request);
+// static void handleDeleteTagList(AsyncWebServerRequest *request);
+
+
 
 // If PSRAM is available use it allocate memory for JSON-objects
 struct SpiRamAllocator {
@@ -305,6 +396,11 @@ void webserverStart(void) {
 			request->redirect("https://espuino.de/espuino/favicon.ico");
 		});
 
+		// API calls
+		AsyncCallbackJsonWebHandler *settingsHandler = new AsyncCallbackJsonWebHandler("/api/systemSettings", handleGetSystemSettings, handleUpdateSystemSettings);
+		wServer.addHandler(settingsHandler);
+		wServer.on("/api/tagList", handleTagList);
+
 		wServer.onNotFound(notFound);
 
 		// allow cors for local debug
@@ -312,6 +408,68 @@ void webserverStart(void) {
 		wServer.begin();
 		webserverStarted = true;
 	}
+}
+
+void handleGetSystemSettings(AsyncWebServerRequest *request) {
+	StaticJsonDocument<2048> doc;
+
+	// fill out the json doc
+	doc["general"]["volume_start_percent"] = gPrefsSettings.getUInt("initVolume", 0);
+	doc["general"]["volume_max_speaker_percent"] = gPrefsSettings.getUInt("maxVolumeSp", 0);
+	doc["general"]["volume_max_headphones_percent"] = gPrefsSettings.getUInt("maxVolumeHp", 0);
+	doc["general"]["led_restart_percent"] = gPrefsSettings.getUChar("iLedBrightness", 0);
+	doc["general"]["led_night_percent"] = gPrefsSettings.getUChar("nLedBrightness", 0);
+	doc["general"]["power_saving_minutes"] = gPrefsSettings.getUInt("mInactiviyT", 0);
+	doc["general"]["battery_warning_voltage"] = gPrefsSettings.getFloat("wLowVoltage", 999.99);
+	doc["general"]["battery_low_voltage"] = gPrefsSettings.getFloat("vIndicatorLow", 999.99);
+	doc["general"]["battery_high_voltage"] = gPrefsSettings.getFloat("vIndicatorHigh", 999.99);
+	doc["general"]["battery_interval_minutes"] = gPrefsSettings.getUInt("vCheckIntv", 17777);
+	doc["wifi"]["ssid"] = gPrefsSettings.getString("SSID");
+	doc["wifi"]["password"] = gPrefsSettings.getString("Password");
+	doc["wifi"]["hostname"] = gPrefsSettings.getString("Hostname");
+	doc["ftp"]["enabled"] = gPrefsSettings.getBool("enableFtp");
+	doc["ftp"]["username"] = gPrefsSettings.getString("ftpuser");
+	doc["ftp"]["password"] = gPrefsSettings.getString("ftppassword");
+	doc["mqtt"]["enabled"] =  gPrefsSettings.getBool("enableMQTT");
+	doc["mqtt"]["client_id"] =  gPrefsSettings.getString("mqttClientId");
+	doc["mqtt"]["host"] = gPrefsSettings.getString("mqttServer");
+	doc["mqtt"]["port"] = gPrefsSettings.getUInt("mqttPort", 1883);
+	doc["mqtt"]["username"] = gPrefsSettings.getString("mqttUser");
+	doc["mqtt"]["password"] = gPrefsSettings.getString("mqttPassword");
+		
+	String reply;
+	serializeJson(doc, reply);
+	request->send(200, JSON_MIMETYPE, reply);	
+}
+
+void handleUpdateSystemSettings(AsyncWebServerRequest *request, JsonVariant &json) {
+
+	// read data from the general settings block
+	JsonVariantConst doc = json["general"];
+	gPrefsSettings.putUInt("initVolume", doc["volume_start_percent"] | 0);
+	gPrefsSettings.putUInt("maxVolumeSp", doc["volume_max_speaker_percent"] | 0);
+	gPrefsSettings.putUInt("maxVolumeHp", doc["volume_max_headphones_percent"] | 0);
+	gPrefsSettings.getUChar("iLedBrightness", doc["led_restart_percent"] | 0);
+	gPrefsSettings.getUChar("nLedBrightness", doc["led_night_percent"] | 0);
+	gPrefsSettings.putFloat("mInactiviyT", doc["power_saving_minutes"] | 0);
+	gPrefsSettings.putFloat("vIndicatorLow", doc["battery_warning_voltage"] | 0);
+	gPrefsSettings.putFloat("vIndicatorHigh", doc["battery_low_voltage"] | 0);
+	gPrefsSettings.putUInt("vCheckIntv", doc["battery_interval_minutes"] | 0);
+
+	// read data from wifi block
+	doc = json["wifi"];
+	gPrefsSettings.putString("SSID", doc["ssid"].as<String>());
+	gPrefsSettings.putString("Password", doc["password"].as<String>());
+	gPrefsSettings.putString("Hostname", doc["hostname"].as<String>());
+
+	// TODO: Do the rest
+
+	// send the new data
+	handleGetSystemSettings(request);
+}
+
+void handleTagList(AsyncWebServerRequest *request) {
+
 }
 
 // Used for substitution of some variables/templates of html-files. Is called by webserver's template-engine
