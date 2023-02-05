@@ -193,7 +193,7 @@ void setup() {
 	Ftp_Init();
 	Mqtt_Init();
 	#ifndef PN5180_ENABLE_LPCD
-		#if defined (RFID_READER_TYPE_MFRC522_SPI) || defined (RFID_READER_TYPE_MFRC522_I2C) || defined(RFID_READER_TYPE_PN5180)
+		#ifdef RFID_ENABLED
 			Rfid_Init();
 		#endif
 	#endif
