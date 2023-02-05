@@ -33,11 +33,11 @@ PN532 nfc(pn532interface);
 static void Rfid_Task(void *p);
 static TaskHandle_t rfidTaskHandle;
 
-static constexpr void bufferToHexString(uint8_t *buf, size_t len, char *str) {
-    constexpr char hexDigits[] = "0123456789ABCDEF";
+static constexpr void bufferToDezimalString(uint8_t *buf, size_t len, char *str) {
 	for(size_t i=0;i<len;i++) {
-		*(str++) = hexDigits[(buf[i] >> 4) & 0x0F];
-		*(str++) = hexDigits[buf[i] & 0x0F];
+		*(str++) = '0' + buf[i] / 100;
+		*(str++) = '0' + (buf[i] / 10) % 10;
+		*(str++) = '0' + buf[i] % 10;
 	}
 	*str = '\0';
 }
@@ -193,7 +193,7 @@ void Rfid_Task(void *p) {
 
 			// create the cardid string
 			char chrBuffer[cardIdStringSize];
-			bufferToHexString(uid, cardIdSize, chrBuffer);
+			bufferToDezimalString(uid, cardIdSize, chrBuffer);
 			
 			#ifdef PAUSE_WHEN_RFID_REMOVED
 				#ifdef ACCEPT_SAME_RFID_AFTER_TRACK_END
