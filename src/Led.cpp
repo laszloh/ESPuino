@@ -72,6 +72,9 @@ void Led_Init(void) {
 			Log_Println((char *) FPSTR(wroteNmBrightnessToNvs), LOGLEVEL_ERROR);
 		}
 
+		FastLED.addLeds<CHIPSET, LED_PIN, COLOR_ORDER>(leds, leds.size()).setCorrection(TypicalSMD5050).setTemperature(DirectSunlight);
+		FastLED.setBrightness(Led_Brightness);
+
 		xTaskCreatePinnedToCore(
 			Led_Task,   /* Function to implement the task */
 			"Led_Task", /* Name of the task */
@@ -765,18 +768,18 @@ static void Led_SetButtonLedsEnabled(boolean value) {
 						if (gPlayProperties.currentRelPos != lastPos || animationIndex == 0) {
 							animationIndex = 1;
 							lastPos = gPlayProperties.currentRelPos;
-							FastLED.clear();
-							if (NUM_LEDS == 1) {
-								leds[0].setHue((uint8_t)(85 - ((double)90 / 100) * gPlayProperties.currentRelPos));
+							indicatorLeds = CRGB::Black;
+							if constexpr(NUM_LEDS == 1) {
+								indicatorLeds[0].setHue((uint8_t)(85 - ((double)90 / 100) * gPlayProperties.currentRelPos));
 							} else {
 								const uint32_t ledValue = map(gPlayProperties.currentRelPos, 0, 98, 0, NUM_LEDS * DIMMABLE_STATES);
 								const uint8_t fullLeds = ledValue / DIMMABLE_STATES;
 								const uint8_t lastLed = ledValue % DIMMABLE_STATES;
 								for (uint8_t led = 0; led < fullLeds; led++) {
 									if (System_AreControlsLocked()) {
-										leds[Led_Address(led)] = CRGB::Red;
+										indicatorLeds[Led_Address(led)] = CRGB::Red;
 									} else if (!gPlayProperties.pausePlay) { // Hue-rainbow
-										leds[Led_Address(led)].setHue((uint8_t)(((float)PROGRESS_HUE_END - (float)PROGRESS_HUE_START) / (NUM_LEDS-1) * led + PROGRESS_HUE_START));
+										indicatorLeds[Led_Address(led)].setHue((uint8_t)(((float)PROGRESS_HUE_END - (float)PROGRESS_HUE_START) / (NUM_LEDS-1) * led + PROGRESS_HUE_START));
 									}
 								}
 								if (lastLed > 0) {
@@ -805,16 +808,16 @@ static void Led_SetButtonLedsEnabled(boolean value) {
 								ledPosWebstream = 0;
 							}
 							if (System_AreControlsLocked()) {
-								leds[Led_Address(ledPosWebstream)] = CRGB::Red;
-								if (NUM_LEDS > 1) {
-									leds[(Led_Address(ledPosWebstream) + NUM_LEDS / 2) % NUM_LEDS] = CRGB::Red;
+								indicatorLeds[Led_Address(ledPosWebstream)] = CRGB::Red;
+								if constexpr(NUM_LEDS > 1) {
+									indicatorLeds[(Led_Address(ledPosWebstream) + NUM_LEDS / 2) % NUM_LEDS] = CRGB::Red;
 								}
 							} else if (!gPlayProperties.pausePlay) {
-								if (NUM_LEDS == 1) {
-									leds[0].setHue(webstreamColor++);
+								if constexpr(NUM_LEDS == 1) {
+									indicatorLeds[0].setHue(webstreamColor++);
 								} else {
-									leds[Led_Address(ledPosWebstream)].setHue(webstreamColor);
-									leds[(Led_Address(ledPosWebstream) + NUM_LEDS / 2) % NUM_LEDS].setHue(webstreamColor++);
+									indicatorLeds[Led_Address(ledPosWebstream)].setHue(webstreamColor);
+									indicatorLeds[(Led_Address(ledPosWebstream) + NUM_LEDS / 2) % NUM_LEDS].setHue(webstreamColor++);
 								}
 							}
 							FastLED.show();
