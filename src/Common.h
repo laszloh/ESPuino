@@ -8,7 +8,7 @@ constexpr char stringOuterDelimiter[] = "^"; // Character used to encapsulate en
 
 inline bool isNumber(const char *str)
 {
-	byte i = 0;
+	uint8_t i = 0;
 
 	while (*(str + i) != '\0') {
 		if (!isdigit(*(str + i++))) {

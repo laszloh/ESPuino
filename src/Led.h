@@ -1,6 +1,6 @@
 #pragma once
 
-typedef enum class LedIndicator
+enum class LedIndicatorType : uint8_t
 {
 	BootComplete = 0,
 	Error,
@@ -9,7 +9,7 @@ typedef enum class LedIndicator
 	Rewind,
 	Voltage,
 	VoltageWarning
-} LedIndicatorType;
+};
 
 
 // ordered by priority
@@ -41,7 +41,3 @@ void Led_ResetToInitialBrightness(void);
 void Led_ResetToNightBrightness(void);
 uint8_t Led_GetBrightness(void);
 void Led_SetBrightness(uint8_t value);
-uint8_t AudioPlayer_GetInitVolume(void);
-void AudioPlayer_SetInitVolume(uint8_t value);
-uint8_t AudioPlayer_GetInitVolume(void);
-void AudioPlayer_SetInitVolume(uint8_t value);
