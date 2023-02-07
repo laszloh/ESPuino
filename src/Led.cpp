@@ -13,6 +13,7 @@
 #include "Port.h"
 
 #include <FastLED.h>
+#include "pixeloffset.h"
 
 #define LED_INITIAL_BRIGHTNESS 16u
 #define LED_INITIAL_NIGHT_BRIGHTNESS 2u
@@ -44,7 +45,7 @@ static bool Led_Pause = false; // Used to pause Neopixel-signalisation (while NV
 	constexpr uint8_t Led_IdleDotDistance = NUM_LEDS / NUM_LEDS_IDLE_DOTS;
 
 static void Led_Task(void *parameter);
-static uint8_t Led_Address(uint8_t number);
+// static uint8_t Led_Address(uint8_t number);
 
 void Led_Init(void) {
 	#ifdef NEOPIXEL_ENABLE
@@ -777,9 +778,9 @@ static void Led_SetButtonLedsEnabled(boolean value) {
 								const uint8_t lastLed = ledValue % DIMMABLE_STATES;
 								for (uint8_t led = 0; led < fullLeds; led++) {
 									if (System_AreControlsLocked()) {
-										indicatorLeds[Led_Address(led)] = CRGB::Red;
+										indicatorLeds[led] = CRGB::Red;
 									} else if (!gPlayProperties.pausePlay) { // Hue-rainbow
-										indicatorLeds[Led_Address(led)].setHue((uint8_t)(((float)PROGRESS_HUE_END - (float)PROGRESS_HUE_START) / (NUM_LEDS-1) * led + PROGRESS_HUE_START));
+										indicatorLeds[led].setHue((uint8_t)(((float)PROGRESS_HUE_END - (float)PROGRESS_HUE_START) / (NUM_LEDS-1) * led + PROGRESS_HUE_START));
 									}
 								}
 								if (lastLed > 0) {
@@ -808,16 +809,16 @@ static void Led_SetButtonLedsEnabled(boolean value) {
 								ledPosWebstream = 0;
 							}
 							if (System_AreControlsLocked()) {
-								indicatorLeds[Led_Address(ledPosWebstream)] = CRGB::Red;
+								indicatorLeds[ledPosWebstream] = CRGB::Red;
 								if constexpr(NUM_LEDS > 1) {
-									indicatorLeds[(Led_Address(ledPosWebstream) + NUM_LEDS / 2) % NUM_LEDS] = CRGB::Red;
+									indicatorLeds[(ledPosWebstream + NUM_LEDS / 2) % NUM_LEDS] = CRGB::Red;
 								}
 							} else if (!gPlayProperties.pausePlay) {
 								if constexpr(NUM_LEDS == 1) {
 									indicatorLeds[0].setHue(webstreamColor++);
 								} else {
-									indicatorLeds[Led_Address(ledPosWebstream)].setHue(webstreamColor);
-									indicatorLeds[(Led_Address(ledPosWebstream) + NUM_LEDS / 2) % NUM_LEDS].setHue(webstreamColor++);
+									indicatorLeds[ledPosWebstream].setHue(webstreamColor);
+									indicatorLeds[(ledPosWebstream + NUM_LEDS / 2) % NUM_LEDS].setHue(webstreamColor++);
 								}
 							}
 							FastLED.show();
