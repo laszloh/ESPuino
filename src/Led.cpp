@@ -45,8 +45,11 @@
 	static uint8_t Led_NightBrightness = LED_INITIAL_NIGHT_BRIGHTNESS;
 	constexpr uint8_t Led_IdleDotDistance = NUM_LEDS / NUM_LEDS_IDLE_DOTS;
 
+	static CRGBArray<NUM_LEDS> leds;
+	static CRGBSet indicator(leds(0, NUM_LEDS - 1));
+
 static void Led_Task(void *parameter);
-// static uint8_t Led_Address(uint8_t number);
+static uint8_t Led_Address(uint8_t number);
 
 void Led_Init(void) {
 	#ifdef NEOPIXEL_ENABLE
