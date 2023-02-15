@@ -43,7 +43,7 @@ public:
     /// @param start the first element from this set for the new subset
     /// @param end the last element for the new subset
     /// @param offset the offset between the real and the virtual first eleent
-    inline CPixelViewOffset operator()(int start, int end, int offset) { return CPixelView(this->leds, start, end, offset); }
+    inline CPixelViewOffset operator()(int start, int end, int offset) { return CPixelViewOffset(leds, start, end, offset); }
 
     // Access an inclusive subset of the LEDs in this set, starting from the first.
     // @param end the last element for the new subset

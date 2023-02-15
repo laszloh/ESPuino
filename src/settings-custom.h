@@ -83,6 +83,9 @@
         //#define INVERT_POWER                          // If enabled, use inverted logic for POWER circuit, that means peripherals are turned off by writing HIGH
     #endif
 
+    // toggle power showing
+    #define PBCHECK                          4
+
     // (optional) Neopixel
     #define LED_PIN                          0          // GPIO for Neopixel-signaling
 

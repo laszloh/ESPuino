@@ -107,7 +107,7 @@ static int I2C_ClearBus( uint8_t sda, uint8_t scl) {
 
 void Rfid_Init(void) {
 
-	if constexpr(RFID_RST <= GPIO_NUM_MAX){
+	if(RFID_RST <= GPIO_NUM_MAX){
 		pinMode(RFID_RST, OUTPUT);
 		digitalWrite(RFID_RST, LOW);
 		delayMicroseconds(100);
@@ -125,10 +125,10 @@ void Rfid_Init(void) {
 		while (1); // halt
 	}
 	// Got ok data, print it out!
-	snprintf(Log_Buffer, Log_BufferLength, "Found PNS%X FW: %d.%d\n", (versiondata>>24) & 0xFF, (versiondata>>16) & 0xFF, (versiondata>>8) & 0xFF);
+	snprintf(Log_Buffer, Log_BufferLength, "Found PN5%X FW: %d.%d\n", (versiondata>>24) & 0xFF, (versiondata>>16) & 0xFF, (versiondata>>8) & 0xFF);
 	Log_Print(Log_Buffer, LOGLEVEL_NOTICE, false);
 
-	nfc.setPassiveActivationRetries(0x02);
+	nfc.setPassiveActivationRetries(0x0A);
 	nfc.startPassiveTargetIDDetection(PN532_MIFARE_ISO14443A);
 	nfc.SAMConfig();
 
@@ -148,22 +148,22 @@ void Rfid_Task(void *p) {
 	uint8_t uidLength;
 	uint32_t lastTimeDetected14443 = 0;
 	uint8_t lastCardId[cardIdSize];
-	bool cardReceived;
 
 #ifdef PAUSE_WHEN_RFID_REMOVED
 	uint8_t lastValidcardId[cardIdSize];
 	bool cardAppliedCurrentRun = false;
+	bool cardAppliedLastRun = false;
 	bool sameCardReapplied = false;
 #endif
 
 	while(1) {
-		if constexpr(RFID_SCAN_INTERVAL/2 >= 20) {
+		if(RFID_SCAN_INTERVAL/2 >= 20) {
 			vTaskDelay(portTICK_RATE_MS * (RFID_SCAN_INTERVAL/2));
 		} else {
 			vTaskDelay(portTICK_RATE_MS * 20);
 		}
 
-		bool success = nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A, uid, &uidLength, 2);
+		bool success = nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A, uid, &uidLength, 10);
 		if(success) {
 			// we have a card in the RF field
 			lastTimeDetected14443 = millis();
@@ -178,9 +178,7 @@ void Rfid_Task(void *p) {
 			memcpy(lastCardId, uid, cardIdSize);
 
 #ifdef PAUSE_WHEN_RFID_REMOVED
-			if (memcmp(lastValidcardId, uid, cardIdSize) == 0) {
-				sameCardReapplied = true;
-			}
+			sameCardReapplied = (memcmp(lastValidcardId, uid, cardIdSize) == 0);
 #endif
 
 			Log_Print((char *) FPSTR(rfidTagDetected), LOGLEVEL_NOTICE, true);
@@ -216,14 +214,25 @@ void Rfid_Task(void *p) {
 			#endif
 
 		} else {
-			if(!lastTimeDetected14443 || (millis() - lastTimeDetected14443) > 1000) {
+			if(!lastTimeDetected14443 || (millis() - lastTimeDetected14443) > 200) {
 				// card was removed for sure
 				lastTimeDetected14443 = 0;
 #ifdef PAUSE_WHEN_RFID_REMOVED
 				cardAppliedCurrentRun = false;
 #endif
+				memset(lastCardId, 0, sizeof(lastCardId));
+				memset(uid, 0, sizeof(uid));
 			}
 		}
+
+		#ifdef PAUSE_WHEN_RFID_REMOVED
+			if (!cardAppliedCurrentRun && cardAppliedLastRun && !gPlayProperties.pausePlay && System_GetOperationMode() != OPMODE_BLUETOOTH_SINK) {   // Card removed => pause
+				AudioPlayer_TrackControlToQueueSender(PAUSEPLAY);
+				Log_Println((char *) FPSTR(rfidTagRemoved), LOGLEVEL_NOTICE);
+			}
+			cardAppliedLastRun = cardAppliedCurrentRun;
+		#endif
+
 	}
 }
 

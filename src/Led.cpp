@@ -770,7 +770,7 @@ static void Led_SetButtonLedsEnabled(boolean value) {
 							animationIndex = 1;
 							lastPos = gPlayProperties.currentRelPos;
 							indicatorLeds = CRGB::Black;
-							if constexpr(NUM_LEDS == 1) {
+							if (NUM_LEDS == 1) {
 								indicatorLeds[0].setHue((uint8_t)(85 - ((double)90 / 100) * gPlayProperties.currentRelPos));
 							} else {
 								const uint32_t ledValue = map(gPlayProperties.currentRelPos, 0, 98, 0, NUM_LEDS * DIMMABLE_STATES);
@@ -810,11 +810,11 @@ static void Led_SetButtonLedsEnabled(boolean value) {
 							}
 							if (System_AreControlsLocked()) {
 								indicatorLeds[ledPosWebstream] = CRGB::Red;
-								if constexpr(NUM_LEDS > 1) {
+								if (NUM_LEDS > 1) {
 									indicatorLeds[(ledPosWebstream + NUM_LEDS / 2) % NUM_LEDS] = CRGB::Red;
 								}
 							} else if (!gPlayProperties.pausePlay) {
-								if constexpr(NUM_LEDS == 1) {
+								if (NUM_LEDS == 1) {
 									indicatorLeds[0].setHue(webstreamColor++);
 								} else {
 									indicatorLeds[ledPosWebstream].setHue(webstreamColor);

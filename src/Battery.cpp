@@ -11,6 +11,14 @@
 #ifdef BATTERY_MEASURE_ENABLE
 	uint8_t batteryCheckInterval = s_batteryCheckInterval;
 
+	void togglePowerBank(){
+		if(PBCHECK < GPIO_NUM_MAX) {
+			digitalWrite(PBCHECK, HIGH);
+			delay(100);
+			digitalWrite(PBCHECK, LOW);
+		}
+	}
+
 	void Battery_Init(void) {
 		uint32_t vInterval = gPrefsSettings.getUInt("vCheckIntv", 17777);
 		if (vInterval != 17777) {
@@ -19,6 +27,12 @@
 			Log_Println(Log_Buffer, LOGLEVEL_INFO);
 		} else {
 			gPrefsSettings.putUInt("vCheckIntv", batteryCheckInterval);
+		}
+
+		if(PBCHECK < GPIO_NUM_MAX) {
+			pinMode(PBCHECK, OUTPUT);
+			digitalWrite(PBCHECK, LOW);
+			togglePowerBank();
 		}
 
 		Battery_InitInner();
@@ -46,6 +60,8 @@
 	void Battery_Cyclic(void) {
 		static uint32_t lastBatteryCheckTimestamp = 0;
 		if ((millis() - lastBatteryCheckTimestamp >= batteryCheckInterval * 60000) || (!lastBatteryCheckTimestamp && millis() >= 10000)) {
+			togglePowerBank();
+
 			Battery_CyclicInner();
 			Battery_PublishMQTT();
 			Battery_LogStatus();
