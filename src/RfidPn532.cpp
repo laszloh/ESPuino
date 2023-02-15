@@ -116,7 +116,7 @@ void Rfid_Init(void) {
 	}
 
 	I2C_ClearBus(I2C1_SDA, I2C1_SCL);
-	Wire.begin(I2C1_SDA, I2C1_SCL, 10000);
+	Wire.begin(I2C1_SDA, I2C1_SCL, 10000u);
 	nfc.begin();
 
 	uint32_t versiondata = nfc.getFirmwareVersion();

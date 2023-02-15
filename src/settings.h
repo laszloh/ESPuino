@@ -44,14 +44,14 @@
     #define SHUTDOWN_IF_SD_BOOT_FAILS       // Will put ESP to deepsleep if boot fails due to SD. Really recommend this if there's in battery-mode no other way to restart ESP! Interval adjustable via deepsleepTimeAfterBootFails.
     #define MEASURE_BATTERY_VOLTAGE         // Enables battery-measurement via GPIO (ADC) and voltage-divider
     //#define MEASURE_BATTERY_MAX17055      // Enables battery-measurement via external fuel gauge (MAX17055)
-    //#define SHUTDOWN_ON_BAT_CRITICAL        // Whether to turn off on critical battery-level (only used if MEASURE_BATTERY_XXX is active)
+    #define SHUTDOWN_ON_BAT_CRITICAL        // Whether to turn off on critical battery-level (only used if MEASURE_BATTERY_XXX is active)
     //#define PLAY_LAST_RFID_AFTER_REBOOT   // When restarting ESPuino, the last RFID that was active before, is recalled and played
     //#define USE_LAST_VOLUME_AFTER_REBOOT  // Remembers the volume used at last shutdown after reboot
     //#define USEROTARY_ENABLE              // If rotary-encoder is used (don't forget to review WAKEUP_BUTTON if you disable this feature!)
     #define BLUETOOTH_ENABLE                // If enabled and bluetooth-mode is active, you can stream to your ESPuino via bluetooth (a2dp-sink).
     //#define IR_CONTROL_ENABLE             // Enables remote control (https://forum.espuino.de/t/neues-feature-fernsteuerung-per-infrarot-fernbedienung/265)
     #define CACHED_PLAYLIST_ENABLE          // Enables playlist-caching (infos: https://forum.espuino.de/t/neues-feature-cached-playlist/515)
-    //#define PAUSE_WHEN_RFID_REMOVED       // Playback starts when card is applied and pauses automatically, when card is removed (https://forum.espuino.de/t/neues-feature-pausieren-wenn-rfid-karte-entfernt-wurde/541)
+    #define PAUSE_WHEN_RFID_REMOVED         // Playback starts when card is applied and pauses automatically, when card is removed (https://forum.espuino.de/t/neues-feature-pausieren-wenn-rfid-karte-entfernt-wurde/541)
     #define PAUSE_ON_MIN_VOLUME             // When playback is active and volume is changed to zero, playback is paused automatically. Playback is continued if volume reaches 1. (https://forum.espuino.de/t/neues-feature-pausieren-wenn-rfid-karte-entfernt-wurde/541)
     //#define DONT_ACCEPT_SAME_RFID_TWICE   // RFID-reader doesn't accept the same RFID-tag twice in a row (unless it's a modification-card or RFID-tag is unknown in NVS). Flag will be ignored silently if PAUSE_WHEN_RFID_REMOVED is active. (https://forum.espuino.de/t/neues-feature-dont-accept-same-rfid-twice/1247)
     //#define SAVE_PLAYPOS_BEFORE_SHUTDOWN  // When playback is active and mode audiobook was selected, last play-position is saved automatically when shutdown is initiated
@@ -126,25 +126,25 @@
 		BUTTON_MULTI_01 => Buttons 0+1 (NEXT_BUTTON + PREVIOUS_BUTTON) pressed in parallel
 		BUTTON_MULTI_12 => Buttons 1+2 (PREV_BUTTON + PAUSEPLAY_BUTTON) pressed in parallel
 
-	Actions:
-		To all of those buttons, an action can be assigned freely.
-		Please have a look at values.h to look up actions available (>=100 can be used)
-		If you don't want to assign an action or you don't use a given button: CMD_NOTHING has to be set
-	*/
-	// *****BUTTON*****        *****ACTION*****
-	#define BUTTON_0_SHORT    CMD_NEXTTRACK
-	#define BUTTON_1_SHORT    CMD_PREVTRACK
-	#define BUTTON_2_SHORT    CMD_PLAYPAUSE
-	#define BUTTON_3_SHORT    CMD_MEASUREBATTERY
-	#define BUTTON_4_SHORT    CMD_SEEK_BACKWARDS
-	#define BUTTON_5_SHORT    CMD_SEEK_FORWARDS
+    Actions:
+        To all of those buttons, an action can be assigned freely.
+        Please have a look at values.h to look up actions available (>=100 can be used)
+        If you don't want to assign an action or you don't use a given button: CMD_NOTHING has to be set
+    */
+    // *****BUTTON*****        *****ACTION*****
+    #define BUTTON_0_SHORT    CMD_VOLUMEUP
+    #define BUTTON_1_SHORT    CMD_VOLUMEDOWN
+    #define BUTTON_2_SHORT    CMD_PLAYPAUSE
+    #define BUTTON_3_SHORT    CMD_MEASUREBATTERY
+    #define BUTTON_4_SHORT    CMD_SEEK_BACKWARDS
+    #define BUTTON_5_SHORT    CMD_SEEK_FORWARDS
 
-	#define BUTTON_0_LONG     CMD_LASTTRACK
-	#define BUTTON_1_LONG     CMD_FIRSTTRACK
-	#define BUTTON_2_LONG     CMD_PLAYPAUSE
-	#define BUTTON_3_LONG     CMD_SLEEPMODE
-	#define BUTTON_4_LONG     CMD_VOLUMEUP
-	#define BUTTON_5_LONG     CMD_VOLUMEDOWN
+    #define BUTTON_0_LONG     CMD_NEXTTRACK
+    #define BUTTON_1_LONG     CMD_PREVTRACK
+    #define BUTTON_2_LONG     CMD_SLEEPMODE
+    #define BUTTON_3_LONG     CMD_SLEEPMODE
+    #define BUTTON_4_LONG     CMD_VOLUMEUP
+    #define BUTTON_5_LONG     CMD_VOLUMEDOWN
 
 	#define BUTTON_MULTI_01   CMD_NOTHING   //CMD_TOGGLE_WIFI_STATUS (disabled now to prevent children from unwanted WiFi-disable)
 	#define BUTTON_MULTI_02   CMD_ENABLE_FTP_SERVER
