@@ -105,6 +105,17 @@ static int I2C_ClearBus( uint8_t sda, uint8_t scl) {
   return 0; // all ok
 }
 
+void resetAndInit() {
+	digitalWrite(RFID_RST, LOW);
+	delayMicroseconds(1);
+	digitalWrite(RFID_RST, HIGH);
+	delay(10);
+	
+	nfc.begin();
+	nfc.setPassiveActivationRetries(0x05);
+	nfc.SAMConfig();
+}
+
 void Rfid_Init(void) {
 
 	if(RFID_RST <= GPIO_NUM_MAX){
@@ -120,17 +131,13 @@ void Rfid_Init(void) {
 	nfc.begin();
 
 	uint32_t versiondata = nfc.getFirmwareVersion();
-	if (!versiondata) {
+	if (!versiondata)
 		Log_Println("Did not find NFC card!", LOGLEVEL_ERROR);
-		while (1); // halt
-	}
 	// Got ok data, print it out!
 	snprintf(Log_Buffer, Log_BufferLength, "Found PN5%X FW: %d.%d\n", (versiondata>>24) & 0xFF, (versiondata>>16) & 0xFF, (versiondata>>8) & 0xFF);
 	Log_Print(Log_Buffer, LOGLEVEL_NOTICE, false);
 
-	nfc.setPassiveActivationRetries(0x0A);
-	nfc.startPassiveTargetIDDetection(PN532_MIFARE_ISO14443A);
-	nfc.SAMConfig();
+	resetAndInit();
 
 	xTaskCreatePinnedToCore(
 		Rfid_Task,              /* Function to implement the task */
@@ -222,6 +229,7 @@ void Rfid_Task(void *p) {
 #endif
 				memset(lastCardId, 0, sizeof(lastCardId));
 				memset(uid, 0, sizeof(uid));
+				resetAndInit();
 			}
 		}
 
