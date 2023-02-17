@@ -831,17 +831,24 @@ void AudioPlayer_PauseOnMinVolume(const uint8_t oldVolume, const uint8_t newVolu
 		if (gPlayProperties.playMode == BUSY || gPlayProperties.playMode == NO_PLAYLIST) {
 			return;
 		}
+		bool PA_On = true;
 
 		if (!gPlayProperties.pausePlay ) {	// Volume changes from 1 to 0
 			if (oldVolume == AudioPlayer_GetMinVolume()+1 && newVolume == AudioPlayer_GetMinVolume()) {
 				Cmd_Action(CMD_PLAYPAUSE);
+				PA_On = false;
 			}
 		}
 		if (gPlayProperties.pausePlay) {	// Volume changes from 0 to 1
 			if (oldVolume == AudioPlayer_GetMinVolume() && newVolume > AudioPlayer_GetMinVolume()) {
 				Cmd_Action(CMD_PLAYPAUSE);
+				PA_On = true;
 			}
 		}
+
+		#ifdef GPIO_PA_EN
+			Port_Write(GPIO_PA_EN, PA_On, true);
+		#endif
 	#endif
 }
 
