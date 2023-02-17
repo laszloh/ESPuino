@@ -433,9 +433,7 @@ void Led_SetButtonLedsEnabled(boolean value) {
 						indicator = CRGB::Black;
 
 						if (NUM_LEDS == 1) {
-							const uint8_t hue = 85 - (90 *
-								((double)AudioPlayer_GetCurrentVolume() /
-								(double)AudioPlayer_GetMaxVolumeSpeaker()));
+							const uint8_t hue = 85 - ((90 * AudioPlayer_GetCurrentVolume()) / AudioPlayer_GetMaxVolumeSpeaker());
 							indicator[0].setHue(hue);
 						} else {
 							/*
@@ -742,8 +740,7 @@ void Led_SetButtonLedsEnabled(boolean value) {
 						} else {
 							if (OPMODE_BLUETOOTH_SOURCE == System_GetOperationMode()) {
 								generalColor = CRGB::Blue;
-							} else
-							if (gPlayProperties.currentSpeechActive) {
+							} else if (gPlayProperties.currentSpeechActive) {
 								generalColor = speechColor;
 							}
 
