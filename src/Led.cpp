@@ -522,10 +522,8 @@ void Led_SetButtonLedsEnabled(boolean value) {
 									animationTimer = 20*100;
 									animationActive = false;
 								} else {
-									uint8_t numLedsToLight = staticBatteryLevel * NUM_LEDS;
-									if (numLedsToLight > NUM_LEDS) {    // Can happen e.g. if no battery is connected
-										numLedsToLight = NUM_LEDS;
-									}
+									// clamp value, since staticBatteryLevel * NUM_LEDS could get > NUM_LEDS if no battery is connected
+									uint8_t numLedsToLight = std::min(int(staticBatteryLevel * NUM_LEDS), NUM_LEDS);
 
 									if (animationIndex < numLedsToLight) {
 										indicator[Led_Address(animationIndex)] = ledColor;
