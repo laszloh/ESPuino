@@ -45,8 +45,9 @@
 	static uint8_t Led_NightBrightness = LED_INITIAL_NIGHT_BRIGHTNESS;
 	constexpr uint8_t Led_IdleDotDistance = NUM_LEDS / NUM_LEDS_IDLE_DOTS;
 
-	static CRGBArray<NUM_LEDS> leds;
+	static CRGBArray<NUM_LEDS + STATIC_LEDS> leds;
 	static CRGBSet indicator(leds(0, NUM_LEDS - 1));
+	static CRGBSet staticLeds(leds(NUM_LEDS, leds.size() - 1));
 
 static void Led_Task(void *parameter);
 static uint8_t Led_Address(uint8_t number);
@@ -75,6 +76,12 @@ void Led_Init(void) {
 		} else {
 			gPrefsSettings.putUChar("nLedBrightness", Led_NightBrightness);
 			Log_Println((char *) FPSTR(wroteNmBrightnessToNvs), LOGLEVEL_ERROR);
+		}
+
+		constexpr std::array<CRGB::HTMLColorCode, STATIC_LEDS> staticLedColor = STATIC_LEDS_COLOR;
+		uint8_t idx = 0;
+		for(CRGB &px : staticLeds){
+			px = staticLedColor[idx++];
 		}
 
 		xTaskCreatePinnedToCore(
