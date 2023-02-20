@@ -7,6 +7,8 @@
     It's been originally derived from lolin32, but just change it according your needs!
     */
 
+   #define SD_MMC_1BIT_MODE
+
     //################## GPIO-configuration ##############################
     // Please note: GPIOs 34, 35, 36, 39 are input-only and don't have pullup-resistors.
     // So if connecting a button to these, make sure to add a 10k-pullup-resistor for each button.
@@ -30,10 +32,10 @@
 
     // RFID (via SPI)
     #define RST_PIN                         99          // Not necessary but has to be set anyway; so let's use a dummy-number
-    #define RFID_CS                         21          // GPIO for chip select (RFID)
+    #define RFID_CS                         22          // GPIO for chip select (RFID)
     #define RFID_MOSI                       23          // GPIO for master out slave in (RFID)
-    #define RFID_MISO                       19          // GPIO for master in slave out (RFID)
-    #define RFID_SCK                        18          // GPIO for clock-signal (RFID)
+    #define RFID_MISO                       18          // GPIO for master in slave out (RFID)
+    #define RFID_SCK                        19          // GPIO for clock-signal (RFID)
 
     #ifdef RFID_READER_TYPE_PN5180
         #define RFID_BUSY                   16          // PN5180 BUSY PIN
@@ -58,7 +60,7 @@
 
     // Control-buttons (set to 99 to DISABLE; 0->39 for GPIO; 100->115 for port-expander)
     #define NEXT_BUTTON                      4          // Button 0: GPIO to detect next
-    #define PREVIOUS_BUTTON                  2          // Button 1: GPIO to detect previous (Important: as of 19.11.2020 changed from 33 to 2; make sure to change in SD-MMC-mode)
+    #define PREVIOUS_BUTTON                 16          // Button 1: GPIO to detect previous (Important: as of 19.11.2020 changed from 33 to 2; make sure to change in SD-MMC-mode)
     #define PAUSEPLAY_BUTTON                 0          // Button 2: GPIO to detect pause/play
     #define ROTARYENCODER_BUTTON            32          // (set to 99 to disable; 0->39 for GPIO; 100->115 for port-expander)
     #define BUTTON_4                        99          // Button 4: unnamed optional button
@@ -81,7 +83,7 @@
     // Wake-up button => this also is the interrupt-pin if port-expander is enabled!
     // Please note: only RTC-GPIOs (0, 4, 12, 13, 14, 15, 25, 26, 27, 32, 33, 34, 35, 36, 39, 99) can be used! Set to 99 to DISABLE.
     // Please note #2: this button can be used as interrupt-pin for port-expander. If so, all pins connected to port-expander can wake up ESPuino.
-    #define WAKEUP_BUTTON                   ROTARYENCODER_BUTTON // Defines the button that is used to wake up ESPuino from deepsleep.
+    #define WAKEUP_BUTTON                   PAUSEPLAY_BUTTON // Defines the button that is used to wake up ESPuino from deepsleep.
 
     // (optional) Power-control
     #define POWER                           17          // GPIO used to drive transistor-circuit, that switches off peripheral devices while ESP32-deepsleep

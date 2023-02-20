@@ -38,8 +38,9 @@
 		#endif
 
 		// Init RC522 Card-Reader
-		mfrc522.PCD_Init();
 		mfrc522.PCD_SetAntennaGain(rfidGain);
+		mfrc522.PCD_Init();
+		mfrc522.PCD_AntennaOn();
 		delay(50);
 		Log_Println((char *) FPSTR(rfidScannerReady), LOGLEVEL_DEBUG);
 
@@ -52,26 +53,6 @@
 			NULL,                   /* Task handle. */
 			1                       /* Core where the task should run */
 		);
-	}
-
-	static uint8_t PICC_ActivateCardPresent() {
-		uint8_t bufferATQA[2];
-		uint8_t bufferSize = sizeof(bufferATQA);
-
-		// Reset baud rates
-		mfrc522.PCD_WriteRegister(MFRC522::TxModeReg, 0x00);
-		mfrc522.PCD_WriteRegister(MFRC522::RxModeReg, 0x00);
-		// Reset ModWidthReg
-		mfrc522.PCD_WriteRegister(MFRC522::ModWidthReg, 0x26);
-
-		MFRC522::StatusCode result = mfrc522.PICC_RequestA(bufferATQA, &bufferSize);
-		if((result == MFRC522::STATUS_OK || result == MFRC522::STATUS_COLLISION)){
-			// we found a new card in status IDLE and brought it into READY
-			return 2;
-		}
-		// try to wake up a card in HALT mode
-		result = mfrc522.PICC_WakeupA(bufferATQA, &bufferSize);
-		return (result == MFRC522::STATUS_OK || result == MFRC522::STATUS_COLLISION) ? 1 : 0;
 	}
 
 	void Rfid_Task(void *parameter) {
@@ -93,17 +74,34 @@
 
 				// Reset the loop if no new card is present on the sensor/reader. This saves the entire process when idle.
 				RfidMessage msg = {RfidEvent::NoCard};
-
-				uint8_t retry=0;
-				for(;retry<3;retry++) {
+				MFRC522::Uid uid;
+				bool cardFound = false;
+				
+				for(uint8_t retry=0;retry<6;retry++) {
 					// try multiple times to find a card
+					uint8_t bufferATQA[2];
+					uint8_t bufferSize = sizeof(bufferATQA);
 
-					uint8_t ret = PICC_ActivateCardPresent();
-					if(ret && mfrc522.PICC_ReadCardSerial()) {
+					// Reset baud rates
+					mfrc522.PCD_WriteRegister(MFRC522::TxModeReg, 0x00);
+					mfrc522.PCD_WriteRegister(MFRC522::RxModeReg, 0x00);
+					// Reset ModWidthReg
+					mfrc522.PCD_WriteRegister(MFRC522::ModWidthReg, 0x26);
+
+					MFRC522::StatusCode ret = mfrc522.PICC_WakeupA(bufferATQA, &bufferSize);
+					// log_v("ret: %d", ret);
+					if(ret != MFRC522::STATUS_OK && ret != MFRC522::STATUS_COLLISION){
+						continue;
+					}
+
+					ret = mfrc522.PICC_Select(&uid);
+					// log_v("ret: %d", ret);
+					if(ret == MFRC522::STATUS_OK) {
+						cardFound = true;
 						break;
 					}
 				}
-				if(retry == 3) {
+				if(!cardFound) {
 					// we did not find a card
 					if(cardApplied){
 						// card was taken away
@@ -112,21 +110,28 @@
 						xQueueSend(gRfidCardQueue, &msg, 0);
 					}
 					cardApplied = false;
+
+					memset(lastCardId, 0, cardIdSize);
+					mfrc522.PICC_HaltA();
+					mfrc522.PCD_StopCrypto1();
 					continue;
 				}
+				// log_v("cf: %d", cardFound);
+				mfrc522.PICC_HaltA();
+				mfrc522.PCD_StopCrypto1();
 
-				memcpy(cardId, mfrc522.uid.uidByte, cardIdSize);
+				memcpy(cardId, uid.uidByte, cardIdSize);
     			#ifdef HALLEFFECT_SENSOR_ENABLE
 					cardId[cardIdSize-1]   = cardId[cardIdSize-1] + gHallEffectSensor.waitForState(HallEffectWaitMS);  
 				#endif
 
-				Log_Print((char *) FPSTR(rfidTagDetected), LOGLEVEL_NOTICE, true);
-				for (uint8_t i=0u; i < cardIdSize; i++) {
-					snprintf(Log_Buffer, Log_BufferLength, "%02x%s", cardId[i], (i < cardIdSize - 1u) ? "-" : "\n");
-					Log_Print(Log_Buffer, LOGLEVEL_NOTICE, false);
-				}
-
 				if(memcmp(lastCardId, cardId, cardIdSize) != 0) {
+					Log_Print((char *) FPSTR(rfidTagDetected), LOGLEVEL_NOTICE, true);
+					for (uint8_t i=0u; i < cardIdSize; i++) {
+						snprintf(Log_Buffer, Log_BufferLength, "%02x%s", cardId[i], (i < cardIdSize - 1u) ? "-" : "\n");
+						Log_Print(Log_Buffer, LOGLEVEL_NOTICE, false);
+					}
+
 					// different card id read
 					msg.event = RfidEvent::CardApplied;
 					memcpy(msg.cardId, cardId, cardIdSize);
@@ -135,8 +140,6 @@
 				memcpy(lastCardId, cardId, cardIdSize);
 
 				cardApplied = true;
-				mfrc522.PICC_HaltA();
-				mfrc522.PCD_StopCrypto1();
 			}
 		}
 	}
