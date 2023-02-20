@@ -11,9 +11,21 @@ extern char gCurrentRfidTagId[cardIdStringSize];
 	#endif
 #endif
 
-#ifdef DONT_ACCEPT_SAME_RFID_TWICE_ENABLE
+#if defined(DONT_ACCEPT_SAME_RFID_TWICE_ENABLE) || defined(PAUSE_WHEN_RFID_REMOVED)
 	extern char gOldRfidTagId[cardIdStringSize];
 #endif
+
+enum class RfidEvent : uint8_t {
+	NoCard = 0,
+	CardRemoved,
+	CardApplied,
+	CardPresent
+};
+
+struct RfidMessage {
+	RfidEvent event;
+	uint8_t cardId[cardIdSize];
+};
 
 void Rfid_Init(void);
 void Rfid_Cyclic(void);
