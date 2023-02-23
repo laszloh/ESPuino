@@ -218,11 +218,16 @@ void Cmd_Action(const uint16_t mod) {
 		}
 
 		case CMD_DIMM_LEDS_NIGHTMODE: {
+			if(Led_GetNightMode()) {
+				Log_Println((char *) FPSTR(ledsDimmedToInitialValue), LOGLEVEL_INFO);
+				Led_ResetToInitialBrightness();
+			} else {
+				Log_Println((char *) FPSTR(ledsDimmedToNightmode), LOGLEVEL_INFO);
+				Led_ResetToNightBrightness();
+			}
 			#ifdef MQTT_ENABLE
 				publishMqtt((char *) FPSTR(topicLedBrightnessState), Led_GetBrightness(), false);
 			#endif
-			Log_Println((char *) FPSTR(ledsDimmedToNightmode), LOGLEVEL_INFO);
-			Led_ResetToNightBrightness();
 			System_IndicateOk();
 			break;
 		}

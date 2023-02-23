@@ -42,6 +42,7 @@ static bool Led_Pause = false; // Used to pause Neopixel-signalisation (while NV
 static uint8_t Led_InitialBrightness = LED_INITIAL_BRIGHTNESS;
 static uint8_t Led_Brightness = LED_INITIAL_BRIGHTNESS;
 static uint8_t Led_NightBrightness = LED_INITIAL_NIGHT_BRIGHTNESS;
+static bool Led_NightMode = false;
 constexpr uint8_t Led_IdleDotDistance = NUM_LEDS / NUM_LEDS_IDLE_DOTS;
 
 static CRGBArray<NUM_LEDS + STATIC_LEDS> leds;
@@ -116,7 +117,8 @@ void Led_SetPause(boolean value) {
 // Used to reset brightness to initial value after prevously active sleepmode was left
 void Led_ResetToInitialBrightness(void) {
 	#ifdef NEOPIXEL_ENABLE
-		if (Led_Brightness == Led_NightBrightness || Led_Brightness == 0) {	// Only reset to initial value if brightness wasn't intentionally changed (or was zero)
+		if (Led_Brightness == Led_NightBrightness || Led_Brightness == 0 || Led_NightMode) {	// Only reset to initial value if brightness wasn't intentionally changed (or was zero)
+			Led_NightMode = false;
 			Led_Brightness = Led_InitialBrightness;
 			Log_Println((char *) FPSTR(ledsDimmedToInitialValue), LOGLEVEL_INFO);
 		}
@@ -129,11 +131,16 @@ void Led_ResetToInitialBrightness(void) {
 void Led_ResetToNightBrightness(void) {
 	#ifdef NEOPIXEL_ENABLE
 		Led_Brightness = Led_NightBrightness;
+		Led_NightMode = true;
 		Log_Println((char *) FPSTR(ledsDimmedToNightmode), LOGLEVEL_INFO);
 	#endif
 	#ifdef BUTTONS_LED
 		Port_Write(BUTTONS_LED, LOW, false);
 	#endif
+}
+
+bool Led_GetNightMode(void) {
+	return Led_NightMode;
 }
 
 uint8_t Led_GetBrightness(void) {

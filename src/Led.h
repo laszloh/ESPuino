@@ -39,5 +39,6 @@ void Led_Indicate(LedIndicatorType value);
 void Led_SetPause(boolean value);
 void Led_ResetToInitialBrightness(void);
 void Led_ResetToNightBrightness(void);
+bool Led_GetNightMode(void);
 uint8_t Led_GetBrightness(void);
 void Led_SetBrightness(uint8_t value);
