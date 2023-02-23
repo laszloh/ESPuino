@@ -155,6 +155,7 @@ void Rfid_Task(void *p) {
 	uint8_t uidLength;
 	uint32_t lastTimeDetected14443 = 0;
 	uint8_t lastCardId[cardIdSize];
+	bool resetReader = true;
 
 #ifdef PAUSE_WHEN_RFID_REMOVED
 	uint8_t lastValidcardId[cardIdSize];
@@ -199,6 +200,8 @@ void Rfid_Task(void *p) {
 			// create the cardid string
 			char chrBuffer[cardIdStringSize];
 			bufferToDezimalString(uid, cardIdSize, chrBuffer);
+
+			resetReader = true;
 			
 			#ifdef PAUSE_WHEN_RFID_REMOVED
 				#ifdef ACCEPT_SAME_RFID_AFTER_TRACK_END
@@ -229,7 +232,10 @@ void Rfid_Task(void *p) {
 #endif
 				memset(lastCardId, 0, sizeof(lastCardId));
 				memset(uid, 0, sizeof(uid));
-				resetAndInit();
+				if(resetReader) {
+					resetReader = false;
+					resetAndInit();
+				}
 			}
 		}
 
