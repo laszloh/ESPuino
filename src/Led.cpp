@@ -13,41 +13,40 @@
 #include "Bluetooth.h"
 #include "Port.h"
 
-#ifdef NEOPIXEL_ENABLE
-	#include <FastLED.h>
+#include <FastLED.h>
 
-	#define LED_INITIAL_BRIGHTNESS 16u
-	#define LED_INITIAL_NIGHT_BRIGHTNESS 2u
+#define LED_INITIAL_BRIGHTNESS 16u
+#define LED_INITIAL_NIGHT_BRIGHTNESS 2u
 
-	#define LED_INDICATOR_SET(indicator) ((Led_Indicators) |= (1u << ((uint8_t)indicator)))
-	#define LED_INDICATOR_IS_SET(indicator) (((Led_Indicators) & (1u << ((uint8_t)indicator))) > 0u)
-	#define LED_INDICATOR_CLEAR(indicator) ((Led_Indicators) &= ~(1u << ((uint8_t)indicator)))
+#define LED_INDICATOR_SET(indicator) ((Led_Indicators) |= (1u << ((uint8_t)indicator)))
+#define LED_INDICATOR_IS_SET(indicator) (((Led_Indicators) & (1u << ((uint8_t)indicator))) > 0u)
+#define LED_INDICATOR_CLEAR(indicator) ((Led_Indicators) &= ~(1u << ((uint8_t)indicator)))
 
-	#ifndef LED_OFFSET
-		#define LED_OFFSET 0
-	#elif LED_OFFSET < 0 || LED_OFFSET >= NUM_LEDS
-		#error LED_OFFSET must be between 0 and NUM_LEDS-1
-	#endif
+#ifndef LED_OFFSET
+	#define LED_OFFSET 0
+#elif LED_OFFSET < 0 || LED_OFFSET >= NUM_LEDS
+	#error LED_OFFSET must be between 0 and NUM_LEDS-1
+#endif
 
-	// Time in milliseconds the volume indicator is visible
-	#define LED_VOLUME_INDICATOR_RETURN_DELAY	1000U
-	#define LED_VOLUME_INDICATOR_NUM_CYCLES		(LED_VOLUME_INDICATOR_RETURN_DELAY / 20)
+// Time in milliseconds the volume indicator is visible
+#define LED_VOLUME_INDICATOR_RETURN_DELAY	1000U
+#define LED_VOLUME_INDICATOR_NUM_CYCLES		(LED_VOLUME_INDICATOR_RETURN_DELAY / 20)
 
-	extern t_button gButtons[7];    // next + prev + pplay + rotEnc + button4 + button5 + dummy-button
-	extern uint8_t gShutdownButton;
+extern t_button gButtons[7];    // next + prev + pplay + rotEnc + button4 + button5 + dummy-button
+extern uint8_t gShutdownButton;
 
-	static uint32_t Led_Indicators = 0u;
+static uint32_t Led_Indicators = 0u;
 
-	static bool Led_Pause = false; // Used to pause Neopixel-signalisation (while NVS-writes as this leads to exceptions; don't know why)
+static bool Led_Pause = false; // Used to pause Neopixel-signalisation (while NVS-writes as this leads to exceptions; don't know why)
 
-	static uint8_t Led_InitialBrightness = LED_INITIAL_BRIGHTNESS;
-	static uint8_t Led_Brightness = LED_INITIAL_BRIGHTNESS;
-	static uint8_t Led_NightBrightness = LED_INITIAL_NIGHT_BRIGHTNESS;
-	constexpr uint8_t Led_IdleDotDistance = NUM_LEDS / NUM_LEDS_IDLE_DOTS;
+static uint8_t Led_InitialBrightness = LED_INITIAL_BRIGHTNESS;
+static uint8_t Led_Brightness = LED_INITIAL_BRIGHTNESS;
+static uint8_t Led_NightBrightness = LED_INITIAL_NIGHT_BRIGHTNESS;
+constexpr uint8_t Led_IdleDotDistance = NUM_LEDS / NUM_LEDS_IDLE_DOTS;
 
-	static CRGBArray<NUM_LEDS + STATIC_LEDS> leds;
-	static CRGBSet indicator(leds(0, NUM_LEDS - 1));
-	static CRGBSet staticLeds(leds(NUM_LEDS, leds.size() - 1));
+static CRGBArray<NUM_LEDS + STATIC_LEDS> leds;
+static CRGBSet indicator(leds(0, NUM_LEDS - 1));
+static CRGBSet staticLeds(leds(NUM_LEDS, leds.size() - 1));
 
 static void Led_Task(void *parameter);
 static uint8_t Led_Address(uint8_t number);
