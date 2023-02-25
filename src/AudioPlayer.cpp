@@ -960,7 +960,7 @@ void AudioPlayer_TrackQueueDispatcher(const char *_itemToPlay, const uint32_t _l
 	switch (gPlayProperties.playMode) {
 		case SINGLE_TRACK: {
 			Log_Println((char *) FPSTR(modeSingleTrack), LOGLEVEL_NOTICE);
-			xQueueSend(gTrackQueue, &(musicFiles), 0);
+			xQueueSend(gTrackQueue, &musicFiles->files, 0);
 			break;
 		}
 
@@ -968,7 +968,7 @@ void AudioPlayer_TrackQueueDispatcher(const char *_itemToPlay, const uint32_t _l
 			gPlayProperties.repeatCurrentTrack = true;
 			gPlayProperties.repeatPlaylist = true;
 			Log_Println((char *) FPSTR(modeSingleTrackLoop), LOGLEVEL_NOTICE);
-			xQueueSend(gTrackQueue, &(musicFiles), 0);
+			xQueueSend(gTrackQueue, &musicFiles->files, 0);
 			break;
 		}
 
@@ -979,7 +979,7 @@ void AudioPlayer_TrackQueueDispatcher(const char *_itemToPlay, const uint32_t _l
 			Led_ResetToNightBrightness();
 			Log_Println((char *) FPSTR(modeSingleTrackRandom), LOGLEVEL_NOTICE);
 			AudioPlayer_SortPlaylist(musicFiles->files, musicFiles->numFiles);
-			xQueueSend(gTrackQueue, &(musicFiles), 0);
+			xQueueSend(gTrackQueue, &musicFiles->files, 0);
 			break;
 		}
 
@@ -987,7 +987,7 @@ void AudioPlayer_TrackQueueDispatcher(const char *_itemToPlay, const uint32_t _l
 			gPlayProperties.saveLastPlayPosition = true;
 			Log_Println((char *) FPSTR(modeSingleAudiobook), LOGLEVEL_NOTICE);
 			AudioPlayer_SortPlaylist(musicFiles->files, musicFiles->numFiles);
-			xQueueSend(gTrackQueue, &(musicFiles), 0);
+			xQueueSend(gTrackQueue, &musicFiles->files, 0);
 			break;
 		}
 
@@ -996,7 +996,7 @@ void AudioPlayer_TrackQueueDispatcher(const char *_itemToPlay, const uint32_t _l
 			gPlayProperties.saveLastPlayPosition = true;
 			Log_Println((char *) FPSTR(modeSingleAudiobookLoop), LOGLEVEL_NOTICE);
 			AudioPlayer_SortPlaylist(musicFiles->files, musicFiles->numFiles);
-			xQueueSend(gTrackQueue, &(musicFiles), 0);
+			xQueueSend(gTrackQueue, &musicFiles->files, 0);
 			break;
 		}
 
@@ -1005,14 +1005,14 @@ void AudioPlayer_TrackQueueDispatcher(const char *_itemToPlay, const uint32_t _l
 			snprintf(Log_Buffer, Log_BufferLength, "%s '%s' ", (char *) FPSTR(modeAllTrackAlphSorted), filename);
 			Log_Println(Log_Buffer, LOGLEVEL_NOTICE);
 			AudioPlayer_SortPlaylist(musicFiles->files, musicFiles->numFiles);
-			xQueueSend(gTrackQueue, &(musicFiles), 0);
+			xQueueSend(gTrackQueue, &musicFiles->files, 0);
 			break;
 		}
 
 		case ALL_TRACKS_OF_DIR_RANDOM: {
 			Log_Println((char *) FPSTR(modeAllTrackRandom), LOGLEVEL_NOTICE);
 			AudioPlayer_SortPlaylist(musicFiles->files, musicFiles->numFiles);
-			xQueueSend(gTrackQueue, &(musicFiles), 0);
+			xQueueSend(gTrackQueue, &musicFiles->files, 0);
 			break;
 		}
 
@@ -1020,7 +1020,7 @@ void AudioPlayer_TrackQueueDispatcher(const char *_itemToPlay, const uint32_t _l
 			gPlayProperties.repeatPlaylist = true;
 			Log_Println((char *) FPSTR(modeAllTrackAlphSortedLoop), LOGLEVEL_NOTICE);
 			AudioPlayer_SortPlaylist(musicFiles->files, musicFiles->numFiles);
-			xQueueSend(gTrackQueue, &(musicFiles), 0);
+			xQueueSend(gTrackQueue, &musicFiles->files, 0);
 			break;
 		}
 
@@ -1028,14 +1028,14 @@ void AudioPlayer_TrackQueueDispatcher(const char *_itemToPlay, const uint32_t _l
 			gPlayProperties.repeatPlaylist = true;
 			Log_Println((char *) FPSTR(modeAllTrackRandomLoop), LOGLEVEL_NOTICE);
 			AudioPlayer_SortPlaylist(musicFiles->files, musicFiles->numFiles);
-			xQueueSend(gTrackQueue, &(musicFiles), 0);
+			xQueueSend(gTrackQueue, &musicFiles->files, 0);
 			break;
 		}
 
 		case WEBSTREAM: { // This is always just one "track"
 			Log_Println((char *) FPSTR(modeWebstream), LOGLEVEL_NOTICE);
 			if (Wlan_IsConnected()) {
-				xQueueSend(gTrackQueue, &(musicFiles), 0);
+			xQueueSend(gTrackQueue, &musicFiles->files, 0);
 			} else {
 				Log_Println((char *) FPSTR(webstreamNotAvailable), LOGLEVEL_ERROR);
 				System_IndicateError();
@@ -1046,7 +1046,7 @@ void AudioPlayer_TrackQueueDispatcher(const char *_itemToPlay, const uint32_t _l
 
 		case LOCAL_M3U: { // Can be one or multiple SD-files or webradio-stations; or a mix of both
 			Log_Println((char *) FPSTR(modeWebstreamM3u), LOGLEVEL_NOTICE);
-			xQueueSend(gTrackQueue, &(musicFiles), 0);
+			xQueueSend(gTrackQueue, &musicFiles->files, 0);
 			break;
 		}
 

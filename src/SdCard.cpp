@@ -282,6 +282,7 @@ const Playlist *SdCard_ReturnPlaylist(const char *fileName, const uint32_t _play
 					const size_t lineCount = cacheFile.readStringUntil('#').toInt();
 					if(!lineCount) {
 						// old file, delete cache
+						Log_Println((char *) FPSTR(playlistCacheFoundBut0), LOGLEVEL_ERROR);
 						cacheFile.close();
 						gFSystem.remove(cacheFileNameBuf);
 					} else {
@@ -355,10 +356,12 @@ const Playlist *SdCard_ReturnPlaylist(const char *fileName, const uint32_t _play
 			continue;
 		}
 		#if ESP_ARDUINO_VERSION_MAJOR >= 2
-			const char *path = fileOrDirectory.path();
+			const char *path = fileItem.path();
 		#else
-			const char *path = fileOrDirectory.name();
+			const char *path = fileItem.name();
 		#endif
+		snprintf(Log_Buffer, Log_BufferLength, "File[%d]: %s", playlist.numFiles, path);
+		Log_Println(Log_Buffer, LOGLEVEL_DEBUG);
 		if(fileValid(path)) {
 			playlist.files[playlist.numFiles] = x_strdup(path);
 			playlist.numFiles++;
