@@ -119,105 +119,76 @@ bool fileValid(const char *_fileItem) {
 
 
 // Takes a directory as input and returns a random subdirectory from it
-char *SdCard_pickRandomSubdirectory(char *_directory) {
+bool SdCard_pickRandomSubdirectory(char *_directory) {
 	// Look if file/folder requested really exists. If not => break.
 	File directory = gFSystem.open(_directory);
 	if (!directory) {
 		Log_Println((char *) FPSTR(dirOrFileDoesNotExist), LOGLEVEL_ERROR);
-		return NULL;
+		return false;
 	}
 	snprintf(Log_Buffer, Log_BufferLength, "%s: %s", (char *) FPSTR(tryToPickRandomDir), _directory);
 	Log_Println(Log_Buffer, LOGLEVEL_NOTICE);
 
-	static uint8_t allocCount = 1;
-	uint16_t allocSize = psramInit() ? 65535 : 1024;   // There's enough PSRAM. So we don't have to care...
-	uint16_t directoryCount = 0;
-	char *buffer = _directory;  // input char* is reused as it's content no longer needed
-	char *subdirectoryList = (char *) x_calloc(allocSize, sizeof(char));
-
-	if (subdirectoryList == NULL) {
-		Log_Println((char *) FPSTR(unableToAllocateMemForLinearPlaylist), LOGLEVEL_ERROR);
-		System_IndicateError();
-		return NULL;
-	}
-
-	// Create linear list of subdirectories with #-delimiters
-	while (true) {
+	// count the number of subdir's
+	size_t subDirCount = 0;
+	while(true){
 		File fileItem = directory.openNextFile();
-		if (!fileItem) {
+		if(!fileItem) {
 			break;
 		}
-		if (!fileItem.isDirectory()) {
+		if(!fileItem.isDirectory()) {
 			continue;
-		} else {
-			#if ESP_ARDUINO_VERSION_MAJOR >= 2
-				strncpy(buffer, (char *) fileItem.path(), 255);
-			#else
-				strncpy(buffer, (char *) fileItem.name(), 255);
-			#endif
-
-			/*snprintf(Log_Buffer, Log_BufferLength, "%s: %s", (char *) FPSTR(nameOfFileFound), buffer);
-			Log_Println(Log_Buffer, LOGLEVEL_INFO);*/
-			if ((strlen(subdirectoryList) + strlen(buffer) + 2) >= allocCount * allocSize) {
-				subdirectoryList = (char *) realloc(subdirectoryList, ++allocCount * allocSize);
-				Log_Println((char *) FPSTR(reallocCalled), LOGLEVEL_DEBUG);
-				if (subdirectoryList == NULL) {
-					Log_Println((char *) FPSTR(unableToAllocateMemForLinearPlaylist), LOGLEVEL_ERROR);
-					System_IndicateError();
-					return NULL;
-				}
-			}
-			strcat(subdirectoryList, stringDelimiter);
-			strcat(subdirectoryList, buffer);
-			directoryCount++;
 		}
-	}
-	strcat(subdirectoryList, stringDelimiter);
-
-	if (!directoryCount) {
-		free(subdirectoryList);
-		return NULL;
+		
+		subDirCount++;
 	}
 
-	uint16_t randomNumber = random(directoryCount) + 1;     // Create random-number with max = subdirectory-count
-	uint16_t delimiterFoundCount = 0;
-	uint32_t a=0;
-	uint8_t b=0;
+	// no sub directories, return "meh"
+	if(subDirCount == 0) {
+		return false;
+	}
+	const size_t randomNumber = random(subDirCount) + 1;     // Create random-number with max = subdirectory-count
 
-	// Walk through subdirectory-array and extract randomized subdirectory
-	while (subdirectoryList[a] != '\0') {
-		if (subdirectoryList[a] == '#') {
-			delimiterFoundCount++;
-		} else {
-			if (delimiterFoundCount == randomNumber) {  // Pick subdirectory of linear char* according to random number
-				buffer[b++] = subdirectoryList[a];
-			}
+	constexpr size_t maxFileLenght = 255;
+	// we reuse the input buffer (funtion should not return char*)
+	char *buffer = _directory;	//static_cast<char*>(malloc(maxFileLenght));		// this is the max lenght of a FAT32 filename
+
+	directory.rewindDirectory();
+	size_t counter = 0;
+	while(true) {
+		File fileItem = directory.openNextFile();
+		if(!fileItem) {
+			break;
 		}
-		if (delimiterFoundCount > randomNumber || (b == 254)) {  // It's over when next delimiter is found or buffer is full
-			buffer[b] = '\0';
-			free(subdirectoryList);
+		if(!fileItem.isDirectory()) {
+			continue;
+		}
+		
+		counter++;
+		if(counter == randomNumber) {
+			// we found our folder
+#if ESP_ARDUINO_VERSION_MAJOR >= 2
+			const char *path = fileItem.path();
+#else
+			const char *path = fileItem.name();
+#endif
+			strncpy(buffer, path, maxFileLenght);
 			snprintf(Log_Buffer, Log_BufferLength, "%s: %s", (char *) FPSTR(pickedRandomDir), _directory);
 			Log_Println(Log_Buffer, LOGLEVEL_NOTICE);
-			return buffer;  // Full path of random subdirectory
+			return true;  // Full path of random subdirectory
 		}
-		a++;
 	}
-
-	free(subdirectoryList);
-	return NULL;
+	return false;
 }
 
 
 /* Puts SD-file(s) or directory into a playlist
 	First element of array always contains the number of payload-items. */
-char **SdCard_ReturnPlaylist(const char *fileName, const uint32_t _playMode) {
-	static char **files;
-	char *serializedPlaylist;
-	char fileNameBuf[255];
+const Playlist *SdCard_ReturnPlaylist(const char *fileName, const uint32_t _playMode) {
+	static Playlist playlist;
 	char cacheFileNameBuf[275];
 	bool readFromCacheFile = false;
 	bool enablePlaylistCaching = false;
-	bool enablePlaylistFromM3u = false;
 
 	// Look if file/folder requested really exists. If not => break.
 	File fileOrDirectory = gFSystem.open(fileName);
@@ -226,11 +197,60 @@ char **SdCard_ReturnPlaylist(const char *fileName, const uint32_t _playMode) {
 		return NULL;
 	}
 
+	snprintf(Log_Buffer, Log_BufferLength, "%s: %u", (char *) FPSTR(freeMemory), ESP.getFreeHeap());
+	Log_Println(Log_Buffer, LOGLEVEL_DEBUG);
+
+	// clean up previous data
+	if (playlist.files != NULL) {
+		Log_Println((char *) FPSTR(releaseMemoryOfOldPlaylist), LOGLEVEL_DEBUG);
+		freeMultiCharArray(playlist.files, playlist.numFiles);
+		playlist.numFiles = 0;
+		snprintf(Log_Buffer, Log_BufferLength, "%s: %u", (char *) FPSTR(freeMemoryAfterFree), ESP.getFreeHeap());
+		Log_Println(Log_Buffer, LOGLEVEL_DEBUG);
+	}
+
+	// Parse m3u-playlist and create linear-playlist out of it
+	if (_playMode == LOCAL_M3U && fileOrDirectory && !fileOrDirectory.isDirectory() && fileOrDirectory.size() >= 0) {
+		// count the number of lines int he m3u
+		while(fileOrDirectory.available() > 0) {
+			char b = fileOrDirectory.read();
+			if(b == '\n') {
+				playlist.numFiles++;
+			}
+		}
+		fileOrDirectory.seek(0);
+
+		playlist.files = static_cast<char**>(malloc(sizeof(char*) * playlist.numFiles));
+		if(playlist.files == NULL) {
+			// malloc failed
+			Log_Println((char *) FPSTR(unableToAllocateMemForLinearPlaylist), LOGLEVEL_ERROR);
+			System_IndicateError();
+			return NULL;
+		}
+
+		// read file by line
+		size_t cnt = 0;
+		while(fileOrDirectory.available() > 0) {
+			String line = fileOrDirectory.readStringUntil('\n');
+			// ignore extended m3u lines
+			if(line.startsWith("#"))
+				continue;
+
+			// strip newline characters (f.e. CR)
+			line.trim();
+
+			// and save it
+			playlist.files[cnt] = x_strdup(line.c_str());
+			cnt++;
+		}
+
+		// we are finished
+		return &playlist;
+	}
+
 	// Create linear playlist of caching-file
 	#ifdef CACHED_PLAYLIST_ENABLE
-		strncpy(cacheFileNameBuf, fileName, sizeof(cacheFileNameBuf));
-		strcat(cacheFileNameBuf, "/");
-		strcat(cacheFileNameBuf, (const char*) FPSTR(playlistCacheFile));       // Build absolute path of cacheFile
+		snprintf(cacheFileNameBuf, sizeof(cacheFileNameBuf), "%s/%s", fileName, FPSTR(playlistCacheFile));
 
 		// Decide if to use cacheFile. It needs to exist first...
 		if (gFSystem.exists(cacheFileNameBuf)) {     // Check if cacheFile (already) exists
@@ -251,205 +271,131 @@ char **SdCard_ReturnPlaylist(const char *fileName, const uint32_t _playMode) {
 			if (cacheFile) {
 				uint32_t cacheFileSize = cacheFile.size();
 
-				if (!(cacheFileSize >= 1)) {        // Make sure it's greater than 0 bytes
+				if (!cacheFileSize) {        // Make sure it's greater than 0 bytes
 					Log_Println((char *) FPSTR(playlistCacheFoundBut0), LOGLEVEL_ERROR);
-					readFromCacheFile = false;
+					cacheFile.close();
+					gFSystem.remove(cacheFileNameBuf);
 				} else {
 					Log_Println((char *) FPSTR(playlistGenModeCached), LOGLEVEL_NOTICE);
-					serializedPlaylist = (char *) x_calloc(cacheFileSize+10, sizeof(char));
 
-					char buf;
-					uint32_t fPos = 0;
-					while (cacheFile.available() > 0) {
-						buf = cacheFile.read();
-						serializedPlaylist[fPos++] = buf;
+					// assume new cache format
+					const size_t lineCount = cacheFile.readStringUntil('#').toInt();
+					if(!lineCount) {
+						// old file, delete cache
+						cacheFile.close();
+						gFSystem.remove(cacheFileNameBuf);
+					} else {
+						// prepare playlist
+						playlist.numFiles = lineCount;
+						playlist.files = static_cast<char**>(malloc(sizeof(char*) * lineCount));
+						if(playlist.files == NULL) {
+							// malloc failed
+							Log_Println((char *) FPSTR(unableToAllocateMemForLinearPlaylist), LOGLEVEL_ERROR);
+							System_IndicateError();
+							return NULL;
+						}
+
+						size_t cnt = 0;
+						while(cacheFile.available() > 0){
+							const String line = cacheFile.readStringUntil('#');
+							playlist.files[cnt] = x_strdup(line.c_str());
+							cnt++;
+						}
+						return &playlist;
 					}
 				}
-				cacheFile.close();
 			}
 		}
 	#endif
 
-	snprintf(Log_Buffer, Log_BufferLength, "%s: %u", (char *) FPSTR(freeMemory), ESP.getFreeHeap());
-	Log_Println(Log_Buffer, LOGLEVEL_DEBUG);
+	// if we reach here, we didn't read from cachefile or m3u-file. Means: read filenames from SD and make playlist of it
+	Log_Println((char *) FPSTR(playlistGenModeUncached), LOGLEVEL_NOTICE);
 
-	if (files != NULL) { // If **ptr already exists, de-allocate its memory
-		Log_Println((char *) FPSTR(releaseMemoryOfOldPlaylist), LOGLEVEL_DEBUG);
-		--files;
-		freeMultiCharArray(files, strtoul(*files, NULL, 10));
-		snprintf(Log_Buffer, Log_BufferLength, "%s: %u", (char *) FPSTR(freeMemoryAfterFree), ESP.getFreeHeap());
-		Log_Println(Log_Buffer, LOGLEVEL_DEBUG);
+	// File-mode
+	if (!fileOrDirectory.isDirectory()) {
+		playlist.numFiles = 1;
+		playlist.files = static_cast<char**>(malloc(sizeof(char*)));
+		if (playlist.files == NULL) {
+			Log_Println((char *) FPSTR(unableToAllocateMemForPlaylist), LOGLEVEL_ERROR);
+			System_IndicateError();
+			return NULL;
+		}
+		Log_Println((char *) FPSTR(fileModeDetected), LOGLEVEL_INFO);
+		#if ESP_ARDUINO_VERSION_MAJOR >= 2
+			const char *path = fileOrDirectory.path();
+		#else
+			const char *path = fileOrDirectory.name();
+		#endif
+		if (fileValid(path)) {
+			playlist.files[0] = x_strdup(path);
+		}
+		return &playlist;
 	}
 
-	// Parse m3u-playlist and create linear-playlist out of it
-	if (_playMode == LOCAL_M3U) {
-		if (fileOrDirectory && !fileOrDirectory.isDirectory() && fileOrDirectory.size() >= 0) {
-			enablePlaylistFromM3u = true;
-			uint16_t allocCount = 1;
-			uint16_t allocSize = psramInit() ? 65535 : 1024;   // There's enough PSRAM. So we don't have to care...
+	// Directory-mode (linear-playlist)
+	// prepare playlist with a sane amount if entries
+	size_t allocCount = 1;
+	constexpr size_t allocSlots = 32;
 
-			serializedPlaylist = (char *) x_calloc(allocSize, sizeof(char));
-			if (serializedPlaylist == NULL) {
-				Log_Println((char *) FPSTR(unableToAllocateMemForLinearPlaylist), LOGLEVEL_ERROR);
-				System_IndicateError();
-				return files;
-			}
-			char buf;
-			char lastBuf = '#';
-			uint32_t fPos = 1;
+	playlist.files = static_cast<char**>(malloc(sizeof(char*) * allocSlots * allocCount));
+	if(playlist.files == NULL) {
+		// we failed!
+		Log_Println((char *) FPSTR(unableToAllocateMemForPlaylist), LOGLEVEL_ERROR);
+		System_IndicateError();
+		return NULL;
+	}
 
-			serializedPlaylist[0] = '#';
-			while (fileOrDirectory.available() > 0) {
-				buf = fileOrDirectory.read();
-				if (fPos+1 >= allocCount * allocSize) {
-					serializedPlaylist = (char *) realloc(serializedPlaylist, ++allocCount * allocSize);
-					Log_Println((char *) FPSTR(reallocCalled), LOGLEVEL_DEBUG);
-					if (serializedPlaylist == NULL) {
-						Log_Println((char *) FPSTR(unableToAllocateMemForLinearPlaylist), LOGLEVEL_ERROR);
-						System_IndicateError();
-						free(serializedPlaylist);
-						return files;
-					}
+	while(true) {
+		// go through the directory and register all playable files
+		File fileItem = fileOrDirectory.openNextFile();
+		if(!fileItem) {
+			break;
+		}
+		if(fileItem.isDirectory()){
+			continue;
+		}
+		#if ESP_ARDUINO_VERSION_MAJOR >= 2
+			const char *path = fileOrDirectory.path();
+		#else
+			const char *path = fileOrDirectory.name();
+		#endif
+		if(fileValid(path)) {
+			playlist.files[playlist.numFiles] = x_strdup(path);
+			playlist.numFiles++;
+			// test if we have to increase the slot count
+			if(playlist.numFiles == (allocSlots * allocCount)) {
+				allocCount++;
+
+				// use temporary buffer to retain playlist.files if we fail
+				char **tmpBuffer = static_cast<char**>(realloc(playlist.files, sizeof(char*) * allocCount * allocSlots ));
+				if(tmpBuffer == NULL) {
+					// we failed!
+					Log_Println((char *) FPSTR(unableToAllocateMemForPlaylist), LOGLEVEL_ERROR);
+					System_IndicateError();
+					return NULL;
 				}
-
-				if (buf != '\n' && buf != '\r') {
-					serializedPlaylist[fPos++] = buf;
-					lastBuf = buf;
-				} else {
-					if (lastBuf != '#') {   // Strip empty lines from m3u
-						serializedPlaylist[fPos++] = '#';
-						lastBuf = '#';
-					}
-				}
+				playlist.files = tmpBuffer;
 			}
-			if (serializedPlaylist[fPos-1] == '#') {    // Remove trailing delimiter if set
-				serializedPlaylist[fPos-1] = '\0';
-			}
-		} else {
-			return files;
 		}
 	}
 
-	// Don't read from cachefile or m3u-file. Means: read filenames from SD and make playlist of it
-	if (!readFromCacheFile && !enablePlaylistFromM3u) {
-		Log_Println((char *) FPSTR(playlistGenModeUncached), LOGLEVEL_NOTICE);
-		// File-mode
-		if (!fileOrDirectory.isDirectory()) {
-			files = (char **) x_malloc(sizeof(char *) * 2);
-			if (files == NULL) {
-				Log_Println((char *) FPSTR(unableToAllocateMemForPlaylist), LOGLEVEL_ERROR);
-				System_IndicateError();
-				return NULL;
+	snprintf(Log_Buffer, Log_BufferLength, "%s: %d", (char *) FPSTR(numberOfValidFiles), playlist.numFiles);
+	Log_Println(Log_Buffer, LOGLEVEL_NOTICE);
+
+	// create playlist cache
+	File cacheFile;
+	if(enablePlaylistCaching) {
+		cacheFile = gFSystem.open(cacheFileNameBuf, FILE_WRITE);
+		if(cacheFile) {
+			// write number of entries
+			cacheFile.printf("%d#", playlist.numFiles);
+			for(size_t i=0;i<playlist.numFiles;i++) {
+				cacheFile.print(playlist.files[i]);
+				cacheFile.print('#');
 			}
-			Log_Println((char *) FPSTR(fileModeDetected), LOGLEVEL_INFO);
-			#if ESP_ARDUINO_VERSION_MAJOR >= 2
-				strncpy(fileNameBuf, (char *) fileOrDirectory.path(), sizeof(fileNameBuf) / sizeof(fileNameBuf[0]));
-			#else
-				strncpy(fileNameBuf, (char *) fileOrDirectory.name(), sizeof(fileNameBuf) / sizeof(fileNameBuf[0]));
-			#endif
-			if (fileValid(fileNameBuf)) {
-				files = (char **) x_malloc(sizeof(char *) * 2);
-				files[1] = x_strdup(fileNameBuf);
-			}
-			files[0] = x_strdup("1"); // Number of files is always 1 in file-mode
-
-			return ++files;
-		}
-
-		// Directory-mode (linear-playlist)
-		uint16_t allocCount = 1;
-		uint16_t allocSize = 4096;
-		if (psramInit()) {
-			allocSize = 65535; // There's enough PSRAM. So we don't have to care...
-		}
-
-		serializedPlaylist = (char *) x_calloc(allocSize, sizeof(char));
-		File cacheFile;
-		if (enablePlaylistCaching) {
-			cacheFile = gFSystem.open(cacheFileNameBuf, FILE_WRITE);
-		}
-
-		while (true) {
-			File fileItem = fileOrDirectory.openNextFile();
-			if (!fileItem) {
-				break;
-			}
-			if (fileItem.isDirectory()) {
-				continue;
-			} else {
-				#if ESP_ARDUINO_VERSION_MAJOR >= 2
-					strncpy(fileNameBuf, (char *) fileItem.path(), sizeof(fileNameBuf) / sizeof(fileNameBuf[0]));
-				#else
-					strncpy(fileNameBuf, (char *) fileItem.name(), sizeof(fileNameBuf) / sizeof(fileNameBuf[0]));
-				#endif
-
-				// Don't support filenames that start with "." and only allow .mp3
-				if (fileValid(fileNameBuf)) {
-					/*snprintf(Log_Buffer, Log_BufferLength, "%s: %s", (char *) FPSTR(nameOfFileFound), fileNameBuf);
-					Log_Println(Log_Buffer, LOGLEVEL_INFO);*/
-					if ((strlen(serializedPlaylist) + strlen(fileNameBuf) + 2) >= allocCount * allocSize) {
-						serializedPlaylist = (char *) realloc(serializedPlaylist, ++allocCount * allocSize);
-						Log_Println((char *) FPSTR(reallocCalled), LOGLEVEL_DEBUG);
-						if (serializedPlaylist == NULL) {
-							Log_Println((char *) FPSTR(unableToAllocateMemForLinearPlaylist), LOGLEVEL_ERROR);
-							System_IndicateError();
-							return files;
-						}
-					}
-					strcat(serializedPlaylist, stringDelimiter);
-					strcat(serializedPlaylist, fileNameBuf);
-					if (cacheFile && enablePlaylistCaching) {
-						cacheFile.print(stringDelimiter);
-						cacheFile.print(fileNameBuf);       // Write linear playlist to cacheFile
-					}
-				}
-			}
-		}
-
-		if (cacheFile && enablePlaylistCaching) {
 			cacheFile.close();
 		}
 	}
 
-	// Get number of elements out of serialized playlist
-	uint32_t cnt = 0;
-	for (uint32_t k = 0; k < (strlen(serializedPlaylist)); k++) {
-		if (serializedPlaylist[k] == '#') {
-			cnt++;
-		}
-	}
-
-	// Alloc only necessary number of playlist-pointers
-	files = (char **) x_malloc(sizeof(char *) * cnt + 1);
-
-	if (files == NULL) {
-		Log_Println((char *) FPSTR(unableToAllocateMemForPlaylist), LOGLEVEL_ERROR);
-		System_IndicateError();
-		free(serializedPlaylist);
-		return NULL;
-	}
-
-	// Extract elements out of serialized playlist and copy to playlist
-	char *token;
-	token = strtok(serializedPlaylist, stringDelimiter);
-	uint32_t pos = 1;
-	while (token != NULL) {
-		files[pos++] = x_strdup(token);
-		token = strtok(NULL, stringDelimiter);
-	}
-
-	free(serializedPlaylist);
-
-	files[0] = (char *) x_malloc(sizeof(char) * 5);
-
-	if (files[0] == NULL) {
-		Log_Println((char *) FPSTR(unableToAllocateMemForPlaylist), LOGLEVEL_ERROR);
-		System_IndicateError();
-		return NULL;
-	}
-	sprintf(files[0], "%u", cnt);
-	snprintf(Log_Buffer, Log_BufferLength, "%s: %d", (char *) FPSTR(numberOfValidFiles), cnt);
-	Log_Println(Log_Buffer, LOGLEVEL_NOTICE);
-
-	return ++files; // return ptr+1 (starting at 1st payload-item); ptr+0 contains number of items
+	return &playlist;
 }

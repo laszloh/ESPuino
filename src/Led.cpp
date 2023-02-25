@@ -292,11 +292,11 @@ void Led_SetButtonLedsEnabled(boolean value) {
 				nextAnimation = LedAnimationType::Pause;
 			} else if (gPlayProperties.isWebstream) {
 				nextAnimation = LedAnimationType::Webstream;
-			} else if ((gPlayProperties.playMode != BUSY) && (gPlayProperties.playMode != NO_PLAYLIST)) {
+			} else if ((gPlayProperties.playMode != PLAYLIST_BUSY) && (gPlayProperties.playMode != NO_PLAYLIST)) {
 				nextAnimation = LedAnimationType::Progress;
 			} else if (gPlayProperties.playMode == NO_PLAYLIST) {
 				nextAnimation = LedAnimationType::Idle;
-			} else if (gPlayProperties.playMode == BUSY) {
+			} else if (gPlayProperties.playMode == PLAYLIST_BUSY) {
 				nextAnimation = LedAnimationType::Busy;
 			} else {
 				nextAnimation = LedAnimationType::NoNewAnimation; // should not happen

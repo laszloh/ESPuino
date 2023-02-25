@@ -158,7 +158,7 @@ Indicates different things. Don't forget configuration of number of LEDs via #de
 * BLUETOOTH: four LEDs slow rotating coloured blue
 * ERROR: all LEDs flashing red (1x) if an action was not accepted
 * OK: all LEDs flashing green (1x) if an action was accepted
-* BUSY: violet; four fast rotating LEDs when generating a playlist. Duration depends on the number of files in your playlist.
+* PLAYLIST_BUSY: violet; four fast rotating LEDs when generating a playlist. Duration depends on the number of files in your playlist.
 * track-progress: rainbow; number of LEDs relative to play-progress
 * playlist-progress: blue; appears only shortly in playlist-mode with the beginning every new track; number of LEDs relative to progress
 * webstream: two slow rotating LEDs that change their colours rainbow-wise as the stream proceeds
