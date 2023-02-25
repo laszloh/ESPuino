@@ -15,7 +15,7 @@ void Queues_Init(void) {
 		Log_Println((char *) FPSTR(unableToCreateVolQ), LOGLEVEL_ERROR);
 	}
 
-	gRfidCardQueue = xQueueCreate(1, cardIdStringSize);
+	gRfidCardQueue = xQueueCreate(1, sizeof(RfidMessage));
 	if (gRfidCardQueue == NULL) {
 		Log_Println((char *) FPSTR(unableToCreateRfidQ), LOGLEVEL_ERROR);
 	}

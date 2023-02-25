@@ -31,7 +31,6 @@
 #define RFID_PN5180_NFC15693_STATE_GETINVENTORY_PRIVACY 7u
 #define RFID_PN5180_NFC15693_STATE_ACTIVE 100u
 
-extern unsigned long Rfid_LastRfidCheckTimestamp;
 
 #ifdef RFID_READER_TYPE_PN5180
 	static void Rfid_Task(void *parameter);
@@ -87,13 +86,10 @@ extern unsigned long Rfid_LastRfidCheckTimestamp;
 		static PN5180ISO15693 nfc15693(RFID_CS, RFID_BUSY, RFID_RST);
 		uint32_t lastTimeDetected14443 = 0;
 		uint32_t lastTimeDetected15693 = 0;
-		#ifdef PAUSE_WHEN_RFID_REMOVED
-			byte lastValidcardId[cardIdSize];
-			bool cardAppliedCurrentRun = false;
-			bool cardAppliedLastRun = false;
-		#endif
+		bool cardAppliedCurrentRun = false;
+		bool cardAppliedLastRun = false;
 		uint8_t stateMachine = RFID_PN5180_STATE_INIT;
-		static byte cardId[cardIdSize], lastCardId[cardIdSize];
+		static uint8_t cardId[cardIdSize], lastCardId[cardIdSize];
 		uint8_t uid[10];
 		bool showDisablePrivacyNotification = true;
 
@@ -116,9 +112,6 @@ extern unsigned long Rfid_LastRfidCheckTimestamp;
 			#endif
 			String cardIdString;
 			bool cardReceived = false;
-			#ifdef PAUSE_WHEN_RFID_REMOVED
-				bool sameCardReapplied = false;
-			#endif
 
 			if (RFID_PN5180_STATE_INIT == stateMachine) {
 				nfc14443.begin();
@@ -194,16 +187,12 @@ extern unsigned long Rfid_LastRfidCheckTimestamp;
 					cardReceived = true;
 					stateMachine = RFID_PN5180_NFC15693_STATE_ACTIVE;
 					lastTimeDetected15693 = millis();
-					#ifdef PAUSE_WHEN_RFID_REMOVED
-						cardAppliedCurrentRun = true;
-					#endif
+					cardAppliedCurrentRun = true;
 				} else {
 					// lastTimeDetected15693 is used to prevent "new card detection with old card" with single events where no card was detected
 					if (!lastTimeDetected15693 || (millis() - lastTimeDetected15693 >= 400)) {
 						lastTimeDetected15693 = 0;
-						#ifdef PAUSE_WHEN_RFID_REMOVED
-							cardAppliedCurrentRun = false;
-						#endif
+						cardAppliedCurrentRun = false;
 						for (uint8_t i=0; i<cardIdSize; i++) {
 							lastCardId[i] = 0;
 						}
@@ -213,13 +202,11 @@ extern unsigned long Rfid_LastRfidCheckTimestamp;
 				}
 			}
 
-			#ifdef PAUSE_WHEN_RFID_REMOVED
-				if (!cardAppliedCurrentRun && cardAppliedLastRun && !gPlayProperties.pausePlay && System_GetOperationMode() != OPMODE_BLUETOOTH_SINK) {   // Card removed => pause
-					AudioPlayer_TrackControlToQueueSender(PAUSEPLAY);
-					Log_Println((char *) FPSTR(rfidTagRemoved), LOGLEVEL_NOTICE);
-				}
-				cardAppliedLastRun = cardAppliedCurrentRun;
-			#endif
+			if (!cardAppliedCurrentRun && cardAppliedLastRun) {   // Card removed => push to queue
+				RfidMessage msg = {RfidEvent::CardRemoved, {0}};
+				xQueueSend(gRfidCardQueue, &msg, 0);
+			}
+			cardAppliedLastRun = cardAppliedCurrentRun;
 
 			// send card to queue
 			if (cardReceived) {
@@ -243,12 +230,6 @@ extern unsigned long Rfid_LastRfidCheckTimestamp;
                     cardId[cardIdSize-1]   = cardId[cardIdSize-1] + gHallEffectSensor.waitForState(HallEffectWaitMS);  
                 #endif
 
-				#ifdef PAUSE_WHEN_RFID_REMOVED
-					if (memcmp((const void *)lastValidcardId, (const void *)cardId, sizeof(cardId)) == 0) {
-						sameCardReapplied = true;
-					}
-				#endif
-
 				Log_Print((char *) FPSTR(rfidTagDetected), LOGLEVEL_NOTICE, true);
 				snprintf(Log_Buffer, Log_BufferLength, "(%s) ID: ", (RFID_PN5180_NFC14443_STATE_ACTIVE == stateMachine) ? "ISO-14443" : "ISO-15693");
 				Log_Print(Log_Buffer, LOGLEVEL_NOTICE, false);
@@ -258,30 +239,10 @@ extern unsigned long Rfid_LastRfidCheckTimestamp;
 					Log_Print(Log_Buffer, LOGLEVEL_NOTICE, false);
 				}
 
-				for (uint8_t i = 0u; i < cardIdSize; i++) {
-					char num[4];
-					snprintf(num, sizeof(num), "%03d", cardId[i]);
-					cardIdString += num;
-				}
-
-				#ifdef PAUSE_WHEN_RFID_REMOVED
-					#ifdef ACCEPT_SAME_RFID_AFTER_TRACK_END
-						if (!sameCardReapplied || gPlayProperties.trackFinished || gPlayProperties.playlistFinished) {       // Don't allow to send card to queue if it's the same card again if track or playlist is unfnished 
-					#else	
-						if (!sameCardReapplied){		// Don't allow to send card to queue if it's the same card again... 
-					#endif
-						xQueueSend(gRfidCardQueue, cardIdString.c_str(), 0);
-					} else {
-						// If pause-button was pressed while card was not applied, playback could be active. If so: don't pause when card is reapplied again as the desired functionality would be reversed in this case.
-						if (gPlayProperties.pausePlay && System_GetOperationMode() != OPMODE_BLUETOOTH_SINK) {
-							AudioPlayer_TrackControlToQueueSender(PAUSEPLAY);       // ... play/pause instead
-							Log_Println((char *) FPSTR(rfidTagReapplied), LOGLEVEL_NOTICE);
-						}
-					}
-					memcpy(lastValidcardId, uid, cardIdSize);
-				#else
-					xQueueSend(gRfidCardQueue, cardIdString.c_str(), 0);        // If PAUSE_WHEN_RFID_REMOVED isn't active, every card-apply leads to new playlist-generation
-				#endif
+				// create message packet and send it
+				RfidMessage msg = {RfidEvent::CardApplied, {0}};
+				memcpy(msg.cardId, cardId, cardIdSize);
+				xQueueSend(gRfidCardQueue, &msg, 0);
 			}
 
 			if (RFID_PN5180_NFC14443_STATE_ACTIVE == stateMachine) {            // If 14443 is active, bypass 15693 as next check (performance)

@@ -417,6 +417,33 @@ void AudioPlayer_Task(void *parameter) {
 					AudioPlayer_ClearCover();
 					continue;
 
+				case PLAY:
+					trackCommand = NO_ACTION;
+					if(!audio->isRunning()){
+						// resume playback
+						audio->pauseResume();
+						Log_Println((char *) FPSTR(cmndPause), LOGLEVEL_INFO);	// ToDo: add new command for start playback
+						gPlayProperties.pausePlay = false;
+						Web_SendWebsocketData(0, 30);
+					}
+					continue;
+
+				case PAUSE:
+					trackCommand = NO_ACTION;
+					if(audio->isRunning()){
+						// pause playback
+						audio->pauseResume();
+						Log_Println((char *) FPSTR(cmndPause), LOGLEVEL_INFO);	// ToDo: add new command for start playback
+						if (gPlayProperties.saveLastPlayPosition) {
+							snprintf(Log_Buffer, Log_BufferLength, "%s: %u (%u)", (char *) FPSTR(trackPausedAtPos), audio->getFilePos(), audio->getFilePos() - audio->inBufferFilled());
+							Log_Println(Log_Buffer, LOGLEVEL_INFO);
+							AudioPlayer_NvsRfidWriteWrapper(gPlayProperties.playRfidTag, *(gPlayProperties.playlist + gPlayProperties.currentTrackNumber), audio->getFilePos() - audio->inBufferFilled(), gPlayProperties.playMode, gPlayProperties.currentTrackNumber, gPlayProperties.numberOfTracks);
+						}
+						gPlayProperties.pausePlay = true;
+						Web_SendWebsocketData(0, 30);
+					}
+					continue;
+
 				case PAUSEPLAY:
 					trackCommand = NO_ACTION;
 					audio->pauseResume();

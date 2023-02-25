@@ -8,7 +8,8 @@
 // Track-Control
 #define NO_ACTION                       0           // Dummy to unset track-control-command
 #define STOP                            1           // Stop play
-#define PLAY                            2           // Start play (currently not used)
+#define PLAY                            2           // Start playback
+#define PAUSE                           8           // Pause playback
 #define PAUSEPLAY                       3           // Pause/play
 #define NEXTTRACK                       4           // Next track of playlist
 #define PREVIOUSTRACK                   5           // Previous track of playlist

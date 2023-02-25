@@ -7,6 +7,8 @@
     It's been originally derived from lolin32, but just change it according your needs!
     */
 
+   #define SD_MMC_1BIT_MODE
+
     //################## GPIO-configuration ##############################
     // Please note: GPIOs 34, 35, 36, 39 are input-only and don't have pullup-resistors.
     // So if connecting a button to these, make sure to add a 10k-pullup-resistor for each button.
