@@ -33,15 +33,6 @@ PN532 nfc(pn532interface);
 static void Rfid_Task(void *p);
 static TaskHandle_t rfidTaskHandle;
 
-static constexpr void bufferToDezimalString(uint8_t *buf, size_t len, char *str) {
-	for(size_t i=0;i<len;i++) {
-		*(str++) = '0' + buf[i] / 100;
-		*(str++) = '0' + (buf[i] / 10) % 10;
-		*(str++) = '0' + buf[i] % 10;
-	}
-	*str = '\0';
-}
-
 static int I2C_ClearBus( uint8_t sda, uint8_t scl) {
 #if defined(TWCR) && defined(TWEN)
   TWCR &= ~(_BV(TWEN)); //Disable the Atmel 2-Wire interface so we can control the SDA and SCL pins directly
@@ -155,98 +146,54 @@ void Rfid_Task(void *p) {
 	uint8_t uidLength;
 	uint32_t lastTimeDetected14443 = 0;
 	uint8_t lastCardId[cardIdSize];
-	bool resetReader = true;
-
-#ifdef PAUSE_WHEN_RFID_REMOVED
-	uint8_t lastValidcardId[cardIdSize];
-	bool cardAppliedCurrentRun = false;
 	bool cardAppliedLastRun = false;
-	bool sameCardReapplied = false;
-#endif
 
 	while(1) {
+		RfidMessage msg = {RfidEvent::NoCard};
+
 		if(RFID_SCAN_INTERVAL/2 >= 20) {
 			vTaskDelay(portTICK_RATE_MS * (RFID_SCAN_INTERVAL/2));
 		} else {
 			vTaskDelay(portTICK_RATE_MS * 20);
 		}
 
-		bool success = nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A, uid, &uidLength, 10);
+		bool success = nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A, uid, &uidLength, 5);
 		if(success) {
 			// we have a card in the RF field
 			lastTimeDetected14443 = millis();
-#ifdef PAUSE_WHEN_RFID_REMOVED
-			cardAppliedCurrentRun = true;
-#endif
+			cardAppliedLastRun = true;
 
-			if(memcmp(uid, lastCardId, cardIdSize) == 0) {
-				// we already send this card to the queue
-				continue;
+			if(memcmp(uid, lastCardId, cardIdSize) != 0) {
+				// different card id read
+				Log_Print((char *) FPSTR(rfidTagDetected), LOGLEVEL_NOTICE, true);
+				for (uint8_t i=0u; i < cardIdSize; i++) {
+					snprintf(Log_Buffer, Log_BufferLength, "%02x%s", uid[i], (i < cardIdSize - 1u) ? "-" : "\n");
+					Log_Print(Log_Buffer, LOGLEVEL_NOTICE, false);
+				}
+
+				// different card id read
+				msg.event = RfidEvent::CardApplied;
+				memcpy(msg.cardId, uid, cardIdSize);
+				xQueueSend(gRfidCardQueue, &msg, 0);
 			}
 			memcpy(lastCardId, uid, cardIdSize);
-
-#ifdef PAUSE_WHEN_RFID_REMOVED
-			sameCardReapplied = (memcmp(lastValidcardId, uid, cardIdSize) == 0);
-#endif
-
-			Log_Print((char *) FPSTR(rfidTagDetected), LOGLEVEL_NOTICE, true);
-			snprintf(Log_Buffer, Log_BufferLength, "(ISO-14443) ID: ");
-			Log_Print(Log_Buffer, LOGLEVEL_NOTICE, false);
-			for(uint8_t i=0;i<cardIdSize;i++) {
-				snprintf(Log_Buffer, Log_BufferLength, "%02x%s", uid[i], (i < cardIdSize - 1u) ? "-" : "\n");
-				Log_Print(Log_Buffer, LOGLEVEL_NOTICE, false);
-			}
-
-			// create the cardid string
-			char chrBuffer[cardIdStringSize];
-			bufferToDezimalString(uid, cardIdSize, chrBuffer);
-
-			resetReader = true;
-			
-			#ifdef PAUSE_WHEN_RFID_REMOVED
-				#ifdef ACCEPT_SAME_RFID_AFTER_TRACK_END
-					if (!sameCardReapplied || gPlayProperties.trackFinished || gPlayProperties.playlistFinished) {       // Don't allow to send card to queue if it's the same card again if track or playlist is unfnished 
-				#else	
-					if (!sameCardReapplied){		// Don't allow to send card to queue if it's the same card again... 
-				#endif
-					xQueueSend(gRfidCardQueue, chrBuffer, 0);
-				} else {
-					// If pause-button was pressed while card was not applied, playback could be active. If so: don't pause when card is reapplied again as the desired functionality would be reversed in this case.
-					if (gPlayProperties.pausePlay && System_GetOperationMode() != OPMODE_BLUETOOTH_SINK) {
-						AudioPlayer_TrackControlToQueueSender(PAUSEPLAY);       // ... play/pause instead
-						Log_Println((char *) FPSTR(rfidTagReapplied), LOGLEVEL_NOTICE);
-					}
-				}
-				memcpy(lastValidcardId, uid, cardIdSize);
-			#else
-				// If PAUSE_WHEN_RFID_REMOVED isn't active, every card-apply leads to new playlist-generation
-				xQueueSend(gRfidCardQueue, chrBuffer, 0);
-			#endif
-
 		} else {
 			if(!lastTimeDetected14443 || (millis() - lastTimeDetected14443) > 200) {
 				// card was removed for sure
 				lastTimeDetected14443 = 0;
-#ifdef PAUSE_WHEN_RFID_REMOVED
-				cardAppliedCurrentRun = false;
-#endif
-				memset(lastCardId, 0, sizeof(lastCardId));
-				memset(uid, 0, sizeof(uid));
-				if(resetReader) {
-					resetReader = false;
+
+				if (cardAppliedLastRun) {   // Card was just removed => send to queue
+					msg.event = RfidEvent::CardRemoved;
+					memcpy(msg.cardId, lastCardId, cardIdSize);
+					xQueueSend(gRfidCardQueue, &msg, 0);
 					resetAndInit();
 				}
+				cardAppliedLastRun = false;
+
+				memset(lastCardId, 0, cardIdSize);
+				memset(uid, 0, sizeof(uid));
 			}
 		}
-
-		#ifdef PAUSE_WHEN_RFID_REMOVED
-			if (!cardAppliedCurrentRun && cardAppliedLastRun && !gPlayProperties.pausePlay && System_GetOperationMode() != OPMODE_BLUETOOTH_SINK) {   // Card removed => pause
-				AudioPlayer_TrackControlToQueueSender(PAUSEPLAY);
-				Log_Println((char *) FPSTR(rfidTagRemoved), LOGLEVEL_NOTICE);
-			}
-			cardAppliedLastRun = cardAppliedCurrentRun;
-		#endif
-
 	}
 }
 

@@ -47,8 +47,10 @@ void Rfid_PreferenceLookupHandler(void) {
 		} else if(msg.event == RfidEvent::CardRemoved) {
 			// a card was removed from the field
 			#ifdef PAUSE_WHEN_RFID_REMOVED
-				// no card in field --> pause playback (but not for BT)
-				if(System_GetOperationMode() != OPMODE_BLUETOOTH_SINK) {
+				// pause playback if "our" card was the one removed (but not for BT)
+				char removedCardId[cardIdStringSize];
+				RFID_IdToStr(msg.cardId, removedCardId);
+				if(System_GetOperationMode() != OPMODE_BLUETOOTH_SINK && memcmp(removedCardId, gOldRfidTagId, cardIdSize) == 0) {
 					AudioPlayer_TrackControlToQueueSender(PAUSE);
 				}
 			#endif
@@ -108,7 +110,6 @@ void Rfid_PreferenceLookupHandler(void) {
 							//System_IndicateError(); // Enable to have shown error @neopixel every time
 							return;
 						}
-						memcpy(gOldRfidTagId, gCurrentRfidTagId, cardIdStringSize);
 					#endif
 					#ifdef PAUSE_WHEN_RFID_REMOVED
 						if (strncmp(gCurrentRfidTagId, gOldRfidTagId, cardIdStringSize) == 0) {
@@ -118,7 +119,6 @@ void Rfid_PreferenceLookupHandler(void) {
 							}
 							return;
 						}
-						memcpy(gOldRfidTagId, gCurrentRfidTagId, cardIdStringSize);
 					#endif
 				}
 				#ifdef MQTT_ENABLE
@@ -132,6 +132,7 @@ void Rfid_PreferenceLookupHandler(void) {
 					}
 				#endif
 
+				memcpy(gOldRfidTagId, gCurrentRfidTagId, cardIdStringSize);
 				AudioPlayer_TrackQueueDispatcher(_file, _lastPlayPos, _playMode, _trackLastPlayed);
 			}
 		}
