@@ -672,9 +672,9 @@ void Web_SendWebsocketData(uint32_t client, uint8_t code) {
 	serializeJson(doc, jBuf, 255);
 
 	if (client == 0) {
-		ws.printfAll("%s", jBuf);
+		ws.printfAll(jBuf);
 	} else {
-		ws.printf(client, "%s", jBuf);
+		ws.printf(client, jBuf);
 	}
 	free(jBuf);
 }
@@ -943,8 +943,8 @@ void explorerHandleListRequest(AsyncWebServerRequest *request) {
 		if (!startsWith(path, (char *)"/.")) {
 			JsonObject entry = obj.createNestedObject();
 			convertAsciiToUtf8(path, filePath);
-			std::string path = filePath;
-			std::string fileName = path.substr(path.find_last_of("/") + 1);
+			String fileName = String(filePath);
+			fileName = fileName.substring(fileName.lastIndexOf('/') + 1);
 
 			entry["name"] = fileName;
 			entry["dir"].set(file.isDirectory());
@@ -1225,8 +1225,7 @@ void Web_DumpSdToNvs(const char *_filename) {
 	bool count = false;
 	uint16_t importCount = 0;
 	uint16_t invalidCount = 0;
-	nvs_t nvsEntry[1];
-	char buf;
+	nvs_t nvsEntry;
 	File tmpFile = gFSystem.open(_filename);
 
 	if (!tmpFile) {
@@ -1236,9 +1235,9 @@ void Web_DumpSdToNvs(const char *_filename) {
 
 	Led_SetPause(true);
 	while (tmpFile.available() > 0) {
-		buf = tmpFile.read();
-		if (buf != '\n') {
-			ebuf[j++] = buf;
+		char c = tmpFile.read();
+		if (c != '\n') {
+			ebuf[j++] = c;
 		} else {
 			ebuf[j] = '\0';
 			j = 0;
@@ -1246,19 +1245,19 @@ void Web_DumpSdToNvs(const char *_filename) {
 			while (token != NULL) {
 				if (!count) {
 					count = true;
-					memcpy(nvsEntry[0].nvsKey, token, strlen(token));
-					nvsEntry[0].nvsKey[strlen(token)] = '\0';
+					memcpy(nvsEntry.nvsKey, token, strlen(token));
+					nvsEntry.nvsKey[strlen(token)] = '\0';
 				} else {
 					count = false;
-					memcpy(nvsEntry[0].nvsEntry, token, strlen(token));
-					nvsEntry[0].nvsEntry[strlen(token)] = '\0';
+					memcpy(nvsEntry.nvsEntry, token, strlen(token));
+					nvsEntry.nvsEntry[strlen(token)] = '\0';
 				}
 				token = strtok(NULL, stringOuterDelimiter);
 			}
-			if (isNumber(nvsEntry[0].nvsKey) && nvsEntry[0].nvsEntry[0] == '#') {
-				snprintf(Log_Buffer, Log_BufferLength, "[%u] %s: %s => %s", ++importCount, (char *) FPSTR(writeEntryToNvs), nvsEntry[0].nvsKey, nvsEntry[0].nvsEntry);
+			if (isNumber(nvsEntry.nvsKey) && nvsEntry.nvsEntry[0] == '#') {
+				snprintf(Log_Buffer, Log_BufferLength, "[%u] %s: %s => %s", ++importCount, (char *) FPSTR(writeEntryToNvs), nvsEntry.nvsKey, nvsEntry.nvsEntry);
 				Log_Println(Log_Buffer, LOGLEVEL_NOTICE);
-				gPrefsRfid.putString(nvsEntry[0].nvsKey, nvsEntry[0].nvsEntry);
+				gPrefsRfid.putString(nvsEntry.nvsKey, nvsEntry.nvsEntry);
 			} else {
 				invalidCount++;
 			}
