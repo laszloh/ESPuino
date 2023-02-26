@@ -1064,7 +1064,7 @@ size_t AudioPlayer_NvsRfidWriteWrapper(const char *_rfidCardId, const char *_tra
 	Led_SetPause(true); // Workaround to prevent exceptions due to Neopixel-signalisation while NVS-write
 	char prefBuf[275];
 	char trackBuf[255];
-	snprintf(trackBuf, sizeof(trackBuf) / sizeof(trackBuf[0]), _track);
+	snprintf(trackBuf, sizeof(trackBuf), "%s", _track);
 
 	// If it's a directory we just want to play/save basename(path)
 	if (_numberOfTracks > 1) {
@@ -1073,7 +1073,7 @@ size_t AudioPlayer_NvsRfidWriteWrapper(const char *_rfidCardId, const char *_tra
 		char *first = strchr(_track, s);
 		unsigned long substr = last - first + 1;
 		if (substr <= sizeof(trackBuf) / sizeof(trackBuf[0])) {
-			snprintf(trackBuf, substr, _track); // save substring basename(_track)
+			snprintf(trackBuf, substr, "%s", _track); // save substring basename(_track)
 		} else {
 			return 0; // Filename too long!
 		}

@@ -210,7 +210,7 @@ const Playlist *SdCard_ReturnPlaylist(const char *fileName, const uint32_t _play
 	}
 
 	// Parse m3u-playlist and create linear-playlist out of it
-	if (_playMode == LOCAL_M3U && fileOrDirectory && !fileOrDirectory.isDirectory() && fileOrDirectory.size() >= 0) {
+	if (_playMode == LOCAL_M3U && fileOrDirectory && !fileOrDirectory.isDirectory() && fileOrDirectory.size() > 0) {
 		// count the number of lines int he m3u
 		while(fileOrDirectory.available() > 0) {
 			char b = fileOrDirectory.read();

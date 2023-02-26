@@ -672,9 +672,9 @@ void Web_SendWebsocketData(uint32_t client, uint8_t code) {
 	serializeJson(doc, jBuf, 255);
 
 	if (client == 0) {
-		ws.printfAll(jBuf);
+		ws.printfAll("%s", jBuf);
 	} else {
-		ws.printf(client, jBuf);
+		ws.printf(client, "%s", jBuf);
 	}
 	free(jBuf);
 }
@@ -870,8 +870,7 @@ void explorerHandleFileStorageTask(void *parameter) {
 			}
 
 			if (lastUpdateTimestamp + maxUploadDelay * 1000 < millis()) {
-				snprintf(Log_Buffer, Log_BufferLength, (char *) FPSTR(webTxCanceled));
-				Log_Println(Log_Buffer, LOGLEVEL_ERROR);
+				Log_Println((char *) FPSTR(webTxCanceled), LOGLEVEL_ERROR);
 				vTaskDelete(NULL);
 				return;
 			}
@@ -923,32 +922,27 @@ void explorerHandleListRequest(AsyncWebServerRequest *request) {
 	}
 
 	if (!root) {
-		snprintf(Log_Buffer, Log_BufferLength, (char *) FPSTR(failedToOpenDirectory));
-		Log_Println(Log_Buffer, LOGLEVEL_DEBUG);
+		Log_Println((char *) FPSTR(failedToOpenDirectory), LOGLEVEL_DEBUG);
 		return;
 	}
 
 	if (!root.isDirectory()) {
-		snprintf(Log_Buffer, Log_BufferLength, (char *) FPSTR(notADirectory));
-		Log_Println(Log_Buffer, LOGLEVEL_DEBUG);
+		Log_Println((char *) FPSTR(notADirectory), LOGLEVEL_DEBUG);
 		return;
 	}
 
 	File file = root.openNextFile();
 
 	while (file) {
-		// ignore hidden folders, e.g. MacOS spotlight files
 		#if ESP_ARDUINO_VERSION_MAJOR >= 2
-		if (!startsWith( file.path() , (char *)"/.")) {
+		const char *path = file.path();
 		#else
-		if (!startsWith( file.name() , (char *)"/.")) {
+		const char *path = file.name();
 		#endif
+		// ignore hidden folders, e.g. MacOS spotlight files
+		if (!startsWith(path, (char *)"/.")) {
 			JsonObject entry = obj.createNestedObject();
-			#if ESP_ARDUINO_VERSION_MAJOR >= 2
-				convertAsciiToUtf8(file.path(), filePath);
-			#else
-				convertAsciiToUtf8(file.name(), filePath);
-			#endif
+			convertAsciiToUtf8(path, filePath);
 			std::string path = filePath;
 			std::string fileName = path.substr(path.find_last_of("/") + 1);
 

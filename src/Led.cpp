@@ -217,7 +217,7 @@ void Led_SetButtonLedsEnabled(boolean value) {
 #ifdef NEOPIXEL_ENABLE
 	static void Led_Task(void *parameter) {
 		static uint8_t hlastVolume = AudioPlayer_GetCurrentVolume();
-		static double lastPos = gPlayProperties.currentRelPos;
+		static float lastPos = gPlayProperties.currentRelPos;
 		static bool showEvenError = false;
 		static bool turnedOffLeds = false;
 		static bool singleLedStatus = false;
@@ -520,9 +520,9 @@ void Led_SetButtonLedsEnabled(boolean value) {
 								}
 
 								CRGB::HTMLColorCode ledColor = CRGB::Green;
-								if (staticBatteryLevel < 0.3) {
+								if (staticBatteryLevel < 0.3f) {
 									ledColor = CRGB::Red;
-								} else if (staticBatteryLevel < 0.6) {
+								} else if (staticBatteryLevel < 0.6f) {
 									ledColor = CRGB::Orange;
 								}
 
@@ -773,7 +773,7 @@ void Led_SetButtonLedsEnabled(boolean value) {
 							lastPos = gPlayProperties.currentRelPos;
 							indicator = CRGB::Black;
 							if (NUM_LEDS == 1) {
-								indicator[0].setHue((uint8_t)(85 - ((double)90 / 100) * gPlayProperties.currentRelPos));
+								indicator[0].setHue((uint8_t)(85 - (float(90) / 100) * gPlayProperties.currentRelPos));
 							} else {
 								const uint32_t ledValue = std::clamp(map(gPlayProperties.currentRelPos, 0, 98, 0, NUM_LEDS * DIMMABLE_STATES), long(0), long(NUM_LEDS * DIMMABLE_STATES));
 								const uint8_t fullLeds = ledValue / DIMMABLE_STATES;
