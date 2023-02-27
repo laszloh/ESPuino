@@ -31,7 +31,7 @@
 // MQTT
 static bool Mqtt_Enabled = true;
 
-static void Mqtt_ClientCallback(const char *topic, const byte *payload, uint32_t length);
+static void Mqtt_ClientCallback(const char *topic, uint8_t *payload, uint32_t length);
 static bool Mqtt_Reconnect(void);
 static void Mqtt_PostWiFiRssi(void);
 
@@ -286,13 +286,13 @@ bool Mqtt_Reconnect() {
 }
 
 // Is called if there's a new MQTT-message for us
-void Mqtt_ClientCallback(const char *topic, const byte *payload, uint32_t length) {
+void Mqtt_ClientCallback(const char *topic, uint8_t *payload, uint32_t length) {
 	#ifdef MQTT_ENABLE
-		char *receivedString = (char*)x_calloc(length + 1u, sizeof(char));
-		memcpy(receivedString, (char *) payload, length);
-		char *mqttTopic = x_strdup(topic);
+		// use mqtt buffer directly
+		payload[length] = '\0';
+		char *receivedString = (char*)payload;
 
-		snprintf(Log_Buffer, Log_BufferLength, "%s: [Topic: %s] [Command: %s]", (char *) FPSTR(mqttMsgReceived), mqttTopic, receivedString);
+		snprintf(Log_Buffer, Log_BufferLength, "%s: [Topic: %s] [Command: %s]", (char *) FPSTR(mqttMsgReceived), topic, receivedString);
 		Log_Println(Log_Buffer, LOGLEVEL_INFO);
 
 		// Go to sleep?
@@ -303,8 +303,7 @@ void Mqtt_ClientCallback(const char *topic, const byte *payload, uint32_t length
 		}
 		// New track to play? Take RFID-ID as input
 		else if (strcmp_P(topic, topicRfidCmnd) == 0) {
-			char *_rfidId = x_strdup(receivedString);
-			xQueueSend(gRfidCardQueue, _rfidId, 0);
+			xQueueSend(gRfidCardQueue, receivedString, 0);
 		}
 		// Loudness to change?
 		else if (strcmp_P(topic, topicLoudnessCmnd) == 0) {
@@ -458,8 +457,5 @@ void Mqtt_ClientCallback(const char *topic, const byte *payload, uint32_t length
 			Log_Println(Log_Buffer, LOGLEVEL_ERROR);
 			System_IndicateError();
 		}
-
-		free(receivedString);
-		free(mqttTopic);
 	#endif
 }

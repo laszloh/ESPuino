@@ -858,6 +858,7 @@ void AudioPlayer_TrackQueueDispatcher(const char *_itemToPlay, const uint32_t _l
 			}
 		}
 	#endif
+	// TODO: check usage of a stack buffer instead
 	char *filename;
 	filename = (char *) x_malloc(sizeof(char) * 255);
 
@@ -868,11 +869,11 @@ void AudioPlayer_TrackQueueDispatcher(const char *_itemToPlay, const uint32_t _l
 
 	if (_playMode != WEBSTREAM) {
 		if (_playMode == RANDOM_SUBDIRECTORY_OF_DIRECTORY) {
-			filename = SdCard_pickRandomSubdirectory(filename);     // *filename (input): target-directory  //   *filename (output): random subdirectory
-			if (filename == NULL) {  // If error occured while extracting random subdirectory
+			char *tmp = SdCard_pickRandomSubdirectory(filename);     // *filename (input): target-directory  //   *filename (output): random subdirectory
+			if (tmp == NULL) {  // If error occured while extracting random subdirectory
 				musicFiles = NULL;
 			} else {
-				musicFiles = SdCard_ReturnPlaylist(filename, _playMode);    // Provide random subdirectory in order to enter regular playlist-generation
+				musicFiles = SdCard_ReturnPlaylist(tmp, _playMode);    // Provide random subdirectory in order to enter regular playlist-generation
 			}
 		} else {
 			musicFiles = SdCard_ReturnPlaylist(filename, _playMode);
@@ -888,6 +889,7 @@ void AudioPlayer_TrackQueueDispatcher(const char *_itemToPlay, const uint32_t _l
 		if (gPlayProperties.playMode != NO_PLAYLIST) {
 			AudioPlayer_TrackControlToQueueSender(STOP);
 		}
+		free(filename);
 		return;
 	}
 
@@ -1067,21 +1069,17 @@ size_t AudioPlayer_NvsRfidWriteWrapper(const char *_rfidCardId, const char *_tra
 
 // Adds webstream to playlist; same like SdCard_ReturnPlaylist() but always only one entry
 char **AudioPlayer_ReturnPlaylistFromWebstream(const char *_webUrl) {
-	char *webUrl = x_strdup(_webUrl);
-	static char **url;
+	static char *url[2] = {"1", NULL};
 
-	if (url != NULL) {
-		--url;
-		freeMultiCharArray(url, strtoul(*url, NULL, 10));
+	// free url[1] if it is used
+	if(url[1] != NULL) {
+		free(url[1]);
 	}
 
-	url = (char **)x_malloc(sizeof(char *) * 2);
+	url[0] = "1";	// make sure nobody messed with our value
+	url[1] = x_strdup(_webUrl);
 
-	url[0] = x_strdup("1"); // Number of files is always 1 in url-mode
-	url[1] = x_strdup(webUrl);
-
-	free(webUrl);
-	return ++url;
+	return &(url[1]);
 }
 
 // Adds new control-command to control-queue

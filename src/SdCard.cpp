@@ -133,6 +133,7 @@ char *SdCard_pickRandomSubdirectory(char *_directory) {
 	uint16_t allocSize = psramInit() ? 65535 : 1024;   // There's enough PSRAM. So we don't have to care...
 	uint16_t directoryCount = 0;
 	char *buffer = _directory;  // input char* is reused as it's content no longer needed
+	// TODO: check if memory usage can be reduced
 	char *subdirectoryList = (char *) x_calloc(allocSize, sizeof(char));
 
 	if (subdirectoryList == NULL) {
@@ -159,13 +160,15 @@ char *SdCard_pickRandomSubdirectory(char *_directory) {
 			/*snprintf(Log_Buffer, Log_BufferLength, "%s: %s", (char *) FPSTR(nameOfFileFound), buffer);
 			Log_Println(Log_Buffer, LOGLEVEL_INFO);*/
 			if ((strlen(subdirectoryList) + strlen(buffer) + 2) >= allocCount * allocSize) {
-				subdirectoryList = (char *) realloc(subdirectoryList, ++allocCount * allocSize);
+				char *tmp = (char *) realloc(subdirectoryList, ++allocCount * allocSize);
 				Log_Println((char *) FPSTR(reallocCalled), LOGLEVEL_DEBUG);
-				if (subdirectoryList == NULL) {
+				if (tmp == NULL) {
 					Log_Println((char *) FPSTR(unableToAllocateMemForLinearPlaylist), LOGLEVEL_ERROR);
 					System_IndicateError();
+					free(subdirectoryList);
 					return NULL;
 				}
+				subdirectoryList = tmp;
 			}
 			strcat(subdirectoryList, stringDelimiter);
 			strcat(subdirectoryList, buffer);
@@ -256,7 +259,13 @@ char **SdCard_ReturnPlaylist(const char *fileName, const uint32_t _playMode) {
 					readFromCacheFile = false;
 				} else {
 					Log_Println((char *) FPSTR(playlistGenModeCached), LOGLEVEL_NOTICE);
+					// TODO: check if memory usage can be reduced
 					serializedPlaylist = (char *) x_calloc(cacheFileSize+10, sizeof(char));
+					if(serializedPlaylist == NULL) {
+						Log_Println((char *) FPSTR(unableToAllocateMemForLinearPlaylist), LOGLEVEL_ERROR);
+						System_IndicateError();
+						return files;
+					}
 
 					char buf;
 					uint32_t fPos = 0;
@@ -288,6 +297,7 @@ char **SdCard_ReturnPlaylist(const char *fileName, const uint32_t _playMode) {
 			uint16_t allocCount = 1;
 			uint16_t allocSize = psramInit() ? 65535 : 1024;   // There's enough PSRAM. So we don't have to care...
 
+			// TODO: check if memory usage can be reduced
 			serializedPlaylist = (char *) x_calloc(allocSize, sizeof(char));
 			if (serializedPlaylist == NULL) {
 				Log_Println((char *) FPSTR(unableToAllocateMemForLinearPlaylist), LOGLEVEL_ERROR);
@@ -302,14 +312,15 @@ char **SdCard_ReturnPlaylist(const char *fileName, const uint32_t _playMode) {
 			while (fileOrDirectory.available() > 0) {
 				buf = fileOrDirectory.read();
 				if (fPos+1 >= allocCount * allocSize) {
-					serializedPlaylist = (char *) realloc(serializedPlaylist, ++allocCount * allocSize);
+					char *tmp = (char *) realloc(serializedPlaylist, ++allocCount * allocSize);
 					Log_Println((char *) FPSTR(reallocCalled), LOGLEVEL_DEBUG);
-					if (serializedPlaylist == NULL) {
+					if (tmp == NULL) {
 						Log_Println((char *) FPSTR(unableToAllocateMemForLinearPlaylist), LOGLEVEL_ERROR);
 						System_IndicateError();
 						free(serializedPlaylist);
 						return files;
 					}
+					serializedPlaylist = tmp;
 				}
 
 				if (buf != '\n' && buf != '\r') {
@@ -348,7 +359,6 @@ char **SdCard_ReturnPlaylist(const char *fileName, const uint32_t _playMode) {
 				strncpy(fileNameBuf, (char *) fileOrDirectory.name(), sizeof(fileNameBuf) / sizeof(fileNameBuf[0]));
 			#endif
 			if (fileValid(fileNameBuf)) {
-				files = (char **) x_malloc(sizeof(char *) * 2);
 				files[1] = x_strdup(fileNameBuf);
 			}
 			files[0] = x_strdup("1"); // Number of files is always 1 in file-mode
@@ -363,7 +373,14 @@ char **SdCard_ReturnPlaylist(const char *fileName, const uint32_t _playMode) {
 			allocSize = 65535; // There's enough PSRAM. So we don't have to care...
 		}
 
+		// TODO: check if memory usage can be reduced
 		serializedPlaylist = (char *) x_calloc(allocSize, sizeof(char));
+		if (serializedPlaylist == NULL) {
+			Log_Println((char *) FPSTR(unableToAllocateMemForLinearPlaylist), LOGLEVEL_ERROR);
+			System_IndicateError();
+			return files;
+		}
+
 		File cacheFile;
 		if (enablePlaylistCaching) {
 			cacheFile = gFSystem.open(cacheFileNameBuf, FILE_WRITE);
@@ -388,13 +405,15 @@ char **SdCard_ReturnPlaylist(const char *fileName, const uint32_t _playMode) {
 					/*snprintf(Log_Buffer, Log_BufferLength, "%s: %s", (char *) FPSTR(nameOfFileFound), fileNameBuf);
 					Log_Println(Log_Buffer, LOGLEVEL_INFO);*/
 					if ((strlen(serializedPlaylist) + strlen(fileNameBuf) + 2) >= allocCount * allocSize) {
-						serializedPlaylist = (char *) realloc(serializedPlaylist, ++allocCount * allocSize);
+						char *tmp = (char *) realloc(serializedPlaylist, ++allocCount * allocSize);
 						Log_Println((char *) FPSTR(reallocCalled), LOGLEVEL_DEBUG);
-						if (serializedPlaylist == NULL) {
+						if (tmp == NULL) {
 							Log_Println((char *) FPSTR(unableToAllocateMemForLinearPlaylist), LOGLEVEL_ERROR);
 							System_IndicateError();
+							free(serializedPlaylist);
 							return files;
 						}
+						serializedPlaylist = tmp;
 					}
 					strcat(serializedPlaylist, stringDelimiter);
 					strcat(serializedPlaylist, fileNameBuf);
