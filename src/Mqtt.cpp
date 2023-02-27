@@ -8,6 +8,7 @@
 #include "MemX.h"
 #include "System.h"
 #include "Queues.h"
+#include "Rfid.h"
 #include "Wlan.h"
 #include "revision.h"
 
@@ -275,6 +276,7 @@ bool Mqtt_Reconnect() {
 
 				return Mqtt_PubSubClient.connected();
 			} else {
+				Mqtt_PubSubClient.disconnect();
 				snprintf(Log_Buffer, Log_BufferLength, "%s: rc=%i (%d / %d)", (char *) FPSTR(mqttConnFailed), Mqtt_PubSubClient.state(), i, mqttMaxRetriesPerInterval);
 				Log_Println(Log_Buffer, LOGLEVEL_ERROR);
 			}
@@ -283,6 +285,13 @@ bool Mqtt_Reconnect() {
 	#else
 		return false;
 	#endif
+}
+
+static void decimalToBinary(const char *str, uint8_t *buf) {
+	for(uint8_t i=0;i<cardIdSize;i++) {
+		const String sub = String(str).substring(i * 3, (i * 3) + 2);
+		buf[i] = sub.toInt();
+	}
 }
 
 // Is called if there's a new MQTT-message for us
@@ -303,7 +312,10 @@ void Mqtt_ClientCallback(const char *topic, uint8_t *payload, uint32_t length) {
 		}
 		// New track to play? Take RFID-ID as input
 		else if (strcmp_P(topic, topicRfidCmnd) == 0) {
-			xQueueSend(gRfidCardQueue, receivedString, 0);
+			RfidMessage msg;
+			msg.event = RfidEvent::CardApplied;
+			decimalToBinary(receivedString, msg.cardId);
+			xQueueSend(gRfidCardQueue, &msg, 0);
 		}
 		// Loudness to change?
 		else if (strcmp_P(topic, topicLoudnessCmnd) == 0) {
