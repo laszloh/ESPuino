@@ -50,7 +50,7 @@ void Rfid_PreferenceLookupHandler(void) {
 				// pause playback if "our" card was the one removed (but not for BT)
 				char removedCardId[cardIdStringSize];
 				RFID_IdToStr(msg.cardId, removedCardId);
-				if(System_GetOperationMode() != OPMODE_BLUETOOTH_SINK && memcmp(removedCardId, gOldRfidTagId, cardIdSize) == 0) {
+				if(System_GetOperationMode() != OPMODE_BLUETOOTH_SINK && memcmp(removedCardId, gOldRfidTagId, cardIdSize) == 0 && gPlayProperties.playMode != AUDIOBOOK && gPlayProperties.playMode != AUDIOBOOK_LOOP) {
 					AudioPlayer_TrackControlToQueueSender(PAUSE);
 				}
 			#endif
