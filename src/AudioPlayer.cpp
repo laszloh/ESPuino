@@ -892,6 +892,7 @@ void AudioPlayer_TrackQueueDispatcher(const char *_itemToPlay, const uint32_t _l
 			}
 		}
 	#endif
+	// TODO: check usage of a stack buffer instead
 	char *filename;
 	filename = (char *) x_malloc(sizeof(char) * 255);
 

@@ -3,6 +3,7 @@
 #include "IrReceiver.h"
 #include "AudioPlayer.h"
 #include "Cmd.h"
+#include "Log.h"
 #include "Queues.h"
 #include "System.h"
 

@@ -639,7 +639,6 @@ bool processJsonRequest(char *_serialJson) {
 void Web_SendWebsocketData(uint32_t client, uint8_t code) {
 	if (!webserverStarted)
 		return;
-	char *jBuf = (char *) x_calloc(255, sizeof(char));
 
 	const size_t CAPACITY = JSON_OBJECT_SIZE(1) + 200;
 	StaticJsonDocument<CAPACITY> doc;
@@ -669,14 +668,21 @@ void Web_SendWebsocketData(uint32_t client, uint8_t code) {
 		object["volume"] = AudioPlayer_GetCurrentVolume();
 	};
 
-	serializeJson(doc, jBuf, 255);
+	size_t len = measureJson(doc);
+	AsyncWebSocketMessageBuffer *buffer = ws.makeBuffer(len);
+	if(!buffer) {
+		// buffer allocation failed
+		//TODO: Add error handling or something like that
+		return;
+	}
+
+	serializeJson(doc, buffer, len + 1);
 
 	if (client == 0) {
-		ws.printfAll(jBuf);
+		ws.textAll(buffer);
 	} else {
-		ws.printf(client, jBuf);
+		ws.client(client)->text(buffer);
 	}
-	free(jBuf);
 }
 
 
