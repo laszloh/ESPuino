@@ -670,13 +670,13 @@ void Web_SendWebsocketData(uint32_t client, uint8_t code) {
 
 	size_t len = measureJson(doc);
 	AsyncWebSocketMessageBuffer *buffer = ws.makeBuffer(len);
-	if(!buffer) {
+	if(buffer == NULL) {
 		// buffer allocation failed
 		//TODO: Add error handling or something like that
 		return;
 	}
 
-	serializeJson(doc, buffer, len + 1);
+	serializeJson(doc, buffer->get(), len + 1);
 
 	if (client == 0) {
 		ws.textAll(buffer);
