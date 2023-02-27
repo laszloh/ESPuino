@@ -123,7 +123,7 @@ void Rfid_Init(void) {
 
 	uint32_t versiondata = nfc.getFirmwareVersion();
 	if (!versiondata)
-		Log_Println("Did not find NFC card!", LOGLEVEL_ERROR);
+		Log_Println("Did not find NFC card reader!", LOGLEVEL_ERROR);
 	// Got ok data, print it out!
 	snprintf(Log_Buffer, Log_BufferLength, "Found PN5%X FW: %d.%d\n", (versiondata>>24) & 0xFF, (versiondata>>16) & 0xFF, (versiondata>>8) & 0xFF);
 	Log_Print(Log_Buffer, LOGLEVEL_NOTICE, false);
@@ -157,6 +157,12 @@ void Rfid_Task(void *p) {
 			vTaskDelay(portTICK_RATE_MS * 20);
 		}
 
+		const uint32_t versiondata = nfc.getFirmwareVersion();
+		if (!versiondata) {
+			Log_Println("Lost communication with the card reader!", LOGLEVEL_ERROR);
+			resetAndInit();
+		}
+
 		bool success = nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A, uid, &uidLength, 5);
 		if(success) {
 			// we have a card in the RF field
@@ -186,7 +192,6 @@ void Rfid_Task(void *p) {
 					msg.event = RfidEvent::CardRemoved;
 					memcpy(msg.cardId, lastCardId, cardIdSize);
 					xQueueSend(gRfidCardQueue, &msg, 0);
-					resetAndInit();
 				}
 				cardAppliedLastRun = false;
 
