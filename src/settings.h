@@ -119,21 +119,21 @@
 		If you don't want to assign an action or you don't use a given button: CMD_NOTHING has to be set
 	*/
 	// *****BUTTON*****        *****ACTION*****
-	#define BUTTON_0_SHORT    CMD_NEXTTRACK
-	#define BUTTON_1_SHORT    CMD_PREVTRACK
+	#define BUTTON_0_SHORT    CMD_VOLUMEUP
+	#define BUTTON_1_SHORT    CMD_VOLUMEDOWN
 	#define BUTTON_2_SHORT    CMD_PLAYPAUSE
 	#define BUTTON_3_SHORT    CMD_MEASUREBATTERY
 	#define BUTTON_4_SHORT    CMD_SEEK_BACKWARDS
 	#define BUTTON_5_SHORT    CMD_SEEK_FORWARDS
 
-	#define BUTTON_0_LONG     CMD_LASTTRACK
-	#define BUTTON_1_LONG     CMD_FIRSTTRACK
-	#define BUTTON_2_LONG     CMD_PLAYPAUSE
-	#define BUTTON_3_LONG     CMD_SLEEPMODE
+	#define BUTTON_0_LONG     CMD_NEXTTRACK
+	#define BUTTON_1_LONG     CMD_PREVTRACK
+	#define BUTTON_2_LONG     CMD_SLEEPMODE
+	#define BUTTON_3_LONG     CMD_NOTHING
 	#define BUTTON_4_LONG     CMD_VOLUMEUP
 	#define BUTTON_5_LONG     CMD_VOLUMEDOWN
 
-	#define BUTTON_MULTI_01   CMD_NOTHING   //CMD_TOGGLE_WIFI_STATUS (disabled now to prevent children from unwanted WiFi-disable)
+	#define BUTTON_MULTI_01   CMD_MEASUREBATTERY   //CMD_TOGGLE_WIFI_STATUS (disabled now to prevent children from unwanted WiFi-disable)
 	#define BUTTON_MULTI_02   CMD_ENABLE_FTP_SERVER
 	#define BUTTON_MULTI_03   CMD_NOTHING
 	#define BUTTON_MULTI_04   CMD_NOTHING
@@ -196,7 +196,7 @@
 	//#################### Settings for optional Modules##############################
 	// (optinal) Neopixel
 	#ifdef NEOPIXEL_ENABLE
-		#define NUM_LEDS			24          	// number of LEDs
+		#define NUM_LEDS			12          	// number of LEDs
 		#define CHIPSET				WS2812B     	// type of Neopixel
 		#define COLOR_ORDER			GRB
 		#define NUM_LEDS_IDLE_DOTS		4           	// count of LEDs, which are shown when Idle
@@ -299,6 +299,8 @@
 		#include "settings-lolin_d32_sdmmc_pe.h"            // Pre-configured settings for Lolin D32 (non-pro) with SDMMC + port-expander (https://forum.espuino.de/t/espuino-minid32-pro-lolin-d32-pro-mit-sd-mmc-und-port-expander-smd/866)
 	#elif (HAL == 10)
 		#include "settings-muse_proto.h"                     // Pre-configured settings for Raspiaudio ESPMuse Proto Board with I2C RFID Reader (https://raspiaudio.com/produit/muse-proto)
+	#elif (HAL == 98)
+		#include "settings-testrig.h"
 	#elif (HAL == 99)
 		#include "settings-custom.h"                        // Contains all user-relevant settings custom-board
 	#endif
