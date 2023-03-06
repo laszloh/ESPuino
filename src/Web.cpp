@@ -3,10 +3,12 @@
 #include <Update.h>
 #include <nvsDump.h>
 #include <esp_task_wdt.h>
+#include <nvs.h>
 #include "soc/timer_group_struct.h"
 #include "soc/timer_group_reg.h"
 #include "freertos/ringbuf.h"
 #include "ESPAsyncWebServer.h"
+#include "AsyncJson.h"
 #include "ArduinoJson.h"
 #include "settings.h"
 #include "AudioPlayer.h"
@@ -38,6 +40,8 @@ typedef struct {
 
 const char mqttTab[] PROGMEM = "<a class=\"nav-item nav-link\" id=\"nav-mqtt-tab\" data-toggle=\"tab\" href=\"#nav-mqtt\" role=\"tab\" aria-controls=\"nav-mqtt\" aria-selected=\"false\"><i class=\"fas fa-network-wired\"></i><span data-i18n=\"nav.mqtt\"></span></a>";
 const char ftpTab[] PROGMEM = "<a class=\"nav-item nav-link\" id=\"nav-ftp-tab\" data-toggle=\"tab\" href=\"#nav-ftp\" role=\"tab\" aria-controls=\"nav-ftp\" aria-selected=\"false\"><i class=\"fas fa-folder\"></i><span data-i18n=\"nav.ftp\"></span></a>";
+
+constexpr const char *apiHandlerBase PROGMEM = "/api/";
 
 AsyncWebServer wServer(80);
 AsyncWebSocket ws("/ws");
@@ -190,6 +194,216 @@ void webserverStart(void) {
 		});
 
 		WWWData::registerRoutes(serveProgmemFiles);
+
+		// api request Handler
+		wServer.on("/api/systemSettings", HTTP_GET, [](AsyncWebServerRequest *request) {
+			AsyncJsonResponse *response = new AsyncJsonResponse();
+			JsonObject root = response->getRoot();
+
+			// general parts
+			JsonObject general = root.createNestedObject("general");
+			general["volume_start_percent"] = gPrefsSettings.getUInt("initVolume", 0);
+			general["volume_max_speaker_percent"] = gPrefsSettings.getUInt("maxVolumeSp", 0);
+			general["volume_max_headphones_percent"] = gPrefsSettings.getUInt("maxVolumeHp", 0);
+			general["led_restart_percent"] = gPrefsSettings.getUChar("iLedBrightness", 0);
+			general["led_night_percent"] = gPrefsSettings.getUChar("nLedBrightness", 0);
+			general["power_saving_minutes"] = gPrefsSettings.getUInt("mInactiviyT", 0);
+			general["battery_warning_voltage"] = gPrefsSettings.getFloat("wLowVoltage", 999.99);
+			general["battery_low_voltage"] = gPrefsSettings.getFloat("vIndicatorLow", 999.99);
+			general["battery_high_voltage"] = gPrefsSettings.getFloat("vIndicatorHigh", 999.99);
+			general["battery_interval_minutes"] = gPrefsSettings.getUInt("vCheckIntv", 17777);
+
+			// wifi settings
+			JsonObject wifi = root.createNestedObject("wifi");
+			wifi["ssid"] = gPrefsSettings.getString("SSID", "");
+			wifi["password"] = gPrefsSettings.getString("Password", "");
+			wifi["hostname"] = gPrefsSettings.getString("Hostname", "espuino");
+
+			// ftp
+			JsonObject ftp = root.createNestedObject("ftp");
+			ftp["enabled"] = gPrefsSettings.getBool("enableFTP", false);
+			ftp["username"] = gPrefsSettings.getString("ftpuser", "admin");
+			ftp["password"] = gPrefsSettings.getString("ftppassword", "");
+
+			// mqtt
+			JsonObject mqtt = root.createNestedObject("mqtt");
+			mqtt["enabled"] = gPrefsSettings.getBool("enableMQTT", false);
+			mqtt["client_id"] = gPrefsSettings.getString("mqttClientId", "espuino");
+			mqtt["host"] = gPrefsSettings.getString("mqttServer", "192.168.0.12");
+			mqtt["port"] = gPrefsSettings.getUInt("mqttPort", 1883);
+			mqtt["username"] = gPrefsSettings.getString("mqttUser", "espuino");
+			mqtt["password"] = gPrefsSettings.getString("mqttPassword", "");
+
+			response->setLength();
+			request->send(response);
+		});
+		wServer.on("/api/systemState", HTTP_GET, [](AsyncWebServerRequest *request) {
+			AsyncJsonResponse *response = new AsyncJsonResponse();
+			JsonObject root = response->getRoot();
+
+			root["brightness"] = Led_GetBrightness();
+			root["rssi"] = Wlan_GetRssi();
+			root["battery"] = Battery_GetVoltage();
+			root["capacity"] = Battery_EstimateLevel() * 100;
+			root["charging"] = false;
+			JsonObject info = root.createNestedObject("info");
+			info["version"]["espuino"] = softwareRevision;
+			info["version"]["git"] = gitRevision;
+			info["version"]["idf"] = ESP.getSdkVersion();
+			info["heap"]["max"] = ESP.getHeapSize();
+			info["heap"]["free"] = ESP.getFreeHeap();
+			info["heap"]["max_alloc"] = ESP.getMaxAllocHeap();
+			if(psramInit()) {
+				info["psram"]["avaliable"] = true;
+				info["psram"]["max"] = ESP.getPsramSize();
+				info["psram"]["free"] = ESP.getFreePsram();
+				info["psram"]["max_alloc"] = ESP.getMaxAllocPsram();
+			} else {
+				info["psram"]["avaliable"] = false;
+			}
+			info["wifi"]["connected"] = Wlan_IsConnected();
+			if(Wlan_IsConnected()){
+				info["wifi"]["ip"] = WiFi.localIP().toString();
+				info["wifi"]["rssi"] = Wlan_GetRssi();
+			}
+			#ifdef HALLEFFECT_SENSOR_ENABLE
+				const uint16_t sva = gHallEffectSensor.readSensorValueAverage(true);
+				const int diff = sva-gHallEffectSensor.NullFieldValue();
+				info["hall"]["avaliable"] = true;
+				info["hall"]["NullFieldValue"] = gHallEffectSensor.NullFieldValue();
+				info["hall"]["actual"] = sva;
+				info["hall"]["diff"] = diff;
+				info["hall"]["LastWaitForState"] = gHallEffectSensor.LastWaitForState();
+				info["hall"]["waited"] = gHallEffectSensor.LastWaitForStateMS();
+			#else
+				info["hall"]["avaliable"] = false;
+			#endif
+
+			response->setLength();
+			request->send(response);
+		});
+		wServer.on("/api/log", HTTP_GET, [](AsyncWebServerRequest *request){
+			request->send(200, "text/plain; charset=utf-8", Log_GetRingBuffer());
+		});
+		wServer.on("/api/playerState", HTTP_GET, [](AsyncWebServerRequest *request) {
+			AsyncJsonResponse *response = new AsyncJsonResponse();
+			JsonObject root = response->getRoot();
+
+			root["play"] = gPlayProperties.pausePlay;
+			root["currentTrackNumber"] = gPlayProperties.currentTrackNumber;
+			root["numberofTracks"] = gPlayProperties.numberOfTracks;
+			root["volume"] = AudioPlayer_GetCurrentVolume();
+			root["repeat"] = AudioPlayer_GetRepeatMode();
+			root["position"] = gPlayProperties.currentRelPos;
+
+			JsonArray playlist = root.createNestedArray("playlist");
+			for(size_t i=0;i<gPlayProperties.numberOfTracks;i++) {
+				playlist.add(gPlayProperties.playlist[i]);
+			}
+
+			response->setLength();
+			request->send(response);
+		});
+		wServer.on("/api/currentTag", HTTP_GET, [](AsyncWebServerRequest *request) {
+			AsyncJsonResponse *response = new AsyncJsonResponse();
+			JsonObject root = response->getRoot();
+
+			root["id"] = gCurrentRfidTagId;
+			root["cmd"] = gPrefsRfid.getString(gCurrentRfidTagId);
+
+			response->setLength();
+			request->send(response);
+		});
+		wServer.on("/api/tagList", HTTP_GET, [](AsyncWebServerRequest *request) {
+			AsyncJsonResponse *response = new AsyncJsonResponse();
+			JsonObject root = response->getRoot();
+
+			size_t count = 0;
+			JsonArray arr = root.createNestedArray("tags");
+			#if ESP_ARDUINO_VERSION_MAJOR >= 2
+				// get all cards with the iterator
+				nvs_iterator_t it = NULL;
+				esp_err_t res = nvs_entry_find("nvs", prefsRfidNamespace, NVS_TYPE_ANY, &it);
+				while(res == ESP_OK) {
+					nvs_entry_info_t info;
+					nvs_entry_info(it, &info);
+
+					JsonObject tag = arr.createNestedObject();
+					tag["id"] = info.key;
+					tag["cmd"] = gPrefsRfid.getString(info.key);
+					count++;
+
+					res = nvs_entry_next(&it);
+				}
+				nvs_release_iterator(it);
+			#else
+				// get all cards by reading the NVS directly
+				esp_partition_iterator_t pi; // Iterator for find
+				const esp_partition_t *nvs;  // Pointer to partition struct
+				esp_err_t result = ESP_OK;
+				constexpr const char *partname = "nvs";
+				uint8_t pagenr = 0;   // Page number in NVS
+				uint8_t i;            // Index in Entry 0..125
+				uint8_t bm;           // Bitmap for an entry
+				uint32_t offset = 0;  // Offset in nvs partition
+				uint8_t namespace_ID; // Namespace ID found
+
+				pi = esp_partition_find(ESP_PARTITION_TYPE_DATA,   // Get partition iterator for
+										ESP_PARTITION_SUBTYPE_ANY, // this partition
+										partname);
+				if (pi) {
+					nvs = esp_partition_get(pi);        // Get partition struct
+					esp_partition_iterator_release(pi); // Release the iterator
+					dbgprint("Partition %s found, %d bytes", partname, nvs->size);
+				} else {
+					snprintf(Log_Buffer, Log_BufferLength, "Partition %s not found!", partname);
+					Log_Println(Log_Buffer, LOGLEVEL_ERROR);
+
+					delete response;
+					request->send(500);
+					return;
+				}
+				namespace_ID = FindNsID(nvs, prefsRfidNamespace); // Find ID of our namespace in NVS
+				while (offset < nvs->size) {
+					result = esp_partition_read(nvs, offset, // Read 1 page in nvs partition
+												&buf,
+												sizeof(nvs_page));
+					if (result != ESP_OK) {
+						snprintf(Log_Buffer, Log_BufferLength, (char *) F("Error reading NVS!"));
+						Log_Println(Log_Buffer, LOGLEVEL_ERROR);
+
+						delete response;
+						request->send(500);
+						return;
+					}
+
+					i = 0;
+					while (i < 126) {
+						bm = (buf.Bitmap[i / 4] >> ((i % 4) * 2)) & 0x03; // Get bitmap for this entry
+						if (bm == 2) {
+							if (buf.Entry[i].Ns == namespace_ID) { // otherwise just my namespace
+								if (isNumber(buf.Entry[i].Key)) {
+									JsonObject tag = arr.createNestedObject();
+									tag["id"] = buf.Entry[i].Key;
+									tag["cmd"] = gPrefsRfid.getString((const char *)buf.Entry[i].Key);
+									count++;
+								}
+							}
+							i += buf.Entry[i].Span; // Next entry
+						} else {
+							i++;
+						}
+					}
+					offset += sizeof(nvs_page); // Prepare to read next page in nvs
+					pagenr++;
+				}
+			#endif
+
+			root["total"] = count;
+
+			response->setLength();
+			request->send(response);
+		});
 
 		// Log
 		wServer.on("/log", HTTP_GET, [](AsyncWebServerRequest *request) {

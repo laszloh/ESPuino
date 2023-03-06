@@ -4,6 +4,8 @@
 extern Preferences gPrefsRfid;
 extern Preferences gPrefsSettings;
 
+extern const char prefsRfidNamespace[];
+
 void System_Init(void);
 void System_Cyclic(void);
 void System_UpdateActivityTimer(void);
