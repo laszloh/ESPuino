@@ -54,3 +54,6 @@ def generate():
 
 generate()
 env.Append(CPPPATH=OUTPUT_PATH.parent)  # pylint: disable=undefined-variable
+env.Append(CPPDEFINES=[
+  ("BUILD_TYPE",  env.StringifyMacro(env.GetBuildType()))
+])

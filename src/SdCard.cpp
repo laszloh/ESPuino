@@ -212,8 +212,8 @@ char *SdCard_pickRandomSubdirectory(char *_directory) {
 
 /* Puts SD-file(s) or directory into a playlist
 	First element of array always contains the number of payload-items. */
-char **SdCard_ReturnPlaylist(const char *fileName, const uint32_t _playMode) {
-	static char **files;
+const Playlist SdCard_ReturnPlaylist(const char *fileName, const uint32_t _playMode) {
+	Playlist playlist;
 	char *serializedPlaylist = NULL;
 	char fileNameBuf[255];
 	char cacheFileNameBuf[275];
@@ -232,7 +232,7 @@ char **SdCard_ReturnPlaylist(const char *fileName, const uint32_t _playMode) {
 	File fileOrDirectory = gFSystem.open(fileName);
 	if (!fileOrDirectory) {
 		Log_Println((char *) FPSTR(dirOrFileDoesNotExist), LOGLEVEL_ERROR);
-		return nullptr;
+		return Playlist();
 	}
 
 	// Create linear playlist of caching-file
@@ -269,7 +269,7 @@ char **SdCard_ReturnPlaylist(const char *fileName, const uint32_t _playMode) {
 					if(serializedPlaylist == NULL) {
 						Log_Println((char *) FPSTR(unableToAllocateMemForLinearPlaylist), LOGLEVEL_ERROR);
 						System_IndicateError();
-						return nullptr;
+						return Playlist();
 					}
 
 					char buf;
@@ -298,7 +298,7 @@ char **SdCard_ReturnPlaylist(const char *fileName, const uint32_t _playMode) {
 			if (serializedPlaylist == NULL) {
 				Log_Println((char *) FPSTR(unableToAllocateMemForLinearPlaylist), LOGLEVEL_ERROR);
 				System_IndicateError();
-				return nullptr;
+				return Playlist();
 			}
 			char buf;
 			char lastBuf = '#';
@@ -314,7 +314,7 @@ char **SdCard_ReturnPlaylist(const char *fileName, const uint32_t _playMode) {
 						Log_Println((char *) FPSTR(unableToAllocateMemForLinearPlaylist), LOGLEVEL_ERROR);
 						System_IndicateError();
 						free(serializedPlaylist);
-						return nullptr;
+						return Playlist();
 					}
 					serializedPlaylist = tmp;
 				}
@@ -333,7 +333,7 @@ char **SdCard_ReturnPlaylist(const char *fileName, const uint32_t _playMode) {
 				serializedPlaylist[fPos-1] = '\0';
 			}
 		} else {
-			return nullptr;
+			return Playlist();
 		}
 	}
 
@@ -342,24 +342,17 @@ char **SdCard_ReturnPlaylist(const char *fileName, const uint32_t _playMode) {
 		Log_Println((char *) FPSTR(playlistGenModeUncached), LOGLEVEL_NOTICE);
 		// File-mode
 		if (!fileOrDirectory.isDirectory()) {
-			files = (char **) x_malloc(sizeof(char *) * 2);
-			if (files == nullptr) {
-				Log_Println((char *) FPSTR(unableToAllocateMemForPlaylist), LOGLEVEL_ERROR);
-				System_IndicateError();
-				return nullptr;
-			}
 			Log_Println((char *) FPSTR(fileModeDetected), LOGLEVEL_INFO);
+			const char *path;
 			#if ESP_ARDUINO_VERSION_MAJOR >= 2
-				strncpy(fileNameBuf, (char *) fileOrDirectory.path(), sizeof(fileNameBuf) / sizeof(fileNameBuf[0]));
+				path = fileOrDirectory.path();
 			#else
-				strncpy(fileNameBuf, (char *) fileOrDirectory.name(), sizeof(fileNameBuf) / sizeof(fileNameBuf[0]));
+				path = fileOrDirectory.name();
 			#endif
-			if (fileValid(fileNameBuf)) {
-				files[1] = x_strdup(fileNameBuf);
+			if (fileValid(path)) {
+				playlist = Playlist(path);
 			}
-			files[0] = x_strdup("1"); // Number of files is always 1 in file-mode
-
-			return &(files[1]);
+			return playlist;
 		}
 
 		// Directory-mode (linear-playlist)
@@ -400,7 +393,7 @@ char **SdCard_ReturnPlaylist(const char *fileName, const uint32_t _playMode) {
 							Log_Println((char *) FPSTR(unableToAllocateMemForLinearPlaylist), LOGLEVEL_ERROR);
 							System_IndicateError();
 							free(serializedPlaylist);
-							return nullptr;
+							return Playlist();
 						}
 						serializedPlaylist = tmp;
 					}
@@ -428,36 +421,27 @@ char **SdCard_ReturnPlaylist(const char *fileName, const uint32_t _playMode) {
 	}
 
 	// Alloc only necessary number of playlist-pointers
-	files = (char **) x_malloc(sizeof(char *) * (cnt + 1));
-	if (files == nullptr) {
+	if(!playlist.reserve(cnt)) {
 		Log_Println((char *) FPSTR(unableToAllocateMemForPlaylist), LOGLEVEL_ERROR);
 		System_IndicateError();
-		free(serializedPlaylist);
-		return nullptr;
+		if(serializedPlaylist) {
+			free(serializedPlaylist);
+		}
+		return Playlist();
 	}
 
 	// Extract elements out of serialized playlist and copy to playlist
 	char *token;
 	token = strtok(serializedPlaylist, stringDelimiter);
-	uint32_t pos = 1;
 	while (token != NULL) {
-		files[pos++] = x_strdup(token);
+		playlist.push_back(token);
 		token = strtok(NULL, stringDelimiter);
 	}
 
 	free(serializedPlaylist);
 
-	files[0] = (char *) x_malloc(sizeof(char) * 5);
-
-	if (files[0] == nullptr) {
-		Log_Println((char *) FPSTR(unableToAllocateMemForPlaylist), LOGLEVEL_ERROR);
-		System_IndicateError();
-		freeMultiCharArray(files, cnt + 1);
-		return nullptr;
-	}
-	snprintf(files[0], 5,  "%u", cnt);
 	snprintf(Log_Buffer, Log_BufferLength, "%s: %d", (char *) FPSTR(numberOfValidFiles), cnt);
 	Log_Println(Log_Buffer, LOGLEVEL_NOTICE);
 
-	return &(files[1]); // return ptr+1 (starting at 1st payload-item); ptr+0 contains number of items
+	return playlist;
 }

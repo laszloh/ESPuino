@@ -19,6 +19,7 @@
 #include "Web.h"
 #include "Bluetooth.h"
 #include "Cmd.h"
+#include "Playlist.hpp"
 
 #define AUDIOPLAYER_VOLUME_MAX 21u
 #define AUDIOPLAYER_VOLUME_MIN 0u
@@ -42,10 +43,9 @@ static uint8_t AudioPlayer_InitVolume = AUDIOPLAYER_VOLUME_INIT;
 
 static void AudioPlayer_Task(void *parameter);
 static void AudioPlayer_HeadphoneVolumeManager(void);
-static char **AudioPlayer_ReturnPlaylistFromWebstream(const char *_webUrl);
-static int AudioPlayer_ArrSortHelper(const void *a, const void *b);
-static void AudioPlayer_SortPlaylist(char **arr, int n);
-static void AudioPlayer_RandomizePlaylist(char **str, const uint32_t count);
+static const Playlist AudioPlayer_ReturnPlaylistFromWebstream(const char *_webUrl);
+static void AudioPlayer_SortPlaylist(Playlist &list);
+static void AudioPlayer_RandomizePlaylist(Playlist &list);
 static size_t AudioPlayer_NvsRfidWriteWrapper(const char *_rfidCardId, const char *_track, const uint32_t _playPosition, const uint8_t _playMode, const uint16_t _trackLastPlayed, const uint16_t _numberOfTracks);
 static void AudioPlayer_ClearCover(void);
 
@@ -856,35 +856,24 @@ void AudioPlayer_TrackQueueDispatcher(const char *_itemToPlay, const uint32_t _l
 	strncpy(filename, _itemToPlay, sizeof(filename));
 	gPlayProperties.startAtFilePos = _lastPlayPos;
 	gPlayProperties.currentTrackNumber = _trackLastPlayed;
-	char **musicFiles;
+	Playlist playlist;
 
 	if (_playMode != WEBSTREAM) {
 		if (_playMode == RANDOM_SUBDIRECTORY_OF_DIRECTORY) {
 			char *tmp = SdCard_pickRandomSubdirectory(filename);     // *filename (input): target-directory  //   *filename (output): random subdirectory
-			if (tmp == NULL) {  // If error occured while extracting random subdirectory
-				musicFiles = NULL;
-			} else {
-				musicFiles = SdCard_ReturnPlaylist(filename, _playMode);    // Provide random subdirectory in order to enter regular playlist-generation
+			if (tmp != nullptr) {  // If error occured while extracting random subdirectory
+				playlist = SdCard_ReturnPlaylist(filename, _playMode);    // Provide random subdirectory in order to enter regular playlist-generation
 			}
 		} else {
-			musicFiles = SdCard_ReturnPlaylist(filename, _playMode);
+			playlist = SdCard_ReturnPlaylist(filename, _playMode);
 		}
 	} else {
-		musicFiles = AudioPlayer_ReturnPlaylistFromWebstream(filename);
+		playlist = AudioPlayer_ReturnPlaylistFromWebstream(filename);
 	}
 
 	// Catch if error occured (e.g. file not found)
-	if (musicFiles == NULL) {
-		Log_Println((char *) FPSTR(errorOccured), LOGLEVEL_ERROR);
-		System_IndicateError();
-		if (gPlayProperties.playMode != NO_PLAYLIST) {
-			AudioPlayer_TrackControlToQueueSender(STOP);
-		}
-		return;
-	}
-
 	gPlayProperties.playMode = BUSY; // Show @Neopixel, if uC is busy with creating playlist
-	if (!strcmp(*(musicFiles - 1), "0")) {
+	if (playlist.size() == 0) {
 		Log_Println((char *) FPSTR(noMp3FilesInDir), LOGLEVEL_NOTICE);
 		System_IndicateError();
 		if (!gPlayProperties.pausePlay) {
@@ -899,7 +888,7 @@ void AudioPlayer_TrackQueueDispatcher(const char *_itemToPlay, const uint32_t _l
 	}
 
 	gPlayProperties.playMode = _playMode;
-	gPlayProperties.numberOfTracks = strtoul(*(musicFiles - 1), NULL, 10);
+	gPlayProperties.numberOfTracks = playlist.size();
 	// Set some default-values
 	gPlayProperties.repeatCurrentTrack = false;
 	gPlayProperties.repeatPlaylist = false;
@@ -916,7 +905,7 @@ void AudioPlayer_TrackQueueDispatcher(const char *_itemToPlay, const uint32_t _l
 	switch (gPlayProperties.playMode) {
 		case SINGLE_TRACK: {
 			Log_Println((char *) FPSTR(modeSingleTrack), LOGLEVEL_NOTICE);
-			xQueueSend(gTrackQueue, &(musicFiles), 0);
+			xQueueSend(gTrackQueue, &(playlist), 0);
 			break;
 		}
 
@@ -924,7 +913,7 @@ void AudioPlayer_TrackQueueDispatcher(const char *_itemToPlay, const uint32_t _l
 			gPlayProperties.repeatCurrentTrack = true;
 			gPlayProperties.repeatPlaylist = true;
 			Log_Println((char *) FPSTR(modeSingleTrackLoop), LOGLEVEL_NOTICE);
-			xQueueSend(gTrackQueue, &(musicFiles), 0);
+			xQueueSend(gTrackQueue, &(playlist), 0);
 			break;
 		}
 
@@ -934,16 +923,16 @@ void AudioPlayer_TrackQueueDispatcher(const char *_itemToPlay, const uint32_t _l
 			gPlayProperties.numberOfTracks = 1; // Limit number to 1 even there are more entries in the playlist
 			Led_ResetToNightBrightness();
 			Log_Println((char *) FPSTR(modeSingleTrackRandom), LOGLEVEL_NOTICE);
-			AudioPlayer_RandomizePlaylist(musicFiles, gPlayProperties.numberOfTracks);
-			xQueueSend(gTrackQueue, &(musicFiles), 0);
+			AudioPlayer_RandomizePlaylist(playlist);
+			xQueueSend(gTrackQueue, &(playlist), 0);
 			break;
 		}
 
 		case AUDIOBOOK: { // Tracks need to be alph. sorted!
 			gPlayProperties.saveLastPlayPosition = true;
 			Log_Println((char *) FPSTR(modeSingleAudiobook), LOGLEVEL_NOTICE);
-			AudioPlayer_SortPlaylist(musicFiles, gPlayProperties.numberOfTracks);
-			xQueueSend(gTrackQueue, &(musicFiles), 0);
+			AudioPlayer_SortPlaylist(playlist);
+			xQueueSend(gTrackQueue, &(playlist), 0);
 			break;
 		}
 
@@ -951,8 +940,8 @@ void AudioPlayer_TrackQueueDispatcher(const char *_itemToPlay, const uint32_t _l
 			gPlayProperties.repeatPlaylist = true;
 			gPlayProperties.saveLastPlayPosition = true;
 			Log_Println((char *) FPSTR(modeSingleAudiobookLoop), LOGLEVEL_NOTICE);
-			AudioPlayer_SortPlaylist(musicFiles, gPlayProperties.numberOfTracks);
-			xQueueSend(gTrackQueue, &(musicFiles), 0);
+			AudioPlayer_SortPlaylist(playlist);
+			xQueueSend(gTrackQueue, &(playlist), 0);
 			break;
 		}
 
@@ -960,38 +949,38 @@ void AudioPlayer_TrackQueueDispatcher(const char *_itemToPlay, const uint32_t _l
 		case RANDOM_SUBDIRECTORY_OF_DIRECTORY: {
 			snprintf(Log_Buffer, Log_BufferLength, "%s '%s' ", (char *) FPSTR(modeAllTrackAlphSorted), filename);
 			Log_Println(Log_Buffer, LOGLEVEL_NOTICE);
-			AudioPlayer_SortPlaylist(musicFiles, gPlayProperties.numberOfTracks);
-			xQueueSend(gTrackQueue, &(musicFiles), 0);
+			AudioPlayer_SortPlaylist(playlist);
+			xQueueSend(gTrackQueue, &(playlist), 0);
 			break;
 		}
 
 		case ALL_TRACKS_OF_DIR_RANDOM: {
 			Log_Println((char *) FPSTR(modeAllTrackRandom), LOGLEVEL_NOTICE);
-			AudioPlayer_RandomizePlaylist(musicFiles, gPlayProperties.numberOfTracks);
-			xQueueSend(gTrackQueue, &(musicFiles), 0);
+			AudioPlayer_RandomizePlaylist(playlist);
+			xQueueSend(gTrackQueue, &(playlist), 0);
 			break;
 		}
 
 		case ALL_TRACKS_OF_DIR_SORTED_LOOP: {
 			gPlayProperties.repeatPlaylist = true;
 			Log_Println((char *) FPSTR(modeAllTrackAlphSortedLoop), LOGLEVEL_NOTICE);
-			AudioPlayer_SortPlaylist(musicFiles, gPlayProperties.numberOfTracks);
-			xQueueSend(gTrackQueue, &(musicFiles), 0);
+			AudioPlayer_SortPlaylist(playlist);
+			xQueueSend(gTrackQueue, &(playlist), 0);
 			break;
 		}
 
 		case ALL_TRACKS_OF_DIR_RANDOM_LOOP: {
 			gPlayProperties.repeatPlaylist = true;
 			Log_Println((char *) FPSTR(modeAllTrackRandomLoop), LOGLEVEL_NOTICE);
-			AudioPlayer_RandomizePlaylist(musicFiles, gPlayProperties.numberOfTracks);
-			xQueueSend(gTrackQueue, &(musicFiles), 0);
+			AudioPlayer_RandomizePlaylist(playlist);
+			xQueueSend(gTrackQueue, &(playlist), 0);
 			break;
 		}
 
 		case WEBSTREAM: { // This is always just one "track"
 			Log_Println((char *) FPSTR(modeWebstream), LOGLEVEL_NOTICE);
 			if (Wlan_IsConnected()) {
-				xQueueSend(gTrackQueue, &(musicFiles), 0);
+				xQueueSend(gTrackQueue, &(playlist), 0);
 			} else {
 				Log_Println((char *) FPSTR(webstreamNotAvailable), LOGLEVEL_ERROR);
 				System_IndicateError();
@@ -1002,7 +991,7 @@ void AudioPlayer_TrackQueueDispatcher(const char *_itemToPlay, const uint32_t _l
 
 		case LOCAL_M3U: { // Can be one or multiple SD-files or webradio-stations; or a mix of both
 			Log_Println((char *) FPSTR(modeWebstreamM3u), LOGLEVEL_NOTICE);
-			xQueueSend(gTrackQueue, &(musicFiles), 0);
+			xQueueSend(gTrackQueue, &(playlist), 0);
 			break;
 		}
 
@@ -1056,16 +1045,8 @@ size_t AudioPlayer_NvsRfidWriteWrapper(const char *_rfidCardId, const char *_tra
 }
 
 // Adds webstream to playlist; same like SdCard_ReturnPlaylist() but always only one entry
-char **AudioPlayer_ReturnPlaylistFromWebstream(const char *_webUrl) {
-	static char number[] = "1";
-	static char *url[2] = {number, nullptr};
-
-	free(url[1]);
-
-	number[0] = '1';
-	url[1] = x_strdup(_webUrl);
-
-	return &(url[1]);
+const Playlist AudioPlayer_ReturnPlaylistFromWebstream(const char *_webUrl) {
+	return Playlist(_webUrl);
 }
 
 // Adds new control-command to control-queue
@@ -1073,33 +1054,32 @@ void AudioPlayer_TrackControlToQueueSender(const uint8_t trackCommand) {
 	xQueueSend(gTrackControlQueue, &trackCommand, 0);
 }
 
+// sort playlist alphabetically
+static void AudioPlayer_SortPlaylist(Playlist &list) {
+	if(list.size() <= 1) {
+		return;		// we do not have to sort a list with a single element
+	}
+
+	std::qsort(list.begin(), list.size(), list.elemSize(), [](const void* x, const void* y) {
+		const char *a = static_cast<const char*>(x);
+		const char *b = static_cast<const char*>(y);
+		return strcmp(a, b);
+	});
+}
+
 // Knuth-Fisher-Yates-algorithm to randomize playlist
-void AudioPlayer_RandomizePlaylist(char **str, const uint32_t count) {
-	if (!count) {
+static void AudioPlayer_RandomizePlaylist(Playlist &list) {
+	if(list.size() <= 1) {
 		return;
 	}
 
-	uint32_t i, r;
-	char *swap = NULL;
-	uint32_t max = count - 1;
-
-	for (i = 0; i < count; i++) {
-		r = (max > 0) ? rand() % max : 0;
-		swap = *(str + max);
-		*(str + max) = *(str + r);
-		*(str + r) = swap;
-		max--;
+	// modern algorithm according to Durstenfeld, R. (1964). Algorithm 235: Random permutation. Commun. ACM, 7, 420.
+	for(size_t i=list.size()-1;i>0;i--) {
+		size_t j = random(i);
+		char *swap = list[i];
+		list[i] = list[j];
+		list[j] = swap;
 	}
-}
-
-// Helper to sort playlist alphabetically
-static int AudioPlayer_ArrSortHelper(const void *a, const void *b) {
-	return strcmp(*(const char **)a, *(const char **)b);
-}
-
-// Sort playlist alphabetically
-void AudioPlayer_SortPlaylist(char **arr, int n) {
-	qsort(arr, n, sizeof(const char *), AudioPlayer_ArrSortHelper);
 }
 
 // Clear cover send notification
