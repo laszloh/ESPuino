@@ -92,7 +92,7 @@ public:
 		free(url);
 	};
 
-	virtual size_t size() const override { return 1; }
+	virtual size_t size() const override { return (url) ? 1 : 0; }
 	virtual bool isValid() const override { return (url); }
 	virtual const String getAbsolutPath(size_t idx) const override { return url; };
 	virtual const String getFilename(size_t idx) const override { return url; };
@@ -131,12 +131,14 @@ public:
 	}
 
 	bool reserve(size_t _cap) {
-		if(capacity > 0) {
-			destory();
+		char **tmp = static_cast<char**>(this->reallocate((capacity > 0 ) ? files : nullptr, sizeof(char*) * _cap));
+		if(!tmp) {
+			// we failed to get the needed memory D:
+			return false;
 		}
-		files = static_cast<char**>(this->allocate(sizeof(char*) * _cap));
+		files = tmp;
 		capacity = _cap;
-		return (files);
+		return true;
 	}
 
 	bool setBase(const char *_base) {
@@ -146,6 +148,10 @@ public:
 
 	bool push_back(const char *path) {
 		if(count >= capacity) {
+			return false;
+		}
+
+		if(!fileValid(path)) {
 			return false;
 		}
 
@@ -198,6 +204,22 @@ protected:
 		}
 		free(files);
 		free(base);
+	}
+
+	// Check if file-type is correct
+	bool fileValid(const char *_fileItem) {
+		const char ch = '/';
+		char *subst;
+		subst = strrchr(_fileItem, ch); // Don't use files that start with .
+
+		return (!startsWith(subst, (char *) "/.")) && (
+				endsWith(_fileItem, ".mp3") || endsWith(_fileItem, ".MP3") ||
+				endsWith(_fileItem, ".aac") || endsWith(_fileItem, ".AAC") ||
+				endsWith(_fileItem, ".m3u") || endsWith(_fileItem, ".M3U") ||
+				endsWith(_fileItem, ".m4a") || endsWith(_fileItem, ".M4A") ||
+				endsWith(_fileItem, ".wav") || endsWith(_fileItem, ".WAV") ||
+				endsWith(_fileItem, ".flac") || endsWith(_fileItem, ".FLAC") ||
+				endsWith(_fileItem, ".asx") || endsWith(_fileItem, ".ASX"));
 	}
 
 	using PlaylistAlloc<TAllocator>::alphabeticSort;
