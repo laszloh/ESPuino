@@ -4,6 +4,9 @@
 #include <FS.h>
 #include <ArduinoJson.h>
 
+#if MEM_DEBUG == 1
+	#warning Memory access guards are enabled. Disable MEM_DEBUG for production builds
+#endif
 
 using sortFunc = int(*)(const void*,const void*);
 
@@ -76,7 +79,7 @@ public:
 	    files(static_cast<char**>(this->allocate(sizeof(char*) * _capacity))),
 		capacity(_capacity), count(0) 
 	{
-		#ifdef DEBUG
+		#if MEM_DEBUG == 1
 			assert(files != nullptr);
 		#endif
 	}
@@ -109,14 +112,14 @@ public:
 	virtual size_t size() const override { return count; };
 
 	virtual const String getAbsolutPath(size_t idx) const override {
-		#ifdef DEBUG
+		#if MEM_DEBUG == 1
 			assert(idx < count);
 		#endif
 		return String(base) + divider + files[idx];
 	};
 
 	virtual const String getFilename(size_t idx) const override {
-		#ifdef DEBUG
+		#if MEM_DEBUG == 1
 			assert(idx < count);
 		#endif
 		return files[idx];
