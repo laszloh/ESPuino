@@ -10,9 +10,31 @@
 
 using sortFunc = int(*)(const void*,const void*);
 
+struct DefaultPsramAllocator {
+  void* allocate(size_t size) {
+	if(psramInit()) {
+		return ps_malloc(size);
+	} else {
+    	return malloc(size);
+	}
+  }
+
+  void deallocate(void* ptr) {
+    free(ptr);
+  }
+
+  void* reallocate(void* ptr, size_t new_size) {
+	if(psramInit()) {
+		return ps_realloc(ptr, new_size);
+	} else {
+    	return realloc(ptr, new_size);
+	}
+  }
+};
+
 template <typename TAllocator>
-class Playlist : ARDUINOJSON_NAMESPACE::AllocatorOwner<TAllocator> {
-private:
+class PlaylistAlloc : protected ARDUINOJSON_NAMESPACE::AllocatorOwner<TAllocator> {
+protected:
  	char *stringCopy(const char *string) {
 		size_t len = strlen(string);
 		char *ret = static_cast<char*>(this->allocate(len + 1));
@@ -23,8 +45,8 @@ private:
 	}
 
 public:
-	Playlist(TAllocator alloc = TAllocator()) : ARDUINOJSON_NAMESPACE::AllocatorOwner<TAllocator>(alloc) { }
-	virtual ~Playlist() { }
+	PlaylistAlloc(TAllocator alloc = TAllocator()) : ARDUINOJSON_NAMESPACE::AllocatorOwner<TAllocator>(alloc), repeatTrack(false), repeatPlaylist(false) { }
+	virtual ~PlaylistAlloc() { }
 
 	virtual size_t size() const = 0;
 
@@ -43,18 +65,19 @@ public:
 
 	virtual void randomize() { }
 };
+using Playlist = PlaylistAlloc<DefaultPsramAllocator>;
 
 // use custom allocators taken from ArduinoJson
 template <typename TAllocator>
-class WebstreamPlaylist : public Playlist<TAllocator> {
+class WebstreamPlaylistAlloc : public PlaylistAlloc<TAllocator> {
 protected:
 	char *url;
 
 public:
-	explicit WebstreamPlaylist(const char *_url, TAllocator alloc = TAllocator()) : Playlist<TAllocator>(alloc), url(nullptr) {
+	explicit WebstreamPlaylistAlloc(const char *_url, TAllocator alloc = TAllocator()) : PlaylistAlloc<TAllocator>(alloc), url(nullptr) {
 		url = this->stringCopy(_url);
 	}
-	virtual ~WebstreamPlaylist() {
+	virtual ~WebstreamPlaylistAlloc() {
 		free(url);
 	};
 
@@ -63,9 +86,10 @@ public:
 	virtual const String getFilename(size_t idx) const override { return url; };
 
 };
+using WebstreamPlaylist = WebstreamPlaylistAlloc<DefaultPsramAllocator>;
 
 template <typename TAllocator>
-class FolderPlaylist : public Playlist<TAllocator> {
+class FolderPlaylistAlloc : public PlaylistAlloc<TAllocator> {
 protected:
 	char *base;
 	char divider;
@@ -74,8 +98,8 @@ protected:
 	size_t count;
 
 public:
-	FolderPlaylist(size_t _capacity, TAllocator alloc = TAllocator()) 
-	  : Playlist<TAllocator>(alloc), base(nullptr), 
+	FolderPlaylistAlloc(size_t _capacity, TAllocator alloc = TAllocator()) 
+	  : PlaylistAlloc<TAllocator>(alloc), base(nullptr), 
 	    files(static_cast<char**>(this->allocate(sizeof(char*) * _capacity))),
 		capacity(_capacity), count(0) 
 	{
@@ -145,9 +169,9 @@ public:
 	}
 
 protected:
-	using Playlist<TAllocator>::sortFunc;
-	using Playlist<TAllocator>::alphabeticSort;
+	using PlaylistAlloc<TAllocator>::alphabeticSort;
 };
+using FolderPlaylist = FolderPlaylistAlloc<DefaultPsramAllocator>;
 
 #if 0
 class M3UPlaylist : public Playlist {
