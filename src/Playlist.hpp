@@ -44,9 +44,18 @@ protected:
 		return ret;
 	}
 
+	bool repeatTrack;
+	bool repeatPlaylist;
+
 public:
 	PlaylistAlloc(TAllocator alloc = TAllocator()) : ARDUINOJSON_NAMESPACE::AllocatorOwner<TAllocator>(alloc), repeatTrack(false), repeatPlaylist(false) { }
 	virtual ~PlaylistAlloc() { }
+
+	bool getRepeatTrack() const { return repeatTrack; }
+	void setRepeatTrack(bool newVal) { repeatTrack = newVal; }
+
+	bool getRepeatPlaylist() const { return repeatPlaylist; }
+	void setRepeatPlaylist(bool newVal) { repeatPlaylist = newVal; }
 
 	virtual size_t size() const = 0;
 
