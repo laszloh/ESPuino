@@ -43,9 +43,9 @@ static uint8_t AudioPlayer_InitVolume = AUDIOPLAYER_VOLUME_INIT;
 
 static void AudioPlayer_Task(void *parameter);
 static void AudioPlayer_HeadphoneVolumeManager(void);
-static const Playlist AudioPlayer_ReturnPlaylistFromWebstream(const char *_webUrl);
-static void AudioPlayer_SortPlaylist(Playlist &list);
-static void AudioPlayer_RandomizePlaylist(Playlist &list);
+static Playlist *AudioPlayer_ReturnPlaylistFromWebstream(const char *_webUrl);
+static void AudioPlayer_SortPlaylist(Playlist *list);
+static void AudioPlayer_RandomizePlaylist(Playlist *list);
 static size_t AudioPlayer_NvsRfidWriteWrapper(const char *_rfidCardId, const char *_track, const uint32_t _playPosition, const uint8_t _playMode, const uint16_t _trackLastPlayed, const uint16_t _numberOfTracks);
 static void AudioPlayer_ClearCover(void);
 
@@ -856,12 +856,12 @@ void AudioPlayer_TrackQueueDispatcher(const char *_itemToPlay, const uint32_t _l
 	strncpy(filename, _itemToPlay, sizeof(filename));
 	gPlayProperties.startAtFilePos = _lastPlayPos;
 	gPlayProperties.currentTrackNumber = _trackLastPlayed;
-	Playlist playlist;
+	Playlist *playlist = nullptr;
 
 	if (_playMode != WEBSTREAM) {
 		if (_playMode == RANDOM_SUBDIRECTORY_OF_DIRECTORY) {
 			char *tmp = SdCard_pickRandomSubdirectory(filename);     // *filename (input): target-directory  //   *filename (output): random subdirectory
-			if (tmp != nullptr) {  // If error occured while extracting random subdirectory
+			if (tmp != nullptr) {  // If no error occured while extracting random subdirectory
 				playlist = SdCard_ReturnPlaylist(filename, _playMode);    // Provide random subdirectory in order to enter regular playlist-generation
 			}
 		} else {
@@ -873,7 +873,7 @@ void AudioPlayer_TrackQueueDispatcher(const char *_itemToPlay, const uint32_t _l
 
 	// Catch if error occured (e.g. file not found)
 	gPlayProperties.playMode = BUSY; // Show @Neopixel, if uC is busy with creating playlist
-	if (playlist.size() == 0) {
+	if (!playlist || playlist->size() == 0) {
 		Log_Println((char *) FPSTR(noMp3FilesInDir), LOGLEVEL_NOTICE);
 		System_IndicateError();
 		if (!gPlayProperties.pausePlay) {
@@ -888,7 +888,7 @@ void AudioPlayer_TrackQueueDispatcher(const char *_itemToPlay, const uint32_t _l
 	}
 
 	gPlayProperties.playMode = _playMode;
-	gPlayProperties.numberOfTracks = playlist.size();
+	gPlayProperties.numberOfTracks = playlist->size();
 	// Set some default-values
 	gPlayProperties.repeatCurrentTrack = false;
 	gPlayProperties.repeatPlaylist = false;
@@ -905,26 +905,23 @@ void AudioPlayer_TrackQueueDispatcher(const char *_itemToPlay, const uint32_t _l
 	switch (gPlayProperties.playMode) {
 		case SINGLE_TRACK: {
 			Log_Println((char *) FPSTR(modeSingleTrack), LOGLEVEL_NOTICE);
-			xQueueSend(gTrackQueue, &(playlist), 0);
 			break;
 		}
 
 		case SINGLE_TRACK_LOOP: {
-			gPlayProperties.repeatCurrentTrack = true;
-			gPlayProperties.repeatPlaylist = true;
+			playlist->setRepeatTrack(true);
 			Log_Println((char *) FPSTR(modeSingleTrackLoop), LOGLEVEL_NOTICE);
-			xQueueSend(gTrackQueue, &(playlist), 0);
 			break;
 		}
 
 		case SINGLE_TRACK_OF_DIR_RANDOM: {
+			// TODO rework this case to use the playlist object
 			gPlayProperties.sleepAfterCurrentTrack = true;
 			gPlayProperties.playUntilTrackNumber = 0;
 			gPlayProperties.numberOfTracks = 1; // Limit number to 1 even there are more entries in the playlist
 			Led_ResetToNightBrightness();
 			Log_Println((char *) FPSTR(modeSingleTrackRandom), LOGLEVEL_NOTICE);
 			AudioPlayer_RandomizePlaylist(playlist);
-			xQueueSend(gTrackQueue, &(playlist), 0);
 			break;
 		}
 
@@ -932,16 +929,14 @@ void AudioPlayer_TrackQueueDispatcher(const char *_itemToPlay, const uint32_t _l
 			gPlayProperties.saveLastPlayPosition = true;
 			Log_Println((char *) FPSTR(modeSingleAudiobook), LOGLEVEL_NOTICE);
 			AudioPlayer_SortPlaylist(playlist);
-			xQueueSend(gTrackQueue, &(playlist), 0);
 			break;
 		}
 
 		case AUDIOBOOK_LOOP: { // Tracks need to be alph. sorted!
-			gPlayProperties.repeatPlaylist = true;
+			playlist->setRepeatPlaylist(true);
 			gPlayProperties.saveLastPlayPosition = true;
 			Log_Println((char *) FPSTR(modeSingleAudiobookLoop), LOGLEVEL_NOTICE);
 			AudioPlayer_SortPlaylist(playlist);
-			xQueueSend(gTrackQueue, &(playlist), 0);
 			break;
 		}
 
@@ -950,14 +945,12 @@ void AudioPlayer_TrackQueueDispatcher(const char *_itemToPlay, const uint32_t _l
 			snprintf(Log_Buffer, Log_BufferLength, "%s '%s' ", (char *) FPSTR(modeAllTrackAlphSorted), filename);
 			Log_Println(Log_Buffer, LOGLEVEL_NOTICE);
 			AudioPlayer_SortPlaylist(playlist);
-			xQueueSend(gTrackQueue, &(playlist), 0);
 			break;
 		}
 
 		case ALL_TRACKS_OF_DIR_RANDOM: {
 			Log_Println((char *) FPSTR(modeAllTrackRandom), LOGLEVEL_NOTICE);
 			AudioPlayer_RandomizePlaylist(playlist);
-			xQueueSend(gTrackQueue, &(playlist), 0);
 			break;
 		}
 
@@ -965,7 +958,6 @@ void AudioPlayer_TrackQueueDispatcher(const char *_itemToPlay, const uint32_t _l
 			gPlayProperties.repeatPlaylist = true;
 			Log_Println((char *) FPSTR(modeAllTrackAlphSortedLoop), LOGLEVEL_NOTICE);
 			AudioPlayer_SortPlaylist(playlist);
-			xQueueSend(gTrackQueue, &(playlist), 0);
 			break;
 		}
 
@@ -973,33 +965,36 @@ void AudioPlayer_TrackQueueDispatcher(const char *_itemToPlay, const uint32_t _l
 			gPlayProperties.repeatPlaylist = true;
 			Log_Println((char *) FPSTR(modeAllTrackRandomLoop), LOGLEVEL_NOTICE);
 			AudioPlayer_RandomizePlaylist(playlist);
-			xQueueSend(gTrackQueue, &(playlist), 0);
 			break;
 		}
 
 		case WEBSTREAM: { // This is always just one "track"
 			Log_Println((char *) FPSTR(modeWebstream), LOGLEVEL_NOTICE);
-			if (Wlan_IsConnected()) {
-				xQueueSend(gTrackQueue, &(playlist), 0);
-			} else {
+			if (!Wlan_IsConnected()) {
 				Log_Println((char *) FPSTR(webstreamNotAvailable), LOGLEVEL_ERROR);
-				System_IndicateError();
-				gPlayProperties.playMode = NO_PLAYLIST;
+				goto error;
 			}
 			break;
 		}
 
 		case LOCAL_M3U: { // Can be one or multiple SD-files or webradio-stations; or a mix of both
 			Log_Println((char *) FPSTR(modeWebstreamM3u), LOGLEVEL_NOTICE);
-			xQueueSend(gTrackQueue, &(playlist), 0);
 			break;
 		}
 
 		default:
 			Log_Println((char *) FPSTR(modeDoesNotExist), LOGLEVEL_ERROR);
-			gPlayProperties.playMode = NO_PLAYLIST;
-			System_IndicateError();
+			goto error;
 	}
+
+	// send the playlist to the queue
+	xQueueSend(gTrackQueue, &(playlist), 0);
+	return;
+
+error:
+	System_IndicateError();
+	gPlayProperties.playMode = NO_PLAYLIST;
+	delete playlist;
 }
 
 /* Wraps putString for writing settings into NVS for RFID-cards.
@@ -1045,8 +1040,8 @@ size_t AudioPlayer_NvsRfidWriteWrapper(const char *_rfidCardId, const char *_tra
 }
 
 // Adds webstream to playlist; same like SdCard_ReturnPlaylist() but always only one entry
-const Playlist AudioPlayer_ReturnPlaylistFromWebstream(const char *_webUrl) {
-	return Playlist(_webUrl);
+Playlist *AudioPlayer_ReturnPlaylistFromWebstream(const char *_webUrl) {
+	return new WebstreamPlaylist(_webUrl);
 }
 
 // Adds new control-command to control-queue
@@ -1055,31 +1050,13 @@ void AudioPlayer_TrackControlToQueueSender(const uint8_t trackCommand) {
 }
 
 // sort playlist alphabetically
-static void AudioPlayer_SortPlaylist(Playlist &list) {
-	if(list.size() <= 1) {
-		return;		// we do not have to sort a list with a single element
-	}
-
-	std::qsort(list.begin(), list.size(), list.elemSize(), [](const void* x, const void* y) {
-		const char *a = static_cast<const char*>(x);
-		const char *b = static_cast<const char*>(y);
-		return strcmp(a, b);
-	});
+static void AudioPlayer_SortPlaylist(Playlist *list) {
+	list->sort();
 }
 
 // Knuth-Fisher-Yates-algorithm to randomize playlist
-static void AudioPlayer_RandomizePlaylist(Playlist &list) {
-	if(list.size() <= 1) {
-		return;
-	}
-
-	// modern algorithm according to Durstenfeld, R. (1964). Algorithm 235: Random permutation. Commun. ACM, 7, 420.
-	for(size_t i=list.size()-1;i>0;i--) {
-		size_t j = random(i);
-		char *swap = list[i];
-		list[i] = list[j];
-		list[j] = swap;
-	}
+static void AudioPlayer_RandomizePlaylist(Playlist *list) {
+	list->randomize();
 }
 
 // Clear cover send notification

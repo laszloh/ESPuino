@@ -128,7 +128,7 @@ public:
 
 	virtual ~FolderPlaylistAlloc() {
 		destory();
-		}
+	}
 
 	bool reserve(size_t _cap) {
 		if(capacity > 0) {
