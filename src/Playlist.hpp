@@ -110,16 +110,24 @@ public:
 			assert(files != nullptr);
 		#endif
 	}
+	FolderPlaylistAlloc(TAllocator alloc = TAllocator()) 
+	  : PlaylistAlloc<TAllocator>(alloc), base(nullptr), 
+	    files(nullptr), capacity(0), count(0) 
+	{ }
 
-	FolderPlaylist(File &folder) {}
+	FolderPlaylistAlloc(File &folder) {}
 
-	virtual ~FolderPlaylist() {
-		// destory all the evidence!
-		for(size_t i=0;i<count;i++) {
-			free(files[i]);
+	virtual ~FolderPlaylistAlloc() {
+		destory();
 		}
-		free(files);
-		free(base);
+
+	bool reserve(size_t _cap) {
+		if(capacity > 0) {
+			destory();
+		}
+		files = static_cast<char**>(this->allocate(sizeof(char*) * _cap));
+		capacity = _cap;
+		return (files);
 	}
 
 	bool setBase(const char *_base) {
@@ -174,6 +182,15 @@ public:
 	}
 
 protected:
+	void destory(){
+		// destory all the evidence!
+		for(size_t i=0;i<count;i++) {
+			free(files[i]);
+		}
+		free(files);
+		free(base);
+	}
+
 	using PlaylistAlloc<TAllocator>::alphabeticSort;
 };
 using FolderPlaylist = FolderPlaylistAlloc<DefaultPsramAllocator>;
