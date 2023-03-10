@@ -50,6 +50,8 @@ public:
 
 	virtual size_t size() const = 0;
 
+	virtual bool isValid() const = 0;
+
 	virtual const String getAbsolutPath(size_t idx) const = 0;
 
 	virtual const String getFilename(size_t idx) const = 0;
@@ -82,6 +84,7 @@ public:
 	};
 
 	virtual size_t size() const override { return 1; }
+	virtual bool isValid() const override { return (url); }
 	virtual const String getAbsolutPath(size_t idx) const override { return url; };
 	virtual const String getFilename(size_t idx) const override { return url; };
 
@@ -134,6 +137,8 @@ public:
 	}
 
 	virtual size_t size() const override { return count; };
+
+	virtual bool isValid() const override { return (files); }
 
 	virtual const String getAbsolutPath(size_t idx) const override {
 		#if MEM_DEBUG == 1
