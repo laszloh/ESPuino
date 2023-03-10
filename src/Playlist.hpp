@@ -3,6 +3,7 @@
 #include <Arduino.h>
 #include <FS.h>
 #include <ArduinoJson.h>
+#include "Common.h"
 
 #if MEM_DEBUG == 1
 	#warning Memory access guards are enabled. Disable MEM_DEBUG for production builds
@@ -110,8 +111,8 @@ protected:
 	size_t count;
 
 public:
-	FolderPlaylistAlloc(size_t _capacity, TAllocator alloc = TAllocator()) 
-	  : PlaylistAlloc<TAllocator>(alloc), base(nullptr), 
+	FolderPlaylistAlloc(size_t _capacity, char _divider = '/', TAllocator alloc = TAllocator()) 
+	  : PlaylistAlloc<TAllocator>(alloc), base(nullptr), divider(_divider),
 	    files(static_cast<char**>(this->allocate(sizeof(char*) * _capacity))),
 		capacity(_capacity), count(0) 
 	{
@@ -119,12 +120,61 @@ public:
 			assert(files != nullptr);
 		#endif
 	}
-	FolderPlaylistAlloc(TAllocator alloc = TAllocator()) 
-	  : PlaylistAlloc<TAllocator>(alloc), base(nullptr), 
+	FolderPlaylistAlloc(char _divider = '/', TAllocator alloc = TAllocator()) 
+	  : PlaylistAlloc<TAllocator>(alloc), base(nullptr),  divider(_divider),
 	    files(nullptr), capacity(0), count(0) 
 	{ }
 
-	FolderPlaylistAlloc(File &folder) {}
+	FolderPlaylistAlloc(File &folder, char _divider = '/', TAllocator alloc = TAllocator()) : PlaylistAlloc<TAllocator>(alloc), divider(_divider) {
+		// since we are enumerating, we don't have to think about files not having a base
+		const char *path;
+		#if ESP_ARDUINO_VERSION_MAJO >= 2
+			path = folder.path();
+		#else
+			path = folder.name();
+		#endif
+		base = this->stringCopy(path);
+
+		// enumerate all files in the folder, we have to do it twice
+		constexpr size_t allocUnit = 255;	// we start with 255 entries and double them, if needed
+		size_t allocCount = 1;
+		reserve(allocUnit * allocCount);
+		while(true) {
+			File entry = folder.openNextFile();
+			if(!entry) {
+				break;
+			}
+			if(entry.isDirectory()) {
+				continue;
+			}
+			String path;
+			#if ESP_ARDUINO_VERSION_MAJO >= 2
+				path = folder.name();
+			#else
+				path = folder.name();
+				// remove base, since in Arduino 1, name return the path
+				path = path.substring(path.lastIndexOf(divider) + 1);
+			#endif
+			if(fileValid(path.c_str())) {
+				// push this file into the array
+				bool success = push_back(path.c_str());
+				if(!success) {
+					// we need more memory D:
+					allocCount++;
+					if(!reserve(allocUnit * allocCount)) {
+						#if MEM_DEBUG == 1
+							assert(false);
+						#endif
+						return;
+					}
+					// we should have more memory now
+					push_back(path);
+				}
+			}
+		}
+		// resive memory to fit our count
+		reserve(count);
+	}
 
 	virtual ~FolderPlaylistAlloc() {
 		destory();
@@ -150,13 +200,27 @@ public:
 		if(count >= capacity) {
 			return false;
 		}
-
 		if(!fileValid(path)) {
 			return false;
 		}
 
+		// here we check if we have to cut up the path
+		if(base) {
+			// we are in relative mode, check if the path begins with our base
+			if(strncmp(path, base, strlen(base)) != 0) {
+				// we refuse files other than our base
+				return false;
+			}
+			path = path + strlen(base) + 1;	// modify pointer to the end of the path
+		}
+
 		files[count] = this->stringCopy(path);
-		return (files[count]!=nullptr);
+		if(!files[count]) {
+			// stringcopy failed
+			return false;
+		}
+		count++;
+		return true;
 	}
 
 	virtual size_t size() const override { return count; };
