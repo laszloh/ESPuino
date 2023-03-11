@@ -1,7 +1,7 @@
 #pragma once
 
 #include <Arduino.h>
-#include <FS.h>
+//#include <FS.h>
 #include <ArduinoJson.h>
 #include "Common.h"
 
@@ -89,14 +89,22 @@ public:
 	explicit WebstreamPlaylistAlloc(const char *_url, TAllocator alloc = TAllocator()) : PlaylistAlloc<TAllocator>(alloc), url(nullptr) {
 		url = this->stringCopy(_url);
 	}
-	virtual ~WebstreamPlaylistAlloc() {
-		free(url);
+	WebstreamPlaylistAlloc(TAllocator alloc = TAllocator()) : PlaylistAlloc<TAllocator>(alloc), url(nullptr) { }
+	virtual ~WebstreamPlaylistAlloc() override {
+		this->deallocate(url);
 	};
+
+	void setUrl(const char *_url) {
+		if(_url) {
+			this->deallocate(url);
+		}
+		url = this->stringCopy(_url);
+	}
 
 	virtual size_t size() const override { return (url) ? 1 : 0; }
 	virtual bool isValid() const override { return (url); }
-	virtual const String getAbsolutPath(size_t idx) const override { return url; };
-	virtual const String getFilename(size_t idx) const override { return url; };
+	virtual const String getAbsolutPath(size_t idx = 0) const override { return url; };
+	virtual const String getFilename(size_t idx = 0) const override { return url; };
 
 };
 using WebstreamPlaylist = WebstreamPlaylistAlloc<DefaultPsramAllocator>;
@@ -126,7 +134,23 @@ public:
 	{ }
 
 	FolderPlaylistAlloc(File &folder, char _divider = '/', TAllocator alloc = TAllocator()) : PlaylistAlloc<TAllocator>(alloc), divider(_divider) {
-		// since we are enumerating, we don't have to think about files not having a base
+		createFromFolder(folder);
+	}
+
+	virtual ~FolderPlaylistAlloc() {
+		destory();
+	}
+
+	bool createFromFolder(File &folder) {
+		// This is not a folder, so bail out
+		if(!folder || !folder.isDirectory()){
+			return false;
+		}
+
+		// clean up any previously used memory
+		clear();
+
+		// since we are enumerating, we don't have to think about absolute files with different bases 
 		const char *path;
 		#if ESP_ARDUINO_VERSION_MAJO >= 2
 			path = folder.path();
@@ -147,40 +171,40 @@ public:
 			if(entry.isDirectory()) {
 				continue;
 			}
-			String path;
+			const char *path;
 			#if ESP_ARDUINO_VERSION_MAJO >= 2
-				path = folder.name();
+				path = entry.name();
 			#else
-				path = folder.name();
+				path = entry.name();
 				// remove base, since in Arduino 1, name return the path
-				path = path.substring(path.lastIndexOf(divider) + 1);
+				path = path + strlen(base) + 1;
 			#endif
-			if(fileValid(path.c_str())) {
+			if(fileValid(path)) {
 				// push this file into the array
-				bool success = push_back(path.c_str());
+				bool success = push_back(path);
 				if(!success) {
 					// we need more memory D:
 					allocCount++;
 					if(!reserve(allocUnit * allocCount)) {
-						#if MEM_DEBUG == 1
-							assert(false);
-						#endif
-						return;
+						return false;
 					}
 					// we should have more memory now
 					push_back(path);
 				}
 			}
 		}
-		// resive memory to fit our count
+		// resize memory to fit our count
 		reserve(count);
-	}
 
-	virtual ~FolderPlaylistAlloc() {
-		destory();
+		return true;
 	}
 
 	bool reserve(size_t _cap) {
+		if(_cap < count) {
+			// we do not support reducing below the current size
+			return false;
+		}
+
 		char **tmp = static_cast<char**>(this->reallocate((capacity > 0 ) ? files : nullptr, sizeof(char*) * _cap));
 		if(!tmp) {
 			// we failed to get the needed memory D:
@@ -204,24 +228,33 @@ public:
 			return false;
 		}
 
-		// here we check if we have to cut up the path
-		if(base) {
-			// we are in relative mode, check if the path begins with our base
-			if(strncmp(path, base, strlen(base)) != 0) {
+		// here we check if we have to cut up the path (currently it's only a crude check for absolute paths)
+		if(base && path[0] == '/') {
+			// we are in relative mode and got an absolute path, check if the path begins with our base
+			// Also check if the path is so short, that there is no space for a filename in it
+			if((strncmp(path, base, strlen(base)) != 0) || (strlen(path) < strlen(base) + strlen("/.abc"))) {
 				// we refuse files other than our base
 				return false;
 			}
 			path = path + strlen(base) + 1;	// modify pointer to the end of the path
 		}
 
-		files[count] = this->stringCopy(path);
-		if(!files[count]) {
-			// stringcopy failed
+		char *tmp = this->stringCopy(path);
+		if(!tmp) {
+			// stringCopy failed
 			return false;
 		}
-		count++;
+		files[count++] = tmp;
 		return true;
 	}
+
+	void clear() {
+		destory();
+		init();
+	}
+
+	void setDivider(char _divider) { divider = _divider; }
+	bool getDivider() const { return divider; }
 
 	virtual size_t size() const override { return count; };
 
@@ -231,7 +264,11 @@ public:
 		#if MEM_DEBUG == 1
 			assert(idx < count);
 		#endif
-		return String(base) + divider + files[idx];
+		if(base) {
+			// we are in relative mode
+			return String(base) + divider + files[idx];
+		}
+		return files[idx];
 	};
 
 	virtual const String getFilename(size_t idx) const override {
@@ -246,11 +283,12 @@ public:
 	}
 
 	virtual void randomize() override {
-		if(count <= 1) {
+		if(count < 2) {
 			// we can not randomize less than 2 entries
 			return;
 		}
 
+		// Knuth-Fisher-Yates-algorithm to randomize playlist
 		// modern algorithm according to Durstenfeld, R. (1964). Algorithm 235: Random permutation. Commun. ACM, 7, 420.
 		for(size_t i=count-1;i>0;i--) {
 			size_t j = random(i);
@@ -261,22 +299,34 @@ public:
 	}
 
 protected:
-	void destory(){
+	void destory() {
 		// destory all the evidence!
 		for(size_t i=0;i<count;i++) {
-			free(files[i]);
+			this->deallocate(files[i]);
 		}
-		free(files);
-		free(base);
+		this->deallocate(files);
+		this->deallocate(base);
+	}
+
+	void init() {
+		base = nullptr;
+		files = nullptr;
+		capacity = 0;
+		count = 0;
+		divider = '/';
 	}
 
 	// Check if file-type is correct
 	bool fileValid(const char *_fileItem) {
-		const char ch = '/';
-		char *subst;
-		subst = strrchr(_fileItem, ch); // Don't use files that start with .
+		if(!_fileItem)
+			return false;
 
-		return (!startsWith(subst, (char *) "/.")) && (
+		// if we are in absolute mode...
+		if(!base) {
+			_fileItem = strrchr(_fileItem, divider);	//... extract the file name from path
+		}
+
+		return (!startsWith(_fileItem, (char *) "/.")) && (
 				endsWith(_fileItem, ".mp3") || endsWith(_fileItem, ".MP3") ||
 				endsWith(_fileItem, ".aac") || endsWith(_fileItem, ".AAC") ||
 				endsWith(_fileItem, ".m3u") || endsWith(_fileItem, ".M3U") ||
