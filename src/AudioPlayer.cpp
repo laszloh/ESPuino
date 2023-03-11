@@ -337,14 +337,12 @@ void AudioPlayer_Task(void *parameter) {
 
 		Playlist *tmp;
 		trackQStatus = xQueueReceive(gTrackQueue, &tmp, 0);
-		if(trackQStatus == pdPASS) {
-			if(gPlayProperties.playlist){
+		if (trackQStatus == pdPASS || gPlayProperties.trackFinished || trackCommand != NO_ACTION) {
+			if (trackQStatus == pdPASS) {
 				// clean up the old playlist
 				delete gPlayProperties.playlist;
-			}
-			gPlayProperties.playlist = tmp;
+				gPlayProperties.playlist = tmp;
 
-			if(gPlayProperties.trackFinished || trackCommand != NO_ACTION) {
 				if (gPlayProperties.pausePlay) {
 					gPlayProperties.pausePlay = false;
 				}
@@ -626,7 +624,7 @@ void AudioPlayer_Task(void *parameter) {
 				gPlayProperties.playlistFinished = false;
 			} else if (gPlayProperties.playMode != WEBSTREAM && !gPlayProperties.isWebstream) {
 				// Files from SD
-				if (!gFSystem.exists(gPlayProperties.playlist->getAbsolutPath(gPlayProperties.currentTrackNumber).c_str())) { // Check first if file/folder exists
+				if (!gFSystem.exists(gPlayProperties.playlist->getAbsolutPath(gPlayProperties.currentTrackNumber))) { // Check first if file/folder exists
 					snprintf(Log_Buffer, Log_BufferLength, "%s: %s", (char *) FPSTR(dirOrFileDoesNotExist), gPlayProperties.playlist->getAbsolutPath(gPlayProperties.currentTrackNumber).c_str());
 					Log_Println(Log_Buffer, LOGLEVEL_ERROR);
 					gPlayProperties.trackFinished = true;
@@ -1061,7 +1059,6 @@ static void AudioPlayer_SortPlaylist(Playlist *list) {
 	list->sort();
 }
 
-// Knuth-Fisher-Yates-algorithm to randomize playlist
 static void AudioPlayer_RandomizePlaylist(Playlist *list) {
 	list->randomize();
 }
