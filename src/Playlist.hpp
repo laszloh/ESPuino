@@ -1,9 +1,12 @@
 #pragma once
 
 #include <Arduino.h>
-//#include <FS.h>
 #include <ArduinoJson.h>
 #include "Common.h"
+
+#ifndef MOCK_FS
+	#include <FS.h>
+#endif
 
 #if MEM_DEBUG == 1
 	#warning Memory access guards are enabled. Disable MEM_DEBUG for production builds

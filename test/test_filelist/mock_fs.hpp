@@ -1,7 +1,7 @@
 #pragma once
 
 #include <list>
-
+#define MOCK_FS
 struct Node {
     ~Node() { content.clear(); }
     String fullPath{""};
