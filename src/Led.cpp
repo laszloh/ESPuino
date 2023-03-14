@@ -14,6 +14,7 @@
 
 #ifdef NEOPIXEL_ENABLE
 	#include <FastLED.h>
+	#include "pixelringbuffer.h"
 
 	#define LED_INITIAL_BRIGHTNESS 16u
 	#define LED_INITIAL_NIGHT_BRIGHTNESS 2u
