@@ -236,6 +236,89 @@ void test_folder_content_automatic(void) {
     TEST_ASSERT_EQUAL_MESSAGE(2, reAllocCount, "Calls to realloc");
 }
 
+void test_folder_content_special_char(void) {
+    // this test will access a mock file system implementation
+    Node musicFolder = {
+        .fullPath = "/sdcard/music/131072 😀",
+        .valid = true,
+        .isDir = true,
+        .size = 0,
+        .content = {
+                {
+                    .fullPath = "/sdcard/music/131072 😀/Zongz.mp3",
+                    .valid = true,
+                    .isDir = false,
+                    .size = 12345,
+                    .content = std::list<Node>()
+                },
+                {
+                    .fullPath = "/sdcard/music/131072 😀/Müsäk.mp3",
+                    .valid = true,
+                    .isDir = false,
+                    .size = 12345,
+                    .content = std::list<Node>()
+                },
+                {
+                    .fullPath = "/sdcard/music/131072 😀/狗.mp3",
+                    .valid = true,
+                    .isDir = false,
+                    .size = 12345,
+                    .content = std::list<Node>()
+                },
+                {
+                    .fullPath = "/sdcard/music/131072 😀/très élégant.mp3",
+                    .valid = true,
+                    .isDir = false,
+                    .size = 12345,
+                    .content = std::list<Node>()
+                },
+                {
+                    .fullPath = "/sdcard/music/131072 😀/A Folder",
+                    .valid = true,
+                    .isDir = true,
+                    .size = 0,
+                    .content = std::list<Node>()
+                },
+                {
+                    .fullPath = "/sdcard/music/131072 😀/россиянин.mp3",
+                    .valid = true,
+                    .isDir = false,
+                    .size = 12345,
+                    .content = std::list<Node>()
+                },
+                {
+                    .fullPath = "/sdcard/music/131072 😀/song6.mp3",
+                    .valid = true,
+                    .isDir = false,
+                    .size = 12345,
+                    .content = std::list<Node>()
+                },
+            }
+    };
+    constexpr size_t numFiles = 6;
+    File root(musicFolder);
+
+    folderPlaylist->createFromFolder(root);
+    TEST_ASSERT_EQUAL_MESSAGE(numFiles, folderPlaylist->size(), "Number of elements in Playlist");
+
+    size_t i=0;
+    for(auto it=musicFolder.content.begin();it!=musicFolder.content.end();it++){
+        log_n("Path: %s", it->fullPath.c_str());
+        if(!it->isDir) {
+            TEST_ASSERT_EQUAL_STRING(it->fullPath.c_str(), folderPlaylist->getAbsolutPath(i).c_str());
+            i++;
+        }
+    }
+
+    // cleanup
+    folderPlaylist->clear();
+
+     // test memory actions
+    TEST_ASSERT_EQUAL_MESSAGE(1 + numFiles, allocCount, "Calls to malloc");
+    TEST_ASSERT_EQUAL_MESSAGE(8, deAllocCount, "Calls to free");
+    TEST_ASSERT_EQUAL_MESSAGE(2, reAllocCount, "Calls to realloc");
+}
+
 void setup()
 {
     Serial.begin(115200);
@@ -248,6 +331,7 @@ void setup()
     RUN_TEST(test_folder_content_absolute);
     RUN_TEST(test_folder_content_relative);
     RUN_TEST(test_folder_content_automatic);
+    RUN_TEST(test_folder_content_special_char);
 
 
     UNITY_END(); // stop unit testing
