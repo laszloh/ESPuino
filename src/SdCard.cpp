@@ -7,6 +7,11 @@
 #include "MemX.h"
 #include "System.h"
 
+#include "playlists/FolderPlaylist.hpp"
+#include "playlists/CacheFilePlaylist.hpp"
+#include "playlists/M3UPlaylist.hpp"
+#include "playlists/WebstreamPlaylist.hpp"
+
 #ifdef SD_MMC_1BIT_MODE
 	fs::FS gFSystem = (fs::FS)SD_MMC;
 #else

@@ -19,7 +19,8 @@
 #include "Web.h"
 #include "Bluetooth.h"
 #include "Cmd.h"
-#include "Playlist.hpp"
+
+#include "playlists/WebstreamPlaylist.hpp"
 
 #define AUDIOPLAYER_VOLUME_MAX 21u
 #define AUDIOPLAYER_VOLUME_MIN 0u
