@@ -7,6 +7,8 @@
 #include "MemX.h"
 #include "System.h"
 
+#include "CachedPlaylist.hpp"
+
 #ifdef SD_MMC_1BIT_MODE
 	fs::FS gFSystem = (fs::FS)SD_MMC;
 #else
@@ -225,7 +227,7 @@ Playlist *SdCard_ReturnPlaylist(const char *fileName, const uint32_t _playMode) 
 	File fileOrDirectory = gFSystem.open(fileName);
 	if (!fileOrDirectory) {
 		Log_Println((char *) FPSTR(dirOrFileDoesNotExist), LOGLEVEL_ERROR);
-		return playlist;
+		return nullptr;
 	}
 
 	// Create linear playlist of caching-file
@@ -262,7 +264,7 @@ Playlist *SdCard_ReturnPlaylist(const char *fileName, const uint32_t _playMode) 
 					if(serializedPlaylist == NULL) {
 						Log_Println((char *) FPSTR(unableToAllocateMemForLinearPlaylist), LOGLEVEL_ERROR);
 						System_IndicateError();
-						return playlist;
+						return nullptr;
 					}
 
 					char buf;
@@ -291,7 +293,7 @@ Playlist *SdCard_ReturnPlaylist(const char *fileName, const uint32_t _playMode) 
 			if (serializedPlaylist == NULL) {
 				Log_Println((char *) FPSTR(unableToAllocateMemForLinearPlaylist), LOGLEVEL_ERROR);
 				System_IndicateError();
-				return playlist;
+				return nullptr;
 			}
 			char buf;
 			char lastBuf = '#';
@@ -307,7 +309,7 @@ Playlist *SdCard_ReturnPlaylist(const char *fileName, const uint32_t _playMode) 
 						Log_Println((char *) FPSTR(unableToAllocateMemForLinearPlaylist), LOGLEVEL_ERROR);
 						System_IndicateError();
 						free(serializedPlaylist);
-						return playlist;
+						return nullptr;
 					}
 					serializedPlaylist = tmp;
 				}
@@ -326,7 +328,7 @@ Playlist *SdCard_ReturnPlaylist(const char *fileName, const uint32_t _playMode) 
 				serializedPlaylist[fPos-1] = '\0';
 			}
 		} else {
-			return playlist;
+			return nullptr;
 		}
 	}
 
@@ -385,7 +387,7 @@ Playlist *SdCard_ReturnPlaylist(const char *fileName, const uint32_t _playMode) 
 							Log_Println((char *) FPSTR(unableToAllocateMemForLinearPlaylist), LOGLEVEL_ERROR);
 							System_IndicateError();
 							free(serializedPlaylist);
-							return playlist;
+							return nullptr;
 						}
 						serializedPlaylist = tmp;
 					}
