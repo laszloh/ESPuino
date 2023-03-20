@@ -2,7 +2,7 @@
 #include <unity.h>
 #include <FS.h>
 
-#include "Playlist.hpp"
+#include "playlists/WebstreamPlaylist.hpp"
 
 size_t allocCount = 0;
 size_t deAllocCount = 0;

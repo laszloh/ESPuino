@@ -2,7 +2,7 @@
 #include "settings.h"
 #include "Log.h"
 #include "Rfid.h"
-#include "Playlist.hpp"
+#include "Playlist.h"
 
 QueueHandle_t gVolumeQueue;
 QueueHandle_t gTrackQueue;

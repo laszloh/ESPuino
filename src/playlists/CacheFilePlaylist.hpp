@@ -4,14 +4,11 @@
 #include <stdint.h>
 #include <rom/crc.h>
 
-#ifndef MOCK_FS
-	#include <FS.h>
-#endif
-
-#include "Playlist.hpp"
+#include "../Playlist.h"
+#include "FolderPlaylist.hpp"
 
 template <typename TAllocator>
-class CachedPlaylistAlloc : FolderPlaylistAlloc<TAllocator> {
+class CacheFilePlaylistAlloc : public FolderPlaylistAlloc<TAllocator> {
 protected:
     // bitwise flags for future use
     struct Flags {
@@ -126,8 +123,8 @@ protected:
     }
 
 public:
-    CachedPlaylistAlloc(char divider = '/', TAllocator alloc = TAllocator()) : FolderPlaylistAlloc<TAllocator>(divider, alloc), flags(Flags()), headerValid(false) { }
-	CachedPlaylistAlloc(File &cacheFile, char divider = '/', TAllocator alloc = TAllocator()) : FolderPlaylistAlloc<TAllocator>(divider, alloc), flags(Flags()), headerValid(false) {
+    CacheFilePlaylistAlloc(char divider = '/', TAllocator alloc = TAllocator()) : FolderPlaylistAlloc<TAllocator>(divider, alloc), flags(Flags()), headerValid(false) { }
+	CacheFilePlaylistAlloc(File &cacheFile, char divider = '/', TAllocator alloc = TAllocator()) : FolderPlaylistAlloc<TAllocator>(divider, alloc), flags(Flags()), headerValid(false) {
         deserialize(cacheFile);
 	}
 
@@ -208,4 +205,4 @@ public:
         return headerValid & (this->files);
     }
 };
-using CachedPlaylist = CachedPlaylistAlloc<DefaultPsramAllocator>;
+using CacheFilePlaylist = CacheFilePlaylistAlloc<DefaultPsramAllocator>;

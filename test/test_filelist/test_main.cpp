@@ -3,7 +3,7 @@
 #include <array>
 #include "mock_fs.hpp"
 
-#include "Playlist.hpp"
+#include "playlists/FolderPlaylist.hpp"
 
 size_t allocCount = 0;
 size_t deAllocCount = 0;
