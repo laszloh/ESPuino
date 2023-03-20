@@ -251,6 +251,10 @@ public:
 		return true;
 	}
 
+	bool push_back(const String path) {
+		return push_back(path.c_str());
+	}
+
 	void clear() {
 		destory();
 		init();
