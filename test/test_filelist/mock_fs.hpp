@@ -62,3 +62,26 @@ public:
     Node node;
     std::list<Node>::iterator it;
 };
+
+class WriteFile : public File {
+public:
+    WriteFile(Node n = Node()) : File(n), allocCount(1), fileSize(0), data(new uint8_t[allocCount * allocSize]) {
+    }
+    virtual ~WriteFile() {
+        delete data;
+    }
+
+    size_t allocCount;
+    size_t fileSize;
+    uint8_t *data;
+    static constexpr size_t allocSize=1024;
+};
+
+class ReadFile : public File {
+public:
+    ReadFile(Node n = Node(), const String data) : File(n), data(data) {
+    }
+    virtual ~ReadFile() { }
+
+    String data;
+};
