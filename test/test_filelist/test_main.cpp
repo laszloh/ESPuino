@@ -287,7 +287,7 @@ void test_folder_content_special_char(void) {
                     .content = std::list<Node>()
                 },
                 {
-                    .fullPath = "/sdcard/music/131072 😀/song6.mp3",
+                    .fullPath = "/sdcard/music/131072 😀/" "\xD9\x85\xD9\x88\xD8\xB3\xD9\x8a\xD9\x82" ".mp3",
                     .valid = true,
                     .isDir = false,
                     .size = 12345,
