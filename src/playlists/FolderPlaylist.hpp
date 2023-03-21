@@ -203,7 +203,7 @@ public:
 	}
 
 protected:
-	void destory() {
+	virtual void destory() override {
 		// destory all the evidence!
 		for(size_t i=0;i<count;i++) {
 			this->deallocate(files[i]);

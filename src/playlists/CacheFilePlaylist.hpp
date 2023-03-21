@@ -210,5 +210,10 @@ protected:
 
         return true;
     }
+
+    virtual void destroy() override {
+        FolderPlaylistAlloc<TAllocator>::destroy();
+        headerValid = false;
+    }
 };
 using CacheFilePlaylist = CacheFilePlaylistAlloc<DefaultPsramAllocator>;

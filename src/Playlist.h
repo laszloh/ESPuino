@@ -44,6 +44,8 @@ protected:
 		return ret;
 	}
 
+	virtual void destroy() { }
+
 	bool repeatTrack;
 	bool repeatPlaylist;
 
