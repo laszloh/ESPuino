@@ -74,13 +74,13 @@ void test_webstream_alloc(void) {
 }
 
 void test_webstream_content(void) {
-    TEST_ASSERT_EQUAL_STRING_MESSAGE(webStream, webPlaylist->getAbsolutPath().c_str(), "Test if stored value equal constructor value");
+    TEST_ASSERT_EQUAL_STRING_MESSAGE(webStream, webPlaylist->getAbsolutePath().c_str(), "Test if stored value equal constructor value");
 }
 
 void test_webstream_change(void) {
     const char *newStream = "http://test2.com/stream.mp3";
     webPlaylist->setUrl(newStream);
-    TEST_ASSERT_EQUAL_STRING_MESSAGE(newStream, webPlaylist->getAbsolutPath().c_str(), "Test if stored value equal constructor value");
+    TEST_ASSERT_EQUAL_STRING_MESSAGE(newStream, webPlaylist->getAbsolutePath().c_str(), "Test if stored value equal constructor value");
 
     // test memory actions
     TEST_ASSERT_EQUAL_MESSAGE(2, allocCount, "Calls to malloc");

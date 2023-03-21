@@ -61,7 +61,7 @@ public:
 
 	virtual bool isValid() const = 0;
 
-	virtual const String getAbsolutPath(size_t idx) const = 0;
+	virtual const String getAbsolutePath(size_t idx) const = 0;
 
 	virtual const String getFilename(size_t idx) const = 0;
 

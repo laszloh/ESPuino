@@ -105,7 +105,7 @@ void test_folder_content_absolute(void) {
     TEST_ASSERT_EQUAL(contentAbsolute.size(), folderPlaylist->size());
 
     for(size_t i=0;i<contentAbsolute.size();i++){
-       TEST_ASSERT_EQUAL_STRING(contentAbsolute[i], folderPlaylist->getAbsolutPath(i).c_str());
+       TEST_ASSERT_EQUAL_STRING(contentAbsolute[i], folderPlaylist->getAbsolutePath(i).c_str());
     }
 
     folderPlaylist->clear();
@@ -135,7 +135,7 @@ void test_folder_content_relative(void) {
     TEST_ASSERT_EQUAL(contentRelative.size(), folderPlaylist->size());
 
     for(size_t i=0;i<contentRelative.size();i++){
-       TEST_ASSERT_EQUAL_STRING(contentRelative[i], folderPlaylist->getAbsolutPath(i).c_str());
+       TEST_ASSERT_EQUAL_STRING(contentRelative[i], folderPlaylist->getAbsolutePath(i).c_str());
     }
 
     // this tests should fail
@@ -222,7 +222,7 @@ void test_folder_content_automatic(void) {
     size_t i=0;
     for(auto it=musicFolder.content.begin();it!=musicFolder.content.end();it++){
         if(!it->isDir) {
-            TEST_ASSERT_EQUAL_STRING(it->fullPath.c_str(), folderPlaylist->getAbsolutPath(i).c_str());
+            TEST_ASSERT_EQUAL_STRING(it->fullPath.c_str(), folderPlaylist->getAbsolutePath(i).c_str());
             i++;
         }
     }
@@ -305,7 +305,7 @@ void test_folder_content_special_char(void) {
     for(auto it=musicFolder.content.begin();it!=musicFolder.content.end();it++){
         log_n("Path: %s", it->fullPath.c_str());
         if(!it->isDir) {
-            TEST_ASSERT_EQUAL_STRING(it->fullPath.c_str(), folderPlaylist->getAbsolutPath(i).c_str());
+            TEST_ASSERT_EQUAL_STRING(it->fullPath.c_str(), folderPlaylist->getAbsolutePath(i).c_str());
             i++;
         }
     }

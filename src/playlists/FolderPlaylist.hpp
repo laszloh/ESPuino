@@ -164,7 +164,7 @@ public:
 
 	virtual bool isValid() const override { return (files); }
 
-	virtual const String getAbsolutPath(size_t idx) const override {
+	virtual const String getAbsolutePath(size_t idx) const override {
 		#if MEM_DEBUG == 1
 			assert(idx < count);
 		#endif

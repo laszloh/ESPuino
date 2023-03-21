@@ -23,8 +23,6 @@ protected:
             //      flags |= (flag << 0);
             //      flags |= (otherFlag << 1);
             //      return flags;
-            // 
-
             uint16_t bitfield = 0x00;
 
             bitfield |= (relative << 0);
@@ -55,7 +53,7 @@ protected:
     static constexpr uint16_t crcBase = 0x00;   //< starting value of the crc calculation
     static constexpr size_t headerSize = 13;    //< the expected size of the header: magic(2) + version(2) + flags(2) + count(4) + crc(2) + separator(1)
 
-    Flags flags;                                //< reserved for further use
+    Flags flags;                                //< A 16bit bitfield of flags
     bool headerValid;
 
     static constexpr char separator = '#';      //< separator for all entries
@@ -96,7 +94,7 @@ protected:
     bool writeEntries(File &f) const {
         // write all entries with the separator to the file
         for(size_t i=0;i<this->count;i++) {
-            const String path = this->getAbsolutPath(i);
+            const String path = this->getAbsolutePath(i);
             if(f.write(static_cast<const uint8_t*>(path.c_str()), path.len()) != path.len()) {
                 return false;
             }

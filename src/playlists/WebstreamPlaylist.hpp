@@ -28,7 +28,7 @@ public:
 
 	virtual size_t size() const override { return (url) ? 1 : 0; }
 	virtual bool isValid() const override { return (url); }
-	virtual const String getAbsolutPath(size_t idx = 0) const override { return url; };
+	virtual const String getAbsolutePath(size_t idx = 0) const override { return url; };
 	virtual const String getFilename(size_t idx = 0) const override { return url; };
 
 };
