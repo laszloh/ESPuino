@@ -9,6 +9,93 @@
 
 template <typename TAllocator>
 class CacheFilePlaylistAlloc : public FolderPlaylistAlloc<TAllocator> {
+public:
+    CacheFilePlaylistAlloc(char divider = '/', TAllocator alloc = TAllocator()) : FolderPlaylistAlloc<TAllocator>(divider, alloc), flags(Flags()), headerValid(false) { }
+	CacheFilePlaylistAlloc(File &cacheFile, char divider = '/', TAllocator alloc = TAllocator()) : FolderPlaylistAlloc<TAllocator>(divider, alloc), flags(Flags()), headerValid(false) {
+        deserialize(cacheFile);
+	}
+
+    bool serialize(File &target) const {
+        // write the header into the file
+        // header is big endian 
+        BinaryCacheHeader header;
+        size_t ret;
+
+        // first is the magic marker
+        header.magic = magic;
+        ret = write(target, magic);
+
+        // the header version & flags
+        header.version = version;
+        ret += write(target, version);
+        header.flags = flags;
+        ret += write(target, flags);
+
+        // write the number of entries and the crc (not implemented yet)
+        header.count = this->count;
+        ret += write(target, header.count);
+        header.crc = crcBase;
+        ret += write(target, calcCRC(header));
+
+        ret += target.write(separator);
+
+        if(ret != headerSize) {
+            #ifdef MEM_DEBUG
+                assert(ret != headerSize);
+            #endif
+            return false;
+        }
+
+        return writeEntries(target);
+    }
+
+    bool deserialize(File &cache) {
+        // read the header from the file
+        BinaryCacheHeader header;
+
+        header.magic = read16(cache);
+        header.version = read16(cache);
+
+        // first checkpoint
+        if(header.magic != magic || header.version != version) {
+            // header did not match, bail out
+            return false;
+        }
+
+        // read the flags and the count
+        header.flags = read16(cache);
+        header.count = read32(cache);
+
+        // second checkpoint, crc and separator
+        header.crc = read16(cache);
+        if(calcCRC(header) != 0x00 || cache.read() != separator) {
+            // here we use the feature of the crc16_le that the crc over a block with a correct crc is zero
+            return false;
+        }
+
+        // destroy old data, if present
+        if(isValid()) {
+            destroy();
+        }
+
+        // header was ok
+        headerValid = true;
+
+        // reserve the memory
+        bool success = this->reserve(header.count);
+        if(!success) {
+            // we failed to reserve the needed memory
+            return false;
+        }
+ 
+        // everything was ok read the files
+        return readEntries(cache);
+    }
+
+    virtual bool isValid() const override {
+        return headerValid & (this->files);
+    }
+
 protected:
     // bitwise flags for future use
     struct Flags {
@@ -109,98 +196,19 @@ protected:
             const String basePath = f.readStringUntil(separator);
             this->setBase(basePath);
         }
+        // test if we need this
+        f.seek(1, SeekCur);
 
         for(size_t i=0;i<this->capacity;i++) {
             const String path = f.readStringUntil(separator);
+            // test if we need this
+            f.seek(1, SeekCur);
             if(!this->push_back(path)){
                 return false;
             }
         }
 
         return true;
-    }
-
-public:
-    CacheFilePlaylistAlloc(char divider = '/', TAllocator alloc = TAllocator()) : FolderPlaylistAlloc<TAllocator>(divider, alloc), flags(Flags()), headerValid(false) { }
-	CacheFilePlaylistAlloc(File &cacheFile, char divider = '/', TAllocator alloc = TAllocator()) : FolderPlaylistAlloc<TAllocator>(divider, alloc), flags(Flags()), headerValid(false) {
-        deserialize(cacheFile);
-	}
-
-    bool serialize(File &target) const {
-        // write the header into the file
-        // header is big endian 
-        BinaryCacheHeader header;
-        size_t ret;
-
-        // first is the magic marker
-        header.magic = magic;
-        ret = write(target, magic);
-
-        // the header version & flags
-        header.version = version;
-        ret += write(target, version);
-        header.flags = flags;
-        ret += write(target, flags);
-
-        // write the number of entries and the crc (not implemented yet)
-        header.count = this->count;
-        ret += write(target, header.count);
-        header.crc = crcBase;
-        ret += write(target, calcCRC(header));
-
-        ret += target.write(separator);
-
-        if(ret != headerSize) {
-            #ifdef MEM_DEBUG
-                assert(ret != headerSize);
-            #endif
-            return false;
-        }
-
-        return writeEntries(target);
-    }
-
-    bool deserialize(File &cache) {
-        // read the header from the file
-        BinaryCacheHeader header;
-
-        header.magic = read16(cache);
-        header.version = read16(cache);
-
-        // first checkpoint
-        if(header.magic != magic || header.version != version) {
-            // header did not match, bail out
-            return false;
-        }
-
-        // read the flags and the count
-        header.flags = read16(cache);
-        header.count = read32(cache);
-
-        // second checkpoint, crc and separator
-        header.crc = read16(cache);
-        if(calcCRC(header) != 0x00 || cache.read() != separator) {
-            // here we use the feature of the crc16_le that the crc over a block with a correct crc is zero
-            return false;
-        }
-
-
-        // header was ok
-        headerValid = true;
-
-        // reserve the memory
-        bool success = this->reserve(header.count);
-        if(!success) {
-            // we failed to reserve the needed memory
-            return false;
-        }
- 
-        // everything was ok read the files
-        return readEntries(cache);
-    }
-
-    virtual bool isValid() const override {
-        return headerValid & (this->files);
     }
 };
 using CacheFilePlaylist = CacheFilePlaylistAlloc<DefaultPsramAllocator>;
