@@ -283,8 +283,9 @@ void Led_SetButtonLedsEnabled(boolean value) {
 				nextAnimation = LedAnimationType::VoltageWarning;
 			} else if (LED_INDICATOR_IS_SET(LedIndicatorType::Voltage)) {
 				nextAnimation = LedAnimationType::BatteryMeasurement;
-			} else if (hlastVolume != AudioPlayer_GetCurrentVolume()) {
-				hlastVolume = AudioPlayer_GetCurrentVolume();
+			#endif
+			} else if (LED_INDICATOR_IS_SET(LedIndicatorType::VolumeChange)) {
+				LED_INDICATOR_CLEAR(LedIndicatorType::VolumeChange);
 				nextAnimation = LedAnimationType::Volume;
 			} else if (LED_INDICATOR_IS_SET(LedIndicatorType::Rewind)) {
 				LED_INDICATOR_CLEAR(LedIndicatorType::Rewind);
