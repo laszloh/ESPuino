@@ -82,8 +82,7 @@ public:
         headerValid = true;
 
         // reserve the memory
-        bool success = this->reserve(header.count);
-        if(!success) {
+        if(!this->reserve(header.count)) {
             // we failed to reserve the needed memory
             return false;
         }
