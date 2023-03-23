@@ -156,71 +156,71 @@ void test_folder_content_relative(void) {
 
 void test_folder_content_automatic(void) {
     // this test will access a mock file system implementation
-    Node musicFolder = {
+    mockfs::Node musicFolder = {
         .fullPath = "/sdcard/music/folderE",
         .valid = true,
         .isDir = true,
-        .size = 0,
-        .content = {
+        .content = std::vector<uint8_t>(),
+        .files = {
                 {
                     .fullPath = "/sdcard/music/folderE/song1.mp3",
                     .valid = true,
                     .isDir = false,
-                    .size = 12345,
-                    .content = std::list<Node>()
+                    .content = std::vector<uint8_t>(),
+                    .files = std::vector<mockfs::Node>()
                 },
                 {
                     .fullPath = "/sdcard/music/folderE/song2.mp3",
                     .valid = true,
                     .isDir = false,
-                    .size = 12345,
-                    .content = std::list<Node>()
+                    .content = std::vector<uint8_t>(),
+                    .files = std::vector<mockfs::Node>()
                 },
                 {
                     .fullPath = "/sdcard/music/folderE/song3.mp3",
                     .valid = true,
                     .isDir = false,
-                    .size = 12345,
-                    .content = std::list<Node>()
+                    .content = std::vector<uint8_t>(),
+                    .files = std::vector<mockfs::Node>()
                 },
                 {
                     .fullPath = "/sdcard/music/folderE/song4.mp3",
                     .valid = true,
                     .isDir = false,
-                    .size = 12345,
-                    .content = std::list<Node>()
+                    .content = std::vector<uint8_t>(),
+                    .files = std::vector<mockfs::Node>()
                 },
                 {
                     .fullPath = "/sdcard/music/folderE/A Folder",
                     .valid = true,
                     .isDir = true,
-                    .size = 0,
-                    .content = std::list<Node>()
+                    .content = std::vector<uint8_t>(),
+                    .files = std::vector<mockfs::Node>()
                 },
                 {
                     .fullPath = "/sdcard/music/folderE/song5.mp3",
                     .valid = true,
                     .isDir = false,
-                    .size = 12345,
-                    .content = std::list<Node>()
+                    .content = std::vector<uint8_t>(),
+                    .files = std::vector<mockfs::Node>()
                 },
                 {
                     .fullPath = "/sdcard/music/folderE/song6.mp3",
                     .valid = true,
                     .isDir = false,
-                    .size = 12345,
-                    .content = std::list<Node>()
+                    .content = std::vector<uint8_t>(),
+                    .files = std::vector<mockfs::Node>()
                 },
             }
     };
     constexpr size_t numFiles = 6;
-    File root(musicFolder);
+    File root(mockfs::MockFileImp::open(musicFolder, true));
 
     folderPlaylist->createFromFolder(root);
     TEST_ASSERT_EQUAL_MESSAGE(numFiles, folderPlaylist->size(), "Number of elements in Playlist");
 
     size_t i=0;
-    for(auto it=musicFolder.content.begin();it!=musicFolder.content.end();it++){
+    for(auto it=musicFolder.files.begin();it!=musicFolder.files.end();it++){
         if(!it->isDir) {
             TEST_ASSERT_EQUAL_STRING(it->fullPath.c_str(), folderPlaylist->getAbsolutePath(i).c_str());
             i++;
@@ -238,71 +238,71 @@ void test_folder_content_automatic(void) {
 
 void test_folder_content_special_char(void) {
     // this test will access a mock file system implementation
-    Node musicFolder = {
+    mockfs::Node musicFolder = {
         .fullPath = "/sdcard/music/131072 😀",
         .valid = true,
         .isDir = true,
-        .size = 0,
-        .content = {
+        .content = std::vector<uint8_t>(),
+        .files = {
                 {
                     .fullPath = "/sdcard/music/131072 😀/Zongz.mp3",
                     .valid = true,
                     .isDir = false,
-                    .size = 12345,
-                    .content = std::list<Node>()
+                    .content = std::vector<uint8_t>(),
+                    .files = std::vector<mockfs::Node>()
                 },
                 {
                     .fullPath = "/sdcard/music/131072 😀/Müsäk.mp3",
                     .valid = true,
                     .isDir = false,
-                    .size = 12345,
-                    .content = std::list<Node>()
+                    .content = std::vector<uint8_t>(),
+                    .files = std::vector<mockfs::Node>()
                 },
                 {
                     .fullPath = "/sdcard/music/131072 😀/狗.mp3",
                     .valid = true,
                     .isDir = false,
-                    .size = 12345,
-                    .content = std::list<Node>()
+                    .content = std::vector<uint8_t>(),
+                    .files = std::vector<mockfs::Node>()
                 },
                 {
                     .fullPath = "/sdcard/music/131072 😀/très élégant.mp3",
                     .valid = true,
                     .isDir = false,
-                    .size = 12345,
-                    .content = std::list<Node>()
+                    .content = std::vector<uint8_t>(),
+                    .files = std::vector<mockfs::Node>()
                 },
                 {
                     .fullPath = "/sdcard/music/131072 😀/A Folder",
                     .valid = true,
                     .isDir = true,
-                    .size = 0,
-                    .content = std::list<Node>()
+                    .content = std::vector<uint8_t>(),
+                    .files = std::vector<mockfs::Node>()
                 },
                 {
                     .fullPath = "/sdcard/music/131072 😀/россиянин.mp3",
                     .valid = true,
                     .isDir = false,
-                    .size = 12345,
-                    .content = std::list<Node>()
+                    .content = std::vector<uint8_t>(),
+                    .files = std::vector<mockfs::Node>()
                 },
                 {
                     .fullPath = "/sdcard/music/131072 😀/" "\xD9\x85\xD9\x88\xD8\xB3\xD9\x8a\xD9\x82" ".mp3",
                     .valid = true,
                     .isDir = false,
-                    .size = 12345,
-                    .content = std::list<Node>()
+                    .content = std::vector<uint8_t>(),
+                    .files = std::vector<mockfs::Node>()
                 },
             }
     };
     constexpr size_t numFiles = 6;
-    File root(musicFolder);
+    File root(mockfs::MockFileImp::open(musicFolder, true));
 
     folderPlaylist->createFromFolder(root);
     TEST_ASSERT_EQUAL_MESSAGE(numFiles, folderPlaylist->size(), "Number of elements in Playlist");
 
     size_t i=0;
-    for(auto it=musicFolder.content.begin();it!=musicFolder.content.end();it++){
+    for(auto it=musicFolder.files.begin();it!=musicFolder.files.end();it++){
         log_n("Path: %s", it->fullPath.c_str());
         if(!it->isDir) {
             TEST_ASSERT_EQUAL_STRING(it->fullPath.c_str(), folderPlaylist->getAbsolutePath(i).c_str());
