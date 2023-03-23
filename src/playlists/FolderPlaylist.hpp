@@ -2,10 +2,7 @@
 
 #include <stdint.h>
 #include <WString.h>
-
-#ifndef PIO_UNIT_TESTING
-	#include <FS.h>
-#endif
+#include <FS.h>
 
 #include "../Playlist.h"
 
@@ -38,7 +35,7 @@ public:
 	}
 
 	virtual ~FolderPlaylistAlloc() {
-		destory();
+		destroy();
 	}
 
 	bool createFromFolder(File &folder) {
@@ -153,7 +150,7 @@ public:
 	}
 
 	void clear() {
-		destory();
+		destroy();
 		init();
 	}
 
@@ -203,8 +200,8 @@ public:
 	}
 
 protected:
-	virtual void destory() override {
-		// destory all the evidence!
+	virtual void destroy() override {
+		// destroy all the evidence!
 		for(size_t i=0;i<count;i++) {
 			this->deallocate(files[i]);
 		}
