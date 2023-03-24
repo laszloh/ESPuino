@@ -117,6 +117,10 @@ public:
 		return (base!=nullptr);
 	}
 
+	bool setBase(const String base) {
+		return setBase(base.c_str());
+	}
+
 	bool push_back(const char *path) {
 		if(count >= capacity) {
 			return false;

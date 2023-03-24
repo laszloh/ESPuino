@@ -14,8 +14,11 @@ public:
 	CacheFilePlaylistAlloc(File &cacheFile, char divider = '/', TAllocator alloc = TAllocator()) : FolderPlaylistAlloc<TAllocator>(divider, alloc), flags(Flags()), headerValid(false) {
         deserialize(cacheFile);
 	}
+    virtual ~CacheFilePlaylistAlloc() {
+        this->destroy();
+    }
 
-    bool serialize(File &target) const {
+    bool serialize(File &target) {
         // write the header into the file
         // header is big endian 
         BinaryCacheHeader header;
@@ -28,6 +31,10 @@ public:
         // the header version & flags
         header.version = version;
         ret += write(target, version);
+
+        // update flags
+        flags.relative = (this->base);
+
         header.flags = flags;
         ret += write(target, flags);
 
@@ -35,9 +42,10 @@ public:
         header.count = this->count;
         ret += write(target, header.count);
         header.crc = crcBase;
+        header.sep = separator;
         ret += write(target, calcCRC(header));
 
-        ret += target.write(separator);
+        ret += target.write(header.sep);
 
         if(ret != headerSize) {
             #ifdef MEM_DEBUG
@@ -67,15 +75,17 @@ public:
         header.count = read32(cache);
 
         // second checkpoint, crc and separator
-        header.crc = read16(cache);
-        if(calcCRC(header) != 0x00 || cache.read() != separator) {
-            // here we use the feature of the crc16_le that the crc over a block with a correct crc is zero
+        header.crc = crcBase;
+        uint32_t crc = read32(cache);
+        header.sep = cache.read();
+        if(calcCRC(header) != crc || header.sep != separator) {
+            // crc missmatch, bail out
             return false;
         }
 
         // destroy old data, if present
         if(isValid()) {
-            destroy();
+            this->clear();
         }
 
         // header was ok
@@ -91,9 +101,25 @@ public:
         return readEntries(cache);
     }
 
+    bool setBase(const char *_base) {
+		this->base = this->stringCopy(_base);
+        flags.relative = (this->base);
+		return (this->base);
+	}
+
+    bool setBase(const String base) {
+		return setBase(base.c_str());
+	}
+
     virtual bool isValid() const override {
-        return headerValid & (this->files);
+        return headerValid && FolderPlaylistAlloc<TAllocator>::isValid();
     }
+
+    void clear() {
+		FolderPlaylistAlloc<TAllocator>::destroy();
+		FolderPlaylistAlloc<TAllocator>::init();
+        headerValid = false;
+	}
 
 protected:
     // bitwise flags for future use
@@ -126,18 +152,19 @@ protected:
         }
     };
 
-    struct __attribute__((packed, aligned(1))) BinaryCacheHeader
+    struct BinaryCacheHeader
     {
         uint16_t magic;
         uint16_t version;
         uint16_t flags;
         uint32_t count;
-        uint16_t crc;
+        uint32_t crc;
+        uint8_t sep;
     };
     static constexpr uint16_t magic = 0x4346;   //< Magic header "CF"
     static constexpr uint16_t version = 1;      //< Current cache file version, if header or enconding changes, this has to be incremented
     static constexpr uint16_t crcBase = 0x00;   //< starting value of the crc calculation
-    static constexpr size_t headerSize = 13;    //< the expected size of the header: magic(2) + version(2) + flags(2) + count(4) + crc(2) + separator(1)
+    static constexpr size_t headerSize = 15;    //< the expected size of the header: magic(2) + version(2) + flags(2) + count(4) + crc(4) + separator(1)
 
     Flags flags;                                //< A 16bit bitfield of flags
     bool headerValid;
@@ -172,16 +199,22 @@ protected:
         return (read16(f) << 16) | read16(f);
     }
 
-    uint16_t calcCRC(const BinaryCacheHeader &header) {
+    uint32_t calcCRC(const BinaryCacheHeader &header) const {
         // add all header fields individually since BinaryCacheHeader is not packed
-        return crc16_le(0x0000, &header, sizeof(BinaryCacheHeader));
+        uint32_t ret = crc32_le(0, reinterpret_cast<const uint8_t*>(&header.magic), sizeof(header.magic));
+        ret = crc32_le(ret, reinterpret_cast<const uint8_t*>(&header.version), sizeof(header.version));
+        ret = crc32_le(ret, reinterpret_cast<const uint8_t*>(&header.flags), sizeof(header.flags));
+        ret = crc32_le(ret, reinterpret_cast<const uint8_t*>(&header.count), sizeof(header.count));
+        ret = crc32_le(ret, reinterpret_cast<const uint8_t*>(&header.crc), sizeof(header.crc));
+        ret = crc32_le(ret, reinterpret_cast<const uint8_t*>(&header.sep), sizeof(header.sep));
+        return ret;
     }
 
     bool writeEntries(File &f) const {
         // write all entries with the separator to the file
         for(size_t i=0;i<this->count;i++) {
             const String path = this->getAbsolutePath(i);
-            if(f.write(static_cast<const uint8_t*>(path.c_str()), path.len()) != path.len()) {
+            if(f.write(reinterpret_cast<const uint8_t*>(path.c_str()), path.length()) != path.length()) {
                 return false;
             }
             f.write(separator);
@@ -195,24 +228,15 @@ protected:
             const String basePath = f.readStringUntil(separator);
             this->setBase(basePath);
         }
-        // test if we need this
-        f.seek(1, SeekCur);
 
         for(size_t i=0;i<this->capacity;i++) {
             const String path = f.readStringUntil(separator);
-            // test if we need this
-            f.seek(1, SeekCur);
             if(!this->push_back(path)){
                 return false;
             }
         }
 
         return true;
-    }
-
-    virtual void destroy() override {
-        FolderPlaylistAlloc<TAllocator>::destroy();
-        headerValid = false;
     }
 };
 using CacheFilePlaylist = CacheFilePlaylistAlloc<DefaultPsramAllocator>;

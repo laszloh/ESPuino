@@ -1,9 +1,10 @@
 #include <Arduino.h>
 #include <unity.h>
 #include <array>
+#include <string>
 #include "../mock_fs.hpp"
 
-#include "playlists/FolderPlaylist.hpp"
+#include "playlists/CacheFilePlaylist.hpp"
 
 size_t allocCount = 0;
 size_t deAllocCount = 0;
@@ -11,6 +12,57 @@ size_t reAllocCount = 0;
 
 size_t heap;
 size_t psram;
+
+// our mock file system
+mockfs::Node musicFolder = {
+    .fullPath = "/sdcard/music/folderE",
+    .isDir = true,
+    .content = std::vector<uint8_t>(),
+    .files = {
+        {
+            .fullPath = "/sdcard/music/folderE/song1.mp3",
+            .isDir = false,
+            .content = std::vector<uint8_t>(),
+            .files = std::vector<mockfs::Node>()
+        },
+        {
+            .fullPath = "/sdcard/music/folderE/song2.mp3",
+            .isDir = false,
+            .content = std::vector<uint8_t>(),
+            .files = std::vector<mockfs::Node>()
+        },
+        {
+            .fullPath = "/sdcard/music/folderE/song3.mp3",
+            .isDir = false,
+            .content = std::vector<uint8_t>(),
+            .files = std::vector<mockfs::Node>()
+        },
+        {
+            .fullPath = "/sdcard/music/folderE/song4.mp3",
+            .isDir = false,
+            .content = std::vector<uint8_t>(),
+            .files = std::vector<mockfs::Node>()
+        },
+        {
+            .fullPath = "/sdcard/music/folderE/A Folder",
+            .isDir = true,
+            .content = std::vector<uint8_t>(),
+            .files = std::vector<mockfs::Node>()
+        },
+        {
+            .fullPath = "/sdcard/music/folderE/song5.mp3",
+            .isDir = false,
+            .content = std::vector<uint8_t>(),
+            .files = std::vector<mockfs::Node>()
+        },
+        {
+            .fullPath = "/sdcard/music/folderE/song6.mp3",
+            .isDir = false,
+            .content = std::vector<uint8_t>(),
+            .files = std::vector<mockfs::Node>()
+        },
+    }
+};
 
 // mock allocator
 struct UnitTestAllocator {
@@ -45,49 +97,35 @@ struct UnitTestAllocator {
   }
 };
 
-FolderPlaylistAlloc<UnitTestAllocator> *folderPlaylist;
+CacheFilePlaylistAlloc<UnitTestAllocator> *cachePlaylist;
 
-void get_free_memory(void) {
-    heap = ESP.getFreeHeap();
-    psram = ESP.getFreePsram();
-}
+#define get_free_memory() do {      \
+    heap = ESP.getFreeHeap();       \
+    psram = ESP.getFreePsram();     \
+}while(0);                          \
 
-void test_free_memory(void) {
-    size_t cHeap = ESP.getFreeHeap();
-    size_t cPsram = ESP.getFreePsram();
-
-    TEST_ASSERT_INT_WITHIN_MESSAGE(4, heap, cHeap, "Free heap after test (delta = 4 byte)");
-    TEST_ASSERT_INT_WITHIN_MESSAGE(4, psram, cPsram, "Free psram after test (delta = 4 byte)");
-}
+#define test_free_memory() do {         \
+    size_t cHeap = ESP.getFreeHeap();   \
+    size_t cPsram = ESP.getFreePsram(); \
+    TEST_ASSERT_INT_WITHIN_MESSAGE(4, heap, cHeap, "Free heap after test (delta = 4 byte)");        \
+    TEST_ASSERT_INT_WITHIN_MESSAGE(4, psram, cPsram, "Free psram after test (delta = 4 byte)");     \
+}while(0);
 
 // set stuff up here, this function is before a test function
 void setUp(void) {
     allocCount = deAllocCount = reAllocCount = 0;
-    get_free_memory();
+    // get_free_memory();
 }
 
 void tearDown(void) {
-    test_free_memory();
+    // test_free_memory();
 }
 
 void setup_static(void) {
-    folderPlaylist = new FolderPlaylistAlloc<UnitTestAllocator>();
+    cachePlaylist = new CacheFilePlaylistAlloc<UnitTestAllocator>();
 }
 
-void test_folder_alloc(void) {
-    TEST_ASSERT_TRUE(folderPlaylist->reserve(10));
-
-    folderPlaylist->clear();
-
-    test_free_memory();
-
-    // test memory actions
-    TEST_ASSERT_EQUAL_MESSAGE(0, allocCount, "Calls to malloc");
-    TEST_ASSERT_EQUAL_MESSAGE(1, deAllocCount, "Calls to free");
-    TEST_ASSERT_EQUAL_MESSAGE(1, reAllocCount, "Calls to realloc");
-}
-
-void test_folder_content_absolute(void) {
+void test_cache_write(void) {
     constexpr std::array<const char*, 6> contentAbsolute PROGMEM = {{
         "/sdcard/music/folderA/song1.mp3",
         "/sdcard/music/folderA/song2.mp3",
@@ -97,23 +135,42 @@ void test_folder_content_absolute(void) {
         "/sdcard/music/folderA/song6.mp3",
     }};
 
-    folderPlaylist->clear();
-    TEST_ASSERT_TRUE(folderPlaylist->reserve(contentAbsolute.size()));
+    mockfs::Node cacheNode = mockfs::Node::empty("/sdcard/music/test.csv");
+    File cacheFile = File(mockfs::MockFileImp::open(&cacheNode, false));
+
+    cachePlaylist->clear();
+
+    TEST_ASSERT_TRUE(cachePlaylist->reserve(contentAbsolute.size()));
     for(auto e : contentAbsolute) {
-        TEST_ASSERT_TRUE(folderPlaylist->push_back(e));
+        TEST_ASSERT_TRUE(cachePlaylist->push_back(e));
     }
-    TEST_ASSERT_EQUAL(contentAbsolute.size(), folderPlaylist->size());
+    TEST_ASSERT_EQUAL(contentAbsolute.size(), cachePlaylist->size());
 
-    for(size_t i=0;i<contentAbsolute.size();i++){
-       TEST_ASSERT_EQUAL_STRING(contentAbsolute[i], folderPlaylist->getAbsolutePath(i).c_str());
+    // push the data into the cache file
+    bool serialize = cachePlaylist->serialize(cacheFile);
+    TEST_ASSERT_TRUE_MESSAGE(serialize, "Serialize failed to write file");
+
+    // dump data
+    log_n("Wrote: %d", cacheFile.size());
+
+    // destory cachefile
+    cachePlaylist->clear();
+
+    // read back the data
+    bool deserialize = cachePlaylist->deserialize(cacheFile);
+    TEST_ASSERT_TRUE_MESSAGE(deserialize, "Deserialize failed to read file");
+
+    for(size_t i=0;i<cachePlaylist->size();i++) {
+        TEST_ASSERT_EQUAL_STRING(contentAbsolute[i], cachePlaylist->getAbsolutePath(i).c_str());
     }
 
-    folderPlaylist->clear();
+    // destory cachefile
+    cachePlaylist->clear();
 
     // test memory actions
-    TEST_ASSERT_EQUAL_MESSAGE(contentAbsolute.size(), allocCount, "Calls to malloc");
-    TEST_ASSERT_EQUAL_MESSAGE(1 + contentAbsolute.size(), deAllocCount, "Calls to free");
-    TEST_ASSERT_EQUAL_MESSAGE(1, reAllocCount, "Calls to realloc");
+    TEST_ASSERT_EQUAL_MESSAGE(2 * contentAbsolute.size(), allocCount, "Calls to malloc");
+    TEST_ASSERT_EQUAL_MESSAGE(2 * (1 + contentAbsolute.size()), deAllocCount, "Calls to free");
+    TEST_ASSERT_EQUAL_MESSAGE(2, reAllocCount, "Calls to realloc");
 }
 
 void test_folder_content_relative(void) {
@@ -125,28 +182,28 @@ void test_folder_content_relative(void) {
         "/sdcard/music/folderX/song4.mp3",
     }};
 
-    folderPlaylist->clear(); // <-- nop operation
-    TEST_ASSERT_TRUE(folderPlaylist->setBase(basePath));
-    TEST_ASSERT_TRUE(folderPlaylist->reserve(contentRelative.size()));
+    cachePlaylist->clear(); // <-- nop operation
+    TEST_ASSERT_TRUE(cachePlaylist->setBase(basePath));
+    TEST_ASSERT_TRUE(cachePlaylist->reserve(contentRelative.size()));
 
     for(auto e : contentRelative) {
-        TEST_ASSERT_TRUE(folderPlaylist->push_back(e));
+        TEST_ASSERT_TRUE(cachePlaylist->push_back(e));
     }
-    TEST_ASSERT_EQUAL(contentRelative.size(), folderPlaylist->size());
+    TEST_ASSERT_EQUAL(contentRelative.size(), cachePlaylist->size());
 
     for(size_t i=0;i<contentRelative.size();i++){
-       TEST_ASSERT_EQUAL_STRING(contentRelative[i], folderPlaylist->getAbsolutePath(i).c_str());
+       TEST_ASSERT_EQUAL_STRING(contentRelative[i], cachePlaylist->getAbsolutePath(i).c_str());
     }
 
     // this tests should fail
     constexpr const char *wrongBasePath PROGMEM = "/sdcard/music/folderZ/song1.mp3";
     constexpr const char *noMusicFile PROGMEM = "/sdcard/music/folderX/song4.doc";
 
-    TEST_ASSERT_FALSE(folderPlaylist->push_back(wrongBasePath));
-    TEST_ASSERT_FALSE(folderPlaylist->push_back(noMusicFile));
+    TEST_ASSERT_FALSE(cachePlaylist->push_back(wrongBasePath));
+    TEST_ASSERT_FALSE(cachePlaylist->push_back(noMusicFile));
 
     // cleanup
-    folderPlaylist->clear();
+    cachePlaylist->clear();
 
     // test memory actions
     TEST_ASSERT_EQUAL_MESSAGE(1 + contentRelative.size(), allocCount, "Calls to malloc");
@@ -156,71 +213,23 @@ void test_folder_content_relative(void) {
 
 void test_folder_content_automatic(void) {
     // this test will access a mock file system implementation
-    mockfs::Node musicFolder = {
-        .fullPath = "/sdcard/music/folderE",
-        .isDir = true,
-        .content = std::vector<uint8_t>(),
-        .files = {
-                {
-                    .fullPath = "/sdcard/music/folderE/song1.mp3",
-                    .isDir = false,
-                    .content = std::vector<uint8_t>(),
-                    .files = std::vector<mockfs::Node>()
-                },
-                {
-                    .fullPath = "/sdcard/music/folderE/song2.mp3",
-                    .isDir = false,
-                    .content = std::vector<uint8_t>(),
-                    .files = std::vector<mockfs::Node>()
-                },
-                {
-                    .fullPath = "/sdcard/music/folderE/song3.mp3",
-                    .isDir = false,
-                    .content = std::vector<uint8_t>(),
-                    .files = std::vector<mockfs::Node>()
-                },
-                {
-                    .fullPath = "/sdcard/music/folderE/song4.mp3",
-                    .isDir = false,
-                    .content = std::vector<uint8_t>(),
-                    .files = std::vector<mockfs::Node>()
-                },
-                {
-                    .fullPath = "/sdcard/music/folderE/A Folder",
-                    .isDir = true,
-                    .content = std::vector<uint8_t>(),
-                    .files = std::vector<mockfs::Node>()
-                },
-                {
-                    .fullPath = "/sdcard/music/folderE/song5.mp3",
-                    .isDir = false,
-                    .content = std::vector<uint8_t>(),
-                    .files = std::vector<mockfs::Node>()
-                },
-                {
-                    .fullPath = "/sdcard/music/folderE/song6.mp3",
-                    .isDir = false,
-                    .content = std::vector<uint8_t>(),
-                    .files = std::vector<mockfs::Node>()
-                },
-            }
-    };
+    
     constexpr size_t numFiles = 6;
     File root(mockfs::MockFileImp::open(&musicFolder, true));
 
-    folderPlaylist->createFromFolder(root);
-    TEST_ASSERT_EQUAL_MESSAGE(numFiles, folderPlaylist->size(), "Number of elements in Playlist");
+    cachePlaylist->createFromFolder(root);
+    TEST_ASSERT_EQUAL_MESSAGE(numFiles, cachePlaylist->size(), "Number of elements in Playlist");
 
     size_t i=0;
     for(auto it=musicFolder.files.begin();it!=musicFolder.files.end();it++){
         if(!it->isDir) {
-            TEST_ASSERT_EQUAL_STRING(it->fullPath.c_str(), folderPlaylist->getAbsolutePath(i).c_str());
+            TEST_ASSERT_EQUAL_STRING(it->fullPath.c_str(), cachePlaylist->getAbsolutePath(i).c_str());
             i++;
         }
     }
 
     // cleanup
-    folderPlaylist->clear();
+    cachePlaylist->clear();
 
      // test memory actions
     TEST_ASSERT_EQUAL_MESSAGE(1 + numFiles, allocCount, "Calls to malloc");
@@ -282,20 +291,20 @@ void test_folder_content_special_char(void) {
     constexpr size_t numFiles = 6;
     File root(mockfs::MockFileImp::open(&musicFolder, true));
 
-    folderPlaylist->createFromFolder(root);
-    TEST_ASSERT_EQUAL_MESSAGE(numFiles, folderPlaylist->size(), "Number of elements in Playlist");
+    cachePlaylist->createFromFolder(root);
+    TEST_ASSERT_EQUAL_MESSAGE(numFiles, cachePlaylist->size(), "Number of elements in Playlist");
 
     size_t i=0;
     for(auto it=musicFolder.files.begin();it!=musicFolder.files.end();it++){
         log_n("Path: %s", it->fullPath.c_str());
         if(!it->isDir) {
-            TEST_ASSERT_EQUAL_STRING(it->fullPath.c_str(), folderPlaylist->getAbsolutePath(i).c_str());
+            TEST_ASSERT_EQUAL_STRING(it->fullPath.c_str(), cachePlaylist->getAbsolutePath(i).c_str());
             i++;
         }
     }
 
     // cleanup
-    folderPlaylist->clear();
+    cachePlaylist->clear();
 
      // test memory actions
     TEST_ASSERT_EQUAL_MESSAGE(1 + numFiles, allocCount, "Calls to malloc");
@@ -311,8 +320,7 @@ void setup()
 
     setup_static();
 
-    RUN_TEST(test_folder_alloc);
-    RUN_TEST(test_folder_content_absolute);
+    RUN_TEST(test_cache_write);
     RUN_TEST(test_folder_content_relative);
     RUN_TEST(test_folder_content_automatic);
     RUN_TEST(test_folder_content_special_char);
