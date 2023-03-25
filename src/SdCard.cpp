@@ -155,15 +155,11 @@ char *SdCard_pickRandomSubdirectory(char *_directory) {
 		if (!fileItem.isDirectory()) {
 			continue;
 		} else {
-			#if ESP_ARDUINO_VERSION_MAJOR >= 2
-				strncpy(buffer, (char *) fileItem.path(), 255);
-			#else
-				strncpy(buffer, (char *) fileItem.name(), 255);
-			#endif
+			const char* path = getPath(fileItem);
 
 			/*snprintf(Log_Buffer, Log_BufferLength, "%s: %s", (char *) FPSTR(nameOfFileFound), buffer);
 			Log_Println(Log_Buffer, LOGLEVEL_INFO);*/
-			if ((strlen(subdirectoryList) + strlen(buffer) + 2) >= allocCount * allocSize) {
+			if ((strlen(subdirectoryList) + strlen(path) + 2) >= allocCount * allocSize) {
 				char *tmp = (char *) realloc(subdirectoryList, ++allocCount * allocSize);
 				Log_Println((char *) FPSTR(reallocCalled), LOGLEVEL_DEBUG);
 				if (tmp == NULL) {
@@ -175,7 +171,7 @@ char *SdCard_pickRandomSubdirectory(char *_directory) {
 				subdirectoryList = tmp;
 			}
 			strcat(subdirectoryList, stringDelimiter);
-			strcat(subdirectoryList, buffer);
+			strcat(subdirectoryList, path);
 			directoryCount++;
 		}
 	}
@@ -218,11 +214,8 @@ char *SdCard_pickRandomSubdirectory(char *_directory) {
 /* Puts SD-file(s) or directory into a playlist
 	First element of array always contains the number of payload-items. */
 Playlist *SdCard_ReturnPlaylist(const char *fileName, const uint32_t _playMode) {
-	char cacheFileNameBuf[275];
-	bool readFromCacheFile = false;
-	bool enablePlaylistCaching = false;
-
-
+	bool rebuildCacheFile = false;
+	
 	// Look if file/folder requested really exists. If not => break.
 	File fileOrDirectory = gFSystem.open(fileName);
 	if (!fileOrDirectory) {
@@ -232,25 +225,16 @@ Playlist *SdCard_ReturnPlaylist(const char *fileName, const uint32_t _playMode) 
 
 	// Create linear playlist of caching-file
 	#ifdef CACHED_PLAYLIST_ENABLE
+		auto cacheFilePath = CacheFilePlaylist::getCachefilePath(fileOrDirectory);
 		// Build absolute path of cacheFile
-		snprintf(cacheFileNameBuf, sizeof(cacheFileNameBuf), "%s/%s", fileName, (const char*)FPSTR(playlistCacheFile));
 
-		// Decide if to use cacheFile. It needs to exist first...
-		if (gFSystem.exists(cacheFileNameBuf)) {     // Check if cacheFile (already) exists
-			readFromCacheFile = true;
-		}
 
+		// Decide if to use cacheFile. It needs to exist first check if cacheFile (already) exists
 		// ...and playmode has to be != random/single (as random along with caching doesn't make sense at all)
-		if (_playMode == SINGLE_TRACK ||
-			_playMode == SINGLE_TRACK_LOOP) {
-				readFromCacheFile = false;
-		} else {
-			enablePlaylistCaching = true;
-		}
+		if (cacheFilePath && gFSystem.exists(cacheFilePath.value()) && _playMode != SINGLE_TRACK && _playMode != SINGLE_TRACK_LOOP) {
+			// Read linear playlist (csv with #-delimiter) from cachefile (faster!)
 
-		// Read linear playlist (csv with #-delimiter) from cachefile (faster!)
-		if (readFromCacheFile) {
-			File cacheFile = gFSystem.open(cacheFileNameBuf);
+			File cacheFile = gFSystem.open(cacheFilePath.value());
 			if (cacheFile && cacheFile.size()) {
 				CacheFilePlaylist *cachePlaylist = new CacheFilePlaylist();
 				
@@ -264,7 +248,7 @@ Playlist *SdCard_ReturnPlaylist(const char *fileName, const uint32_t _playMode) 
 					cacheFile.close();
 
 					// reopen for writing
-					cacheFile = gFSystem.open(cacheFileNameBuf, FILE_WRITE);
+					cacheFile = gFSystem.open(cacheFilePath.value(), FILE_WRITE);
 					CacheFilePlaylist::serialize(cacheFile, *cachePlaylist);
 					cacheFile.close();
 					return cachePlaylist;
@@ -273,6 +257,8 @@ Playlist *SdCard_ReturnPlaylist(const char *fileName, const uint32_t _playMode) 
 				// we do not need the class anymore, so destroy it
 				delete cachePlaylist;
 			}
+			// we failed to read the cache file... set the flag to rebuild it
+			rebuildCacheFile = true;
 		}
 	#endif
 
@@ -294,20 +280,17 @@ Playlist *SdCard_ReturnPlaylist(const char *fileName, const uint32_t _playMode) 
 
 	// If we reached here, we did not read a cache file nor an m3u file. Means: read filenames from SD and make playlist of it
 	Log_Println((char *) FPSTR(playlistGenModeUncached), LOGLEVEL_NOTICE);
+
 	// File-mode
 	if (!fileOrDirectory.isDirectory()) {
 		Log_Println((char *) FPSTR(fileModeDetected), LOGLEVEL_INFO);
-		const char *path;
-		#if ESP_ARDUINO_VERSION_MAJOR >= 2
-			path = fileOrDirectory.path();
-		#else
-			path = fileOrDirectory.name();
-		#endif
+		const char *path = getPath(fileOrDirectory);
 		if (fileValid(path)) {
 			return new WebstreamPlaylist(path);
 		}
 	}
 
+	// Folder mode
 	FolderPlaylist *playlist = new FolderPlaylist();
 	playlist->createFromFolder(fileOrDirectory);
 	if(!playlist->isValid()) {
@@ -317,8 +300,8 @@ Playlist *SdCard_ReturnPlaylist(const char *fileName, const uint32_t _playMode) 
 		return nullptr;
 	}
 
-	if(enablePlaylistCaching) {
-		File cacheFile = gFSystem.open(cacheFileNameBuf, FILE_WRITE);
+	if(cacheFilePath && rebuildCacheFile) {
+		File cacheFile = gFSystem.open(cacheFilePath.value(), FILE_WRITE);
 		if(cacheFile) {
 			CacheFilePlaylist::serialize(cacheFile, *playlist);
 		}

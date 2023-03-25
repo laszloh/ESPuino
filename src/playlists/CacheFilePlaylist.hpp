@@ -2,6 +2,7 @@
 
 #include <WString.h>
 #include <stdint.h>
+#include <optional>
 #include <rom/crc.h>
 
 #include "../Playlist.h"
@@ -56,6 +57,14 @@ public:
         }
 
         return writeEntries(target, list);
+    }
+
+    static std::optional<const String> getCachefilePath(File &dir) {
+        if(!dir.isDirectory())
+            return {};
+
+        const char *path = getPath(dir);
+        return String(path) + "/" + playlistCacheFile;
     }
 
     bool deserialize(File &cache) {
