@@ -10,39 +10,8 @@
 
 using sortFunc = int(*)(const void*,const void*);
 
-struct DefaultPsramAllocator {
-  void* allocate(size_t size) {
-	if(psramInit()) {
-		return ps_malloc(size);
-	} else {
-    	return malloc(size);
-	}
-  }
-
-  void deallocate(void* ptr) {
-    free(ptr);
-  }
-
-  void* reallocate(void* ptr, size_t new_size) {
-	if(psramInit()) {
-		return ps_realloc(ptr, new_size);
-	} else {
-    	return realloc(ptr, new_size);
-	}
-  }
-};
-
-template <typename TAllocator>
-class PlaylistAlloc : protected ARDUINOJSON_NAMESPACE::AllocatorOwner<TAllocator> {
+class Playlist {
 protected:
- 	char *stringCopy(const char *string) {
-		size_t len = strlen(string);
-		char *ret = static_cast<char*>(this->allocate(len + 1));
-		if(ret) {
-			memcpy(ret, string, len + 1);		// this is a zero-terminated string, so also copy the zero
-		}
-		return ret;
-	}
 
 	virtual void destroy() { }
 
@@ -50,8 +19,8 @@ protected:
 	bool repeatPlaylist;
 
 public:
-	PlaylistAlloc(TAllocator alloc = TAllocator()) : ARDUINOJSON_NAMESPACE::AllocatorOwner<TAllocator>(alloc), repeatTrack(false), repeatPlaylist(false) { }
-	virtual ~PlaylistAlloc() { }
+	Playlist() : repeatTrack(false), repeatPlaylist(false) { }
+	virtual ~Playlist() { }
 
 	bool getRepeatTrack() const { return repeatTrack; }
 	void setRepeatTrack(bool newVal) { repeatTrack = newVal; }
@@ -78,4 +47,3 @@ public:
 
 	virtual void randomize() { }
 };
-using Playlist = PlaylistAlloc<DefaultPsramAllocator>;

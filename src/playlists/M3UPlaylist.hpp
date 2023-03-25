@@ -6,13 +6,13 @@
 #include "../Playlist.h"
 #include "FolderPlaylist.hpp"
 
-template <typename TAllocator>
-class M3UPlaylistAlloc : public FolderPlaylistAlloc<TAllocator> {
+class M3UPlaylist : public FolderPlaylist {
 public:
-    M3UPlaylistAlloc(char divider = '/', TAllocator alloc = TAllocator()) : FolderPlaylistAlloc<TAllocator>(divider, alloc), extended(false), valid(false) { }
-	M3UPlaylistAlloc(File &m3uFile, char divider = '/', TAllocator alloc = TAllocator()) : FolderPlaylistAlloc<TAllocator>(divider, alloc), extended(false), valid(false) {
+    M3UPlaylist(char divider = '/') : FolderPlaylist(divider), extended(false), valid(false) { }
+	M3UPlaylist(File &m3uFile, char divider = '/') : FolderPlaylist(divider), extended(false), valid(false) {
         valid = parseFile(m3uFile);
 	}
+    ~M3UPlaylist() { }
 
     bool parseFile(File &f, bool forceExtended = false) {
         const String line = f.readStringUntil('\n');
@@ -32,9 +32,9 @@ public:
             }
         }
 
-        if(!this->reserve(lines)){
-            return false;
-        }
+        // if(!this->reserve(lines)){
+        //     return false;
+        // }
 
         f.seek(0);
         for(size_t i=0;i<lines;i++) {
@@ -50,7 +50,7 @@ public:
     }
 
     virtual bool isValid() const override {
-        return valid & (this->files);
+        // return valid && (this->files);
     }
 
 protected:
@@ -76,9 +76,9 @@ protected:
             }
         }
 
-        if(!this->reserve(lines)) {
-            return false;
-        }
+        // if(!this->reserve(lines)) {
+        //     return false;
+        // }
 
         f.seek(0);
         for(size_t i=0;i<lines;i++) {
@@ -97,4 +97,3 @@ protected:
     }
 
 };
-using M3UPlaylist = M3UPlaylistAlloc<DefaultPsramAllocator>;

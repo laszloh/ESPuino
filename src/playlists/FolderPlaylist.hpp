@@ -3,12 +3,17 @@
 #include <stdint.h>
 #include <WString.h>
 #include <FS.h>
+#include <string>
+#include <vector>
 
 #include "../Playlist.h"
 
-template <typename TAllocator>
-class FolderPlaylistAlloc : public PlaylistAlloc<TAllocator> {
+class FolderPlaylist : public Playlist {
 protected:
+
+	//std::basic_string<char, std::char_traits<char>, 
+
+
 	char *base;
 	char divider;
 	char **files;
@@ -16,8 +21,8 @@ protected:
 	size_t count;
 
 public:
-	FolderPlaylistAlloc(size_t _capacity, char _divider = '/', TAllocator alloc = TAllocator()) 
-	  : PlaylistAlloc<TAllocator>(alloc), base(nullptr), divider(_divider),
+	FolderPlaylist(size_t _capacity, char _divider = '/') 
+	  : base(nullptr), divider(_divider),
 	    files(static_cast<char**>(this->allocate(sizeof(char*) * _capacity))),
 		capacity(_capacity), count(0) 
 	{
@@ -25,16 +30,16 @@ public:
 			assert(files != nullptr);
 		#endif
 	}
-	FolderPlaylistAlloc(char _divider = '/', TAllocator alloc = TAllocator()) 
-	  : PlaylistAlloc<TAllocator>(alloc), base(nullptr),  divider(_divider),
+	FolderPlaylist(char _divider = '/') 
+	  : base(nullptr),  divider(_divider),
 	    files(nullptr), capacity(0), count(0) 
 	{ }
 
-	FolderPlaylistAlloc(File &folder, char _divider = '/', TAllocator alloc = TAllocator()) : PlaylistAlloc<TAllocator>(alloc), divider(_divider) {
+	FolderPlaylist(File &folder, char _divider = '/') : divider(_divider) {
 		createFromFolder(folder);
 	}
 
-	virtual ~FolderPlaylistAlloc() {
+	virtual ~FolderPlaylist() {
 		destroy();
 	}
 
@@ -249,6 +254,4 @@ protected:
 				endsWith(_fileItem, ".asx") || endsWith(_fileItem, ".ASX"));
 	}
 
-	using PlaylistAlloc<TAllocator>::alphabeticSort;
 };
-using FolderPlaylist = FolderPlaylistAlloc<DefaultPsramAllocator>;

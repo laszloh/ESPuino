@@ -8,18 +8,17 @@
 #include "../Playlist.h"
 #include "FolderPlaylist.hpp"
 
-template <typename TAllocator>
-class CacheFilePlaylistAlloc : public FolderPlaylistAlloc<TAllocator> {
+class CacheFilePlaylist : public FolderPlaylist {
 public:
-    CacheFilePlaylistAlloc(char divider = '/', TAllocator alloc = TAllocator()) : FolderPlaylistAlloc<TAllocator>(divider, alloc), headerFlags(Flags()), headerValid(false) { }
-	CacheFilePlaylistAlloc(File &cacheFile, char divider = '/', TAllocator alloc = TAllocator()) : FolderPlaylistAlloc<TAllocator>(divider, alloc), headerFlags(Flags()), headerValid(false) {
+    CacheFilePlaylist(char divider = '/') : FolderPlaylist(divider), headerFlags(Flags()), headerValid(false) { }
+	CacheFilePlaylist(File &cacheFile, char divider = '/') : FolderPlaylist(divider), headerFlags(Flags()), headerValid(false) {
         deserialize(cacheFile);
 	}
-    virtual ~CacheFilePlaylistAlloc() {
+    virtual ~CacheFilePlaylist() {
         this->destroy();
     }
 
-    static bool serialize(File &target, const FolderPlaylistAlloc<TAllocator> &list) {
+    static bool serialize(File &target, const FolderPlaylist &list) {
         // write the header into the file
         // header is big endian 
         BinaryCacheHeader header;
@@ -159,12 +158,12 @@ public:
 	}
 
     virtual bool isValid() const override {
-        return headerValid && FolderPlaylistAlloc<TAllocator>::isValid();
+        return headerValid && FolderPlaylist::isValid();
     }
 
     void clear() {
-		FolderPlaylistAlloc<TAllocator>::destroy();
-		FolderPlaylistAlloc<TAllocator>::init();
+		FolderPlaylist::destroy();
+		FolderPlaylist::init();
         headerValid = false;
         headerFlags = Flags();
         headerCount = 0;
@@ -311,10 +310,10 @@ protected:
     }
 
     bool writeEntries(File &f) const {
-        return writeEntries(f, this);
+        return writeEntries(f, *this);
     }
 
-    static bool writeEntries(File &f, const FolderPlaylistAlloc<TAllocator> &list) {
+    static bool writeEntries(File &f, const FolderPlaylist &list) {
         // if flag is set, use relative path
         if(list.isRelative()) {
             f.write(reinterpret_cast<const uint8_t*>(list.getBase()), strlen(list.getBase()));
