@@ -10,46 +10,81 @@
 
 using sortFunc = int(*)(const void*,const void*);
 
-struct DefaultPsramAllocator {
-  void* allocate(size_t size) {
-	if(psramInit()) {
-		return ps_malloc(size);
-	} else {
-    	return malloc(size);
-	}
-  }
-
-  void deallocate(void* ptr) {
-    free(ptr);
-  }
-
-  void* reallocate(void* ptr, size_t new_size) {
-	if(psramInit()) {
-		return ps_realloc(ptr, new_size);
-	} else {
-    	return realloc(ptr, new_size);
-	}
-  }
-};
-
-template <typename TAllocator>
-class PlaylistAlloc : protected ARDUINOJSON_NAMESPACE::AllocatorOwner<TAllocator> {
+class Playlist {
 protected:
- 	char *stringCopy(const char *string) {
-		size_t len = strlen(string);
-		char *ret = static_cast<char*>(this->allocate(len + 1));
-		if(ret) {
-			memcpy(ret, string, len + 1);		// this is a zero-terminated string, so also copy the zero
+
+	template <typename T>
+	class PsramAllocator {
+	public:
+		typedef T value_type;
+		typedef value_type* pointer;
+		typedef const value_type* const_pointer;
+		typedef value_type& reference;
+		typedef const value_type& const_reference;
+		typedef std::size_t size_type;
+		typedef std::ptrdiff_t difference_type;
+
+	public:
+		template<typename U>
+		struct rebind {
+			typedef PsramAllocator<U> other;
+		};
+
+	public:
+		inline explicit PsramAllocator() {}
+		inline ~PsramAllocator() {}
+		inline PsramAllocator(PsramAllocator const&) {}
+		template<typename U>
+		inline explicit PsramAllocator(PsramAllocator<U> const&) {}
+
+		// address
+		inline pointer address(reference r) { return &r; }
+
+		inline const_pointer address(const_reference r) { return &r; }
+
+		// memory allocation
+		inline pointer allocate(size_type cnt, typename std::allocator<void>::const_pointer = 0) {
+			T *ptr = nullptr;
+			if(psramFound()) {
+				ptr = (T*)ps_malloc(cnt * sizeof(T));
+			} else {
+				ptr = (T*)malloc(cnt * sizeof(T));
+			}
+			return ptr;
 		}
-		return ret;
-	}
+
+		inline void deallocate(pointer p, size_type cnt) {
+			free(p);
+		}
+
+		//   size
+		inline size_type max_size() const {
+			return std::numeric_limits<size_type>::max() / sizeof(T);
+		}
+
+		// construction/destruction
+		inline void construct(pointer p, const T& t) {
+			new(p) T(t);
+		}
+
+		inline void destroy(pointer p) {
+			p->~T();
+		}
+
+		inline bool operator==(PsramAllocator const& a) { return this == &a; }
+		inline bool operator!=(PsramAllocator const& a) { return !operator==(a); }
+	};
+
+	using pstring = std::basic_string<char, std::char_traits<char>, PsramAllocator<char>>;
+
+	virtual void destroy() { }
 
 	bool repeatTrack;
 	bool repeatPlaylist;
 
 public:
-	PlaylistAlloc(TAllocator alloc = TAllocator()) : ARDUINOJSON_NAMESPACE::AllocatorOwner<TAllocator>(alloc), repeatTrack(false), repeatPlaylist(false) { }
-	virtual ~PlaylistAlloc() { }
+	Playlist() : repeatTrack(false), repeatPlaylist(false) { }
+	virtual ~Playlist() { }
 
 	bool getRepeatTrack() const { return repeatTrack; }
 	void setRepeatTrack(bool newVal) { repeatTrack = newVal; }
@@ -61,7 +96,7 @@ public:
 
 	virtual bool isValid() const = 0;
 
-	virtual const String getAbsolutPath(size_t idx) const = 0;
+	virtual const String getAbsolutePath(size_t idx) const = 0;
 
 	virtual const String getFilename(size_t idx) const = 0;
 
@@ -76,4 +111,3 @@ public:
 
 	virtual void randomize() { }
 };
-using Playlist = PlaylistAlloc<DefaultPsramAllocator>;

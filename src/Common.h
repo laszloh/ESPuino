@@ -1,5 +1,7 @@
 #pragma once
 
+#include <FS.h>
+
 // FilePathLength
 #define MAX_FILEPATH_LENTGH 256
 
@@ -8,7 +10,7 @@ constexpr char stringOuterDelimiter[] = "^"; // Character used to encapsulate en
 
 inline bool isNumber(const char *str)
 {
-	byte i = 0;
+	size_t i = 0;
 
 	while (*(str + i) != '\0') {
 		if (!isdigit(*(str + i++))) {
@@ -21,6 +23,16 @@ inline bool isNumber(const char *str)
 	} else{
 		return false;
 	}
+}
+
+inline const char *getPath(File &f) {
+	const char *pathStr;
+	#if ESP_ARDUINO_VERSION_MAJOR >= 2
+		pathStr = f.path();
+	#else
+		pathStr = f.name();
+	#endif
+	return pathStr;
 }
 
 // Checks if string starts with prefix

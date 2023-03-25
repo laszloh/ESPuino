@@ -934,17 +934,10 @@ void explorerHandleListRequest(AsyncWebServerRequest *request) {
 
 	while (file) {
 		// ignore hidden folders, e.g. MacOS spotlight files
-		#if ESP_ARDUINO_VERSION_MAJOR >= 2
-		if (!startsWith( file.path() , (char *)"/.")) {
-		#else
-		if (!startsWith( file.name() , (char *)"/.")) {
-		#endif
+		const char *path = getPath(file);
+		if(startsWith(path, "/."))  {
 			JsonObject entry = obj.createNestedObject();
-			#if ESP_ARDUINO_VERSION_MAJOR >= 2
-				convertAsciiToUtf8(file.path(), filePath);
-			#else
-				convertAsciiToUtf8(file.name(), filePath);
-			#endif
+			convertAsciiToUtf8(path, filePath);
 			std::string path = filePath;
 			std::string fileName = path.substr(path.find_last_of("/") + 1);
 
@@ -979,11 +972,8 @@ bool explorerDeleteDirectory(File dir) {
 		if (file.isDirectory()) {
 			explorerDeleteDirectory(file);
 		} else {
-			#if ESP_ARDUINO_VERSION_MAJOR >= 2
-				gFSystem.remove(file.path());
-			#else
-				gFSystem.remove(file.name());
-			#endif
+			const char *path = getPath(file);
+			gFSystem.remove(path);
 		}
 
 		file = dir.openNextFile();
@@ -991,11 +981,8 @@ bool explorerDeleteDirectory(File dir) {
 		esp_task_wdt_reset();
 	}
 
-	#if ESP_ARDUINO_VERSION_MAJOR >= 2
-		return gFSystem.rmdir(dir.path());
-	#else
-		return gFSystem.rmdir(dir.name());
-	#endif
+	const char *dirPath = getPath(dir);
+	gFSystem.rmdir(dirPath);
 }
 
 // Handles delete-requests for cachefiles.
@@ -1361,7 +1348,7 @@ static void handleCoverImageRequest(AsyncWebServerRequest *request) {
 		}
 		return;
 	}
-	const char *coverFileName = gPlayProperties.playlist->getAbsolutPath(gPlayProperties.currentTrackNumber).c_str();
+	const char *coverFileName = gPlayProperties.playlist->getAbsolutePath(gPlayProperties.currentTrackNumber).c_str();
 	Log_Println(coverFileName, LOGLEVEL_DEBUG);
 
 	File coverFile = gFSystem.open(coverFileName, FILE_READ);
