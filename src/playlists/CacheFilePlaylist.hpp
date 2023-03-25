@@ -18,7 +18,7 @@ public:
         this->destroy();
     }
 
-    bool serialize(File &target) {
+    static bool serialize(File &target, const FolderPlaylistAlloc<TAllocator> &list) {
         // write the header into the file
         // header is big endian 
         BinaryCacheHeader header;
@@ -33,13 +33,14 @@ public:
         ret += write(target, version);
 
         // update flags
-        headerFlags.relative = (this->base);
+        Flags flags;
+        flags.relative = list.isRelative();
 
-        header.flags = headerFlags;
-        ret += write(target, headerFlags);
+        header.flags = flags;
+        ret += write(target, flags);
 
         // write the number of entries and the crc (not implemented yet)
-        header.count = this->count;
+        header.count = list.size();
         ret += write(target, header.count);
         header.crc = crcBase;
         header.sep = separator;
@@ -54,7 +55,7 @@ public:
             return false;
         }
 
-        return writeEntries(target);
+        return writeEntries(target, list);
     }
 
     bool deserialize(File &cache) {
@@ -108,7 +109,7 @@ public:
         return readEntries(cache);
     }
 
-    bool isOldPlaylist(File &cache) {
+    static bool isOldPlaylist(File &cache) {
         uint8_t prop = 0;
 
         // try to guess, if we have an old playlist
@@ -211,7 +212,7 @@ protected:
 
     static constexpr char separator = '#';      //< separator for all entries
 
-    int checkHeader(File &cache) {
+    static int checkHeader(File &cache) {
         int ret = 1;
         // read the header from the file
         BinaryCacheHeader header;
@@ -289,7 +290,7 @@ protected:
         return (read16(f) << 16) | read16(f);
     }
 
-    uint32_t calcCRC(const BinaryCacheHeader &header) const {
+    static uint32_t calcCRC(const BinaryCacheHeader &header) {
         // add all header fields individually since BinaryCacheHeader is not packed
         uint32_t ret = crc32_le(0, reinterpret_cast<const uint8_t*>(&header.magic), sizeof(header.magic));
         ret = crc32_le(ret, reinterpret_cast<const uint8_t*>(&header.version), sizeof(header.version));
@@ -301,15 +302,19 @@ protected:
     }
 
     bool writeEntries(File &f) const {
+        return writeEntries(f, this);
+    }
+
+    static bool writeEntries(File &f, const FolderPlaylistAlloc<TAllocator> &list) {
         // if flag is set, use relative path
-        if(headerFlags.relative) {
-            f.write(reinterpret_cast<const uint8_t*>(this->base), strlen(this->base));
+        if(list.isRelative()) {
+            f.write(reinterpret_cast<const uint8_t*>(list.getBase()), strlen(list.getBase()));
             f.write(separator);
         }
 
         // write all entries with the separator to the file
-        for(size_t i=0;i<this->count;i++) {
-            const String path = this->getAbsolutePath(i);
+        for(size_t i=0;i<list.size();i++) {
+            const String path = list.getAbsolutePath(i);
             if(f.write(reinterpret_cast<const uint8_t*>(path.c_str()), path.length()) != path.length()) {
                 return false;
             }
