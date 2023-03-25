@@ -1,5 +1,7 @@
 #pragma once
 
+#include <FS.h>
+
 // FilePathLength
 #define MAX_FILEPATH_LENTGH 256
 
