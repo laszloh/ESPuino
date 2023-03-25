@@ -89,64 +89,6 @@ public:
         return readEntries(cache);
     }
 
-    bool deserializeOldPlaylist(File &cache) {
-        if(!isOldPlaylist(cache)){
-            return false;
-        }
-
-        // iterate through the file to find the count
-        size_t entries = 0;;
-        while(cache.available()) {
-            const char c = cache.read();
-            if(c == '#') {
-                entries++;
-            }
-        }
-        cache.seek(0);
-        log_n("entries: %d", entries);
-
-        // destroy data
-        this->clear();
-
-        // if(!this->reserve(entries)){
-        //     // we failed to get the memory
-        //     return false;
-        // }
-        
-        log_n("flags: %04x", headerFlags);
-        return readEntries(cache);
-    }
-
-    static bool isOldPlaylist(File &cache) {
-        uint8_t prop = 0;
-
-        // try to guess, if we have an old playlist
-        int result = checkHeader(cache);
-        if(result == -1) {
-            // we failed at the magic & version part
-            prop++;
-        } else if(result > 0 || result == -2) {
-            // we have a perfect header or a crc fail
-            return false;
-        }
-
-        // count the lines in the file (there should be at least 1 '#')
-        size_t countSince = 0;
-        while(cache.available()) {
-            const char c = cache.read();
-            if(c == '#' && countSince > 4) {
-                // we only accep separators, which are at least 4 characters apart (with 4 chars the filename could only be ".xyz")
-                prop++;
-                countSince = 0;
-            } else {
-                countSince++;
-            }
-        }
-
-        cache.seek(0);  // rewinde file before leaving
-        return (prop > 2);  // we found no header and at least 1 speparator
-    }
-
     bool setBase(const char *_base) {
 		// this->base = this->stringCopy(_base);
         // headerFlags.relative = (this->base);

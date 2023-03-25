@@ -242,16 +242,6 @@ Playlist *SdCard_ReturnPlaylist(const char *fileName, const uint32_t _playMode) 
 				if(success) {
 					// always first assume a current playlist format
 					return cachePlaylist;
-				} else if(CacheFilePlaylist::isOldPlaylist(cacheFile)) {
-					// read he old format and rewrite it into the new one
-					cachePlaylist->deserializeOldPlaylist(cacheFile);
-					cacheFile.close();
-
-					// reopen for writing
-					cacheFile = gFSystem.open(cacheFilePath.value(), FILE_WRITE);
-					CacheFilePlaylist::serialize(cacheFile, *cachePlaylist);
-					cacheFile.close();
-					return cachePlaylist;
 				}
 				// we had some error reading the cache file, wait for the other to rebuild it
 				// we do not need the class anymore, so destroy it

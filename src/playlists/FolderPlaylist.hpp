@@ -55,12 +55,12 @@ public:
 				continue;
 			}
 			const char *path;
-			#if ESP_ARDUINO_VERSION_MAJO >= 2
+			#if ESP_ARDUINO_VERSION_MAJOR >= 2
 				path = entry.name();
 			#else
 				path = entry.name();
 				// remove base, since in Arduino 1, name return the path
-				path = path + base.length() + 1;
+				path = path + base.length();
 			#endif
 			if(fileValid(path)) {
 				// push this file into the array
@@ -93,6 +93,7 @@ public:
 	}
 
 	bool push_back(const char *path) {
+		log_n("path: %s", path);
 		if(!fileValid(path)) {
 			return false;
 		}
@@ -101,12 +102,11 @@ public:
 		if(isRelative() && path[0] == '/') {
 			// we are in relative mode and got an absolute path, check if the path begins with our base
 			// Also check if the path is so short, that there is no space for a filename in it
-			const size_t pathLen = strlen(path) - (base.length() + strlen("/.abc"));
 			if( (strncmp(path, base.c_str(), base.length()) != 0) || (strlen(path) <  (base.length() + strlen("/.abc")))) {
 				// we refuse files other than our base
 				return false;
 			}
-			path = path + base.length() + 1;	// modify pointer to the end of the path
+			path = path + base.length();	// modify pointer to the end of the path
 		}
 
 		files.push_back(path);
