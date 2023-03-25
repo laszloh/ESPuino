@@ -25,7 +25,7 @@ public:
         // normal m3u is just a bunch of filenames, 1 / line
         size_t lines = 0;
         f.seek(0);
-        while(f.avaliable()) {
+        while(f.available()) {
             char c = f.read();
             if(c == '\n') {
                 lines++;
@@ -61,7 +61,7 @@ protected:
     struct MetaInfo {
         size_t duration;
         String title;
-    }
+    };
 
     bool parseExtended(File &f) {
         // extended m3u file format
@@ -69,9 +69,9 @@ protected:
         size_t lines = 0;
 
         f.seek(0);
-        while(f.avaliable()) {
+        while(f.available()) {
             const String line = f.readStringUntil('\n');
-            if(!line.startsWith('#')){
+            if(!line.startsWith("#")){
                 lines++;
             }
         }
@@ -84,7 +84,7 @@ protected:
         for(size_t i=0;i<lines;i++) {
             String line = f.readStringUntil('\n');
             line.trim(); 
-            if(!line.startsWith('#')){
+            if(!line.startsWith("#")){
                 // this something we have to save
                 if(!this->push_back(line)) {
                     return false;
