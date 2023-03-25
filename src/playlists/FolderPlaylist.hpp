@@ -5,34 +5,22 @@
 #include <FS.h>
 #include <string>
 #include <vector>
+#include <random>
 
 #include "../Playlist.h"
 
 class FolderPlaylist : public Playlist {
 protected:
-
-	//std::basic_string<char, std::char_traits<char>, 
-
-
-	char *base;
+	pstring base;
+	std::vector<pstring, PsramAllocator<pstring>> files;
 	char divider;
-	char **files;
-	size_t capacity;
-	size_t count;
 
 public:
 	FolderPlaylist(size_t _capacity, char _divider = '/') 
-	  : base(nullptr), divider(_divider),
-	    files(static_cast<char**>(this->allocate(sizeof(char*) * _capacity))),
-		capacity(_capacity), count(0) 
-	{
-		#if MEM_DEBUG == 1
-			assert(files != nullptr);
-		#endif
-	}
+	  : base(pstring()), divider(_divider), files(std::vector<pstring, PsramAllocator<pstring>>(_capacity))
+	{ }
 	FolderPlaylist(char _divider = '/') 
-	  : base(nullptr),  divider(_divider),
-	    files(nullptr), capacity(0), count(0) 
+	  : base(pstring()),  divider(_divider), files(std::vector<pstring, PsramAllocator<pstring>>())
 	{ }
 
 	FolderPlaylist(File &folder, char _divider = '/') : divider(_divider) {
@@ -53,18 +41,11 @@ public:
 		clear();
 
 		// since we are enumerating, we don't have to think about absolute files with different bases 
-		const char *path;
-		#if ESP_ARDUINO_VERSION_MAJO >= 2
-			path = folder.path();
-		#else
-			path = folder.name();
-		#endif
-		base = this->stringCopy(path);
+		base = getPath(folder);
 
 		// enumerate all files in the folder, we have to do it twice
-		constexpr size_t allocUnit = 255;	// we start with 255 entries and double them, if needed
-		size_t allocCount = 1;
-		reserve(allocUnit * allocCount);
+		
+		
 		while(true) {
 			File entry = folder.openNextFile();
 			if(!entry) {
@@ -79,86 +60,56 @@ public:
 			#else
 				path = entry.name();
 				// remove base, since in Arduino 1, name return the path
-				path = path + strlen(base) + 1;
+				path = path + base.length() + 1;
 			#endif
 			if(fileValid(path)) {
 				// push this file into the array
 				bool success = push_back(path);
 				if(!success) {
-					// we need more memory D:
-					allocCount++;
-					if(!reserve(allocUnit * allocCount)) {
-						return false;
-					}
-					// we should have more memory now
-					push_back(path);
+					return false;
 				}
 			}
 		}
 		// resize memory to fit our count
-		reserve(count);
+		files.shrink_to_fit();
 
 		return true;
 	}
 
-	bool reserve(size_t _cap) {
-		if(_cap < count) {
-			// we do not support reducing below the current size
-			return false;
-		}
-
-		char **tmp = static_cast<char**>(this->reallocate((capacity > 0 ) ? files : nullptr, sizeof(char*) * _cap));
-		if(!tmp) {
-			// we failed to get the needed memory D:
-			return false;
-		}
-		files = tmp;
-		capacity = _cap;
-		return true;
+	void setBase(const char *_base) {
+		base = _base;
 	}
 
-	bool setBase(const char *_base) {
-		base = this->stringCopy(_base);
-		return (base!=nullptr);
-	}
-
-	bool setBase(const String base) {
-		return setBase(base.c_str());
+	void setBase(const String _base) {
+		base = _base.c_str();
 	}
 
 	const char *getBase() const {
-		return base;
+		return base.c_str();
 	}
 
 	bool isRelative() const {
-		return (base!=nullptr);
+		return base.length();
 	}
 
 	bool push_back(const char *path) {
-		if(count >= capacity) {
-			return false;
-		}
 		if(!fileValid(path)) {
 			return false;
 		}
 
 		// here we check if we have to cut up the path (currently it's only a crude check for absolute paths)
-		if(base && path[0] == '/') {
+		if(isRelative() && path[0] == '/') {
 			// we are in relative mode and got an absolute path, check if the path begins with our base
 			// Also check if the path is so short, that there is no space for a filename in it
-			if((strncmp(path, base, strlen(base)) != 0) || (strlen(path) < strlen(base) + strlen("/.abc"))) {
+			const size_t pathLen = strlen(path) - (base.length() + strlen("/.abc"));
+			if( (strncmp(path, base.c_str(), base.length()) != 0) || (strlen(path) <  (base.length() + strlen("/.abc")))) {
 				// we refuse files other than our base
 				return false;
 			}
-			path = path + strlen(base) + 1;	// modify pointer to the end of the path
+			path = path + base.length() + 1;	// modify pointer to the end of the path
 		}
 
-		char *tmp = this->stringCopy(path);
-		if(!tmp) {
-			// stringCopy failed
-			return false;
-		}
-		files[count++] = tmp;
+		files.push_back(path);
 		return true;
 	}
 
@@ -174,63 +125,54 @@ public:
 	void setDivider(char _divider) { divider = _divider; }
 	bool getDivider() const { return divider; }
 
-	virtual size_t size() const override { return count; };
+	virtual size_t size() const override { return files.size(); };
 
-	virtual bool isValid() const override { return (files); }
+	virtual bool isValid() const override { return files.size(); }
 
 	virtual const String getAbsolutePath(size_t idx) const override {
 		#if MEM_DEBUG == 1
-			assert(idx < count);
+			assert(idx < files.size());
 		#endif
-		if(base) {
+		if(isRelative()) {
 			// we are in relative mode
-			return String(base) + divider + files[idx];
+			return String(base.c_str()) + divider + files[idx].c_str();
 		}
-		return files[idx];
+		return String(files[idx].c_str());
 	};
 
 	virtual const String getFilename(size_t idx) const override {
 		#if MEM_DEBUG == 1
-			assert(idx < count);
+			assert(idx < files.size());
 		#endif
-		return files[idx];
+		if(isRelative()) {
+			return String(files[idx].c_str());
+		}
+		pstring path = files[idx];
+		return String(path.substr(path.find_last_of("/") + 1).c_str());
 	};
 
 	virtual void sort(sortFunc func = alphabeticSort) override {
-		std::qsort(files, count, sizeof(char*), func);
+		std::sort(files.begin(), files.end());
 	}
 
 	virtual void randomize() override {
-		if(count < 2) {
+		if(files.size() < 2) {
 			// we can not randomize less than 2 entries
 			return;
 		}
 
-		// Knuth-Fisher-Yates-algorithm to randomize playlist
-		// modern algorithm according to Durstenfeld, R. (1964). Algorithm 235: Random permutation. Commun. ACM, 7, 420.
-		for(size_t i=count-1;i>0;i--) {
-			size_t j = random(i);
-			char *swap = files[i];
-			files[i] = files[j];
-			files[j] = swap;
-		}
+		// randomize using the "normal" random engine and shuffle
+		std::default_random_engine rnd(millis());
+		std::shuffle(files.begin(), files.end(), rnd);
 	}
 
 protected:
 	virtual void destroy() override {
-		// destroy all the evidence!
-		for(size_t i=0;i<count;i++) {
-			this->deallocate(files[i]);
-		}
-		this->deallocate(files);
-		this->deallocate(base);
+		files.clear();
+		base = pstring();
 	}
 
 	void init() {
-		base = nullptr;
-		files = nullptr;
-		capacity = 0;
-		count = 0;
 		divider = '/';
 	}
 
@@ -240,7 +182,7 @@ protected:
 			return false;
 
 		// if we are in absolute mode...
-		if(!base) {
+		if(!isRelative()) {
 			_fileItem = strrchr(_fileItem, divider);	//... extract the file name from path
 		}
 
