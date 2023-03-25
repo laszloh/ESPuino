@@ -10,8 +10,8 @@
 template <typename TAllocator>
 class CacheFilePlaylistAlloc : public FolderPlaylistAlloc<TAllocator> {
 public:
-    CacheFilePlaylistAlloc(char divider = '/', TAllocator alloc = TAllocator()) : FolderPlaylistAlloc<TAllocator>(divider, alloc), flags(Flags()), headerValid(false) { }
-	CacheFilePlaylistAlloc(File &cacheFile, char divider = '/', TAllocator alloc = TAllocator()) : FolderPlaylistAlloc<TAllocator>(divider, alloc), flags(Flags()), headerValid(false) {
+    CacheFilePlaylistAlloc(char divider = '/', TAllocator alloc = TAllocator()) : FolderPlaylistAlloc<TAllocator>(divider, alloc), headerFlags(Flags()), headerValid(false) { }
+	CacheFilePlaylistAlloc(File &cacheFile, char divider = '/', TAllocator alloc = TAllocator()) : FolderPlaylistAlloc<TAllocator>(divider, alloc), headerFlags(Flags()), headerValid(false) {
         deserialize(cacheFile);
 	}
     virtual ~CacheFilePlaylistAlloc() {
@@ -33,10 +33,10 @@ public:
         ret += write(target, version);
 
         // update flags
-        flags.relative = (this->base);
+        headerFlags.relative = (this->base);
 
-        header.flags = flags;
-        ret += write(target, flags);
+        header.flags = headerFlags;
+        ret += write(target, headerFlags);
 
         // write the number of entries and the crc (not implemented yet)
         header.count = this->count;
@@ -58,28 +58,8 @@ public:
     }
 
     bool deserialize(File &cache) {
-        // read the header from the file
-        BinaryCacheHeader header;
-
-        header.magic = read16(cache);
-        header.version = read16(cache);
-
-        // first checkpoint
-        if(header.magic != magic || header.version != version) {
-            // header did not match, bail out
-            return false;
-        }
-
-        // read the flags and the count
-        header.flags = read16(cache);
-        header.count = read32(cache);
-
-        // second checkpoint, crc and separator
-        header.crc = crcBase;
-        uint32_t crc = read32(cache);
-        header.sep = cache.read();
-        if(calcCRC(header) != crc || header.sep != separator) {
-            // crc missmatch, bail out
+        
+        if(!checkHeader(cache)) {
             return false;
         }
 
@@ -88,11 +68,10 @@ public:
             this->clear();
         }
 
-        // header was ok
-        headerValid = true;
+        deserializeHeader(cache);
 
         // reserve the memory
-        if(!this->reserve(header.count)) {
+        if(!this->reserve(headerCount)) {
             // we failed to reserve the needed memory
             return false;
         }
@@ -101,9 +80,67 @@ public:
         return readEntries(cache);
     }
 
+    bool deserializeOldPlaylist(File &cache) {
+        if(!isOldPlaylist(cache)){
+            return false;
+        }
+
+        // iterate through the file to find the count
+        size_t entries = 0;;
+        while(cache.available()) {
+            const char c = cache.read();
+            if(c == '#') {
+                entries++;
+            }
+        }
+        cache.seek(0);
+        log_n("entries: %d", entries);
+
+        // destroy data
+        this->clear();
+
+        if(!this->reserve(entries)){
+            // we failed to get the memory
+            return false;
+        }
+        
+        log_n("flags: %04x", headerFlags);
+        return readEntries(cache);
+    }
+
+    bool isOldPlaylist(File &cache) {
+        uint8_t prop = 0;
+
+        // try to guess, if we have an old playlist
+        int result = checkHeader(cache);
+        if(result == -1) {
+            // we failed at the magic & version part
+            prop++;
+        } else if(result > 0 || result == -2) {
+            // we have a perfect header or a crc fail
+            return false;
+        }
+
+        // count the lines in the file (there should be at least 1 '#')
+        size_t countSince = 0;
+        while(cache.available()) {
+            const char c = cache.read();
+            if(c == '#' && countSince > 4) {
+                // we only accep separators, which are at least 4 characters apart (with 4 chars the filename could only be ".xyz")
+                prop++;
+                countSince = 0;
+            } else {
+                countSince++;
+            }
+        }
+
+        cache.seek(0);  // rewinde file before leaving
+        return (prop > 2);  // we found no header and at least 1 speparator
+    }
+
     bool setBase(const char *_base) {
 		this->base = this->stringCopy(_base);
-        flags.relative = (this->base);
+        headerFlags.relative = (this->base);
 		return (this->base);
 	}
 
@@ -119,6 +156,8 @@ public:
 		FolderPlaylistAlloc<TAllocator>::destroy();
 		FolderPlaylistAlloc<TAllocator>::init();
         headerValid = false;
+        headerFlags = Flags();
+        headerCount = 0;
 	}
 
 protected:
@@ -163,13 +202,64 @@ protected:
     };
     static constexpr uint16_t magic = 0x4346;   //< Magic header "CF"
     static constexpr uint16_t version = 1;      //< Current cache file version, if header or enconding changes, this has to be incremented
-    static constexpr uint16_t crcBase = 0x00;   //< starting value of the crc calculation
+    static constexpr uint32_t crcBase = 0x00;   //< starting value of the crc calculation
     static constexpr size_t headerSize = 15;    //< the expected size of the header: magic(2) + version(2) + flags(2) + count(4) + crc(4) + separator(1)
 
-    Flags flags;                                //< A 16bit bitfield of flags
+    Flags headerFlags;                          //< A 16bit bitfield of flags
     bool headerValid;
+    size_t headerCount;
 
     static constexpr char separator = '#';      //< separator for all entries
+
+    int checkHeader(File &cache) {
+        int ret = 1;
+        // read the header from the file
+        BinaryCacheHeader header;
+
+        header.magic = read16(cache);
+        header.version = read16(cache);
+
+        // first checkpoint
+        if(header.magic != magic || header.version != version) {
+            // header did not match, bail out
+            ret = -1;
+        }
+
+        // read the flags and the count
+        header.flags = read16(cache);
+        header.count = read32(cache);
+
+        // second checkpoint, crc and separator
+        header.crc = crcBase;
+        uint32_t crc = read32(cache);
+        header.sep = cache.read();
+        if((ret > 0) && (calcCRC(header) != crc || header.sep != separator)) {
+            // crc missmatch, bail out
+            ret = -2;
+        }
+
+        cache.seek(0);
+        return ret;
+    }
+
+    bool deserializeHeader(File &cache) {
+        headerValid = false;
+        if(checkHeader(cache) < 1) {
+            return false;
+        }
+        // header is valid, read on
+        headerValid = true;
+
+        // ignore magic & version
+        cache.seek(sizeof(BinaryCacheHeader::magic) + sizeof(BinaryCacheHeader::version));
+
+        // read the flags and the count
+        headerFlags = read16(cache);
+        headerCount = read32(cache);
+
+        cache.seek(sizeof(BinaryCacheHeader::crc) + sizeof(BinaryCacheHeader::sep), SeekMode::SeekCur);
+        return true;
+    }
 
     // helper function to write 16 bit in big endian
     static size_t write(File &f, uint16_t value) {
@@ -211,6 +301,12 @@ protected:
     }
 
     bool writeEntries(File &f) const {
+        // if flag is set, use relative path
+        if(headerFlags.relative) {
+            f.write(reinterpret_cast<const uint8_t*>(this->base), strlen(this->base));
+            f.write(separator);
+        }
+
         // write all entries with the separator to the file
         for(size_t i=0;i<this->count;i++) {
             const String path = this->getAbsolutePath(i);
@@ -224,12 +320,12 @@ protected:
 
     bool readEntries(File &f) {
         // if flag is set, use relative path
-        if(flags.relative) {
+        if(headerFlags.relative) {
             const String basePath = f.readStringUntil(separator);
             this->setBase(basePath);
         }
 
-        for(size_t i=0;i<this->capacity;i++) {
+        while(f.available()) {
             const String path = f.readStringUntil(separator);
             if(!this->push_back(path)){
                 return false;

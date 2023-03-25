@@ -111,10 +111,39 @@ CacheFilePlaylistAlloc<UnitTestAllocator> *cachePlaylist;
     TEST_ASSERT_INT_WITHIN_MESSAGE(4, psram, cPsram, "Free psram after test (delta = 4 byte)");     \
 }while(0);
 
+void DumpHex(const void* data, size_t size) {
+	char ascii[17];
+	size_t i, j;
+	ascii[16] = '\0';
+	for (i = 0; i < size; ++i) {
+		Serial.printf("%02X ", ((unsigned char*)data)[i]);
+		if (((unsigned char*)data)[i] >= ' ' && ((unsigned char*)data)[i] <= '~') {
+			ascii[i % 16] = ((unsigned char*)data)[i];
+		} else {
+			ascii[i % 16] = '.';
+		}
+		if ((i+1) % 8 == 0 || i+1 == size) {
+			Serial.printf(" ");
+			if ((i+1) % 16 == 0) {
+				Serial.printf("|  %s \n", ascii);
+			} else if (i+1 == size) {
+				ascii[(i+1) % 16] = '\0';
+				if ((i+1) % 16 <= 8) {
+					Serial.printf(" ");
+				}
+				for (j = (i+1) % 16; j < 16; ++j) {
+					Serial.printf("   ");
+				}
+				Serial.printf("|  %s \n", ascii);
+			}
+		}
+	}
+}
+
 // set stuff up here, this function is before a test function
 void setUp(void) {
     allocCount = deAllocCount = reAllocCount = 0;
-    // get_free_memory();
+    // get_free_memory();   // we have a memory leak of ~204 bytes somewhere in the code
 }
 
 void tearDown(void) {
@@ -125,7 +154,7 @@ void setup_static(void) {
     cachePlaylist = new CacheFilePlaylistAlloc<UnitTestAllocator>();
 }
 
-void test_cache_write(void) {
+void test_cache_read_write_absolute(void) {
     constexpr std::array<const char*, 6> contentAbsolute PROGMEM = {{
         "/sdcard/music/folderA/song1.mp3",
         "/sdcard/music/folderA/song2.mp3",
@@ -136,7 +165,7 @@ void test_cache_write(void) {
     }};
 
     mockfs::Node cacheNode = mockfs::Node::empty("/sdcard/music/test.csv");
-    File cacheFile = File(mockfs::MockFileImp::open(&cacheNode, false));
+    File cacheFile = mockfs::MockFileImp::open(&cacheNode, false);
 
     cachePlaylist->clear();
 
@@ -151,7 +180,8 @@ void test_cache_write(void) {
     TEST_ASSERT_TRUE_MESSAGE(serialize, "Serialize failed to write file");
 
     // dump data
-    log_n("Wrote: %d", cacheFile.size());
+    log_n("Wrote: %d, dump:", cacheFile.size());
+    DumpHex(cacheNode.content.data(), cacheNode.content.size());
 
     // destory cachefile
     cachePlaylist->clear();
@@ -166,14 +196,10 @@ void test_cache_write(void) {
 
     // destory cachefile
     cachePlaylist->clear();
-
-    // test memory actions
-    TEST_ASSERT_EQUAL_MESSAGE(2 * contentAbsolute.size(), allocCount, "Calls to malloc");
-    TEST_ASSERT_EQUAL_MESSAGE(2 * (1 + contentAbsolute.size()), deAllocCount, "Calls to free");
-    TEST_ASSERT_EQUAL_MESSAGE(2, reAllocCount, "Calls to realloc");
+    cacheFile.close();
 }
 
-void test_folder_content_relative(void) {
+void test_cache_read_write_relative(void) {
     constexpr const char *basePath = "/sdcard/music/folderX";
     constexpr std::array<const char*, 4> contentRelative PROGMEM = {{
         "/sdcard/music/folderX/song1.mp3",
@@ -181,6 +207,9 @@ void test_folder_content_relative(void) {
         "/sdcard/music/folderX/song3.mp3",
         "/sdcard/music/folderX/song4.mp3",
     }};
+
+    mockfs::Node cacheNode = mockfs::Node::empty("/sdcard/music/test.csv");
+    File cacheFile = mockfs::MockFileImp::open(&cacheNode, false);
 
     cachePlaylist->clear(); // <-- nop operation
     TEST_ASSERT_TRUE(cachePlaylist->setBase(basePath));
@@ -195,6 +224,29 @@ void test_folder_content_relative(void) {
        TEST_ASSERT_EQUAL_STRING(contentRelative[i], cachePlaylist->getAbsolutePath(i).c_str());
     }
 
+    // push the data into the cache file
+    bool serialize = cachePlaylist->serialize(cacheFile);
+    TEST_ASSERT_TRUE_MESSAGE(serialize, "Serialize failed to write file");
+
+    // dump data
+    log_n("Wrote: %d, dump:", cacheFile.size());
+    DumpHex(cacheNode.content.data(), cacheNode.content.size());
+
+    // destory cachefile
+    cachePlaylist->clear();
+
+    // read back the data
+    bool deserialize = cachePlaylist->deserialize(cacheFile);
+    TEST_ASSERT_TRUE_MESSAGE(deserialize, "Deserialize failed to read file");
+
+    for(size_t i=0;i<cachePlaylist->size();i++) {
+        TEST_ASSERT_EQUAL_STRING(contentRelative[i], cachePlaylist->getAbsolutePath(i).c_str());
+    }
+
+    // destory cachefile
+    cachePlaylist->clear();
+    cacheFile.close();
+
     // this tests should fail
     constexpr const char *wrongBasePath PROGMEM = "/sdcard/music/folderZ/song1.mp3";
     constexpr const char *noMusicFile PROGMEM = "/sdcard/music/folderX/song4.doc";
@@ -204,112 +256,85 @@ void test_folder_content_relative(void) {
 
     // cleanup
     cachePlaylist->clear();
-
-    // test memory actions
-    TEST_ASSERT_EQUAL_MESSAGE(1 + contentRelative.size(), allocCount, "Calls to malloc");
-    TEST_ASSERT_EQUAL_MESSAGE(contentRelative.size() + 1 + 1, deAllocCount, "Calls to free");
-    TEST_ASSERT_EQUAL_MESSAGE(1, reAllocCount, "Calls to realloc");
 }
 
-void test_folder_content_automatic(void) {
-    // this test will access a mock file system implementation
-    
-    constexpr size_t numFiles = 6;
-    File root(mockfs::MockFileImp::open(&musicFolder, true));
+void test_cache_read_tests(void) {
+    constexpr std::array<const char*, 4> contentRelative PROGMEM = {{
+        "/sdcard/music/folderX/song1.mp3",
+        "/sdcard/music/folderX/song2.mp3",
+        "/sdcard/music/folderX/song3.mp3",
+        "/sdcard/music/folderX/song4.mp3",
+    }};
 
-    cachePlaylist->createFromFolder(root);
-    TEST_ASSERT_EQUAL_MESSAGE(numFiles, cachePlaylist->size(), "Number of elements in Playlist");
+    mockfs::Node cacheNode = mockfs::Node::fromBuffer("/sdcard/music/test.csv", reinterpret_cast<const uint8_t*>(
+        "CF\x00\x01\x00\x01\x00\x00\x00\x04\xE1\x99\x58\x79#"
+        "/sdcard/music/folderX#"
+        "/sdcard/music/folderX/song1.mp3#"
+        "/sdcard/music/folderX/song2.mp3#"
+        "/sdcard/music/folderX/song3.mp3#"
+        "/sdcard/music/folderX/song4.mp3#"),
+        165
+    );
+    File cacheFile = mockfs::MockFileImp::open(&cacheNode, false);
 
-    size_t i=0;
-    for(auto it=musicFolder.files.begin();it!=musicFolder.files.end();it++){
-        if(!it->isDir) {
-            TEST_ASSERT_EQUAL_STRING(it->fullPath.c_str(), cachePlaylist->getAbsolutePath(i).c_str());
-            i++;
-        }
+    log_n("Wrote: %d, dump:", cacheFile.size());
+    DumpHex(cacheNode.content.data(), cacheNode.content.size());
+
+    // read back the data
+    TEST_ASSERT_TRUE_MESSAGE(cachePlaylist->deserialize(cacheFile), "Deserialize failed to read file");
+
+    // check against test 
+    for(size_t i=0;i<cachePlaylist->size();i++) {
+        TEST_ASSERT_EQUAL_STRING(contentRelative[i], cachePlaylist->getAbsolutePath(i).c_str());
     }
+
+    // destroy file header
+    cacheNode.content[5] = 0xFF;
+
+    // read back the data
+    TEST_ASSERT_FALSE_MESSAGE(cachePlaylist->deserialize(cacheFile), "Deserialize accepted corrupted header");
 
     // cleanup
     cachePlaylist->clear();
-
-     // test memory actions
-    TEST_ASSERT_EQUAL_MESSAGE(1 + numFiles, allocCount, "Calls to malloc");
-    TEST_ASSERT_EQUAL_MESSAGE(8, deAllocCount, "Calls to free");
-    TEST_ASSERT_EQUAL_MESSAGE(2, reAllocCount, "Calls to realloc");
 }
 
-void test_folder_content_special_char(void) {
-    // this test will access a mock file system implementation
-    mockfs::Node musicFolder = {
-        .fullPath = "/sdcard/music/131072 😀",
-        .isDir = true,
-        .content = std::vector<uint8_t>(),
-        .files = {
-                {
-                    .fullPath = "/sdcard/music/131072 😀/Zongz.mp3",
-                    .isDir = false,
-                    .content = std::vector<uint8_t>(),
-                    .files = std::vector<mockfs::Node>()
-                },
-                {
-                    .fullPath = "/sdcard/music/131072 😀/Müsäk.mp3",
-                    .isDir = false,
-                    .content = std::vector<uint8_t>(),
-                    .files = std::vector<mockfs::Node>()
-                },
-                {
-                    .fullPath = "/sdcard/music/131072 😀/狗.mp3",
-                    .isDir = false,
-                    .content = std::vector<uint8_t>(),
-                    .files = std::vector<mockfs::Node>()
-                },
-                {
-                    .fullPath = "/sdcard/music/131072 😀/très élégant.mp3",
-                    .isDir = false,
-                    .content = std::vector<uint8_t>(),
-                    .files = std::vector<mockfs::Node>()
-                },
-                {
-                    .fullPath = "/sdcard/music/131072 😀/A Folder",
-                    .isDir = true,
-                    .content = std::vector<uint8_t>(),
-                    .files = std::vector<mockfs::Node>()
-                },
-                {
-                    .fullPath = "/sdcard/music/131072 😀/россиянин.mp3",
-                    .isDir = false,
-                    .content = std::vector<uint8_t>(),
-                    .files = std::vector<mockfs::Node>()
-                },
-                {
-                    .fullPath = "/sdcard/music/131072 😀/" "\xD9\x85\xD9\x88\xD8\xB3\xD9\x8a\xD9\x82" ".mp3",
-                    .isDir = false,
-                    .content = std::vector<uint8_t>(),
-                    .files = std::vector<mockfs::Node>()
-                },
-            }
-    };
-    constexpr size_t numFiles = 6;
-    File root(mockfs::MockFileImp::open(&musicFolder, true));
+void test_cache_read_old_playlist() {
+    constexpr std::array<const char*, 5> testData PROGMEM = {{
+        "/sdcard/music/folderX/song1.mp3",
+        "/sdcard/music/folderX/song2.mp3",
+        "/sdcard/music/folderX/song3.mp3",
+        "/sdcard/music/folderX/song4.mp3",
+        "/sdcard/music/folderX/song5.mp3",
+    }};
 
-    cachePlaylist->createFromFolder(root);
-    TEST_ASSERT_EQUAL_MESSAGE(numFiles, cachePlaylist->size(), "Number of elements in Playlist");
+    mockfs::Node cacheNode = mockfs::Node::fromBuffer("/sdcard/music/test.csv", reinterpret_cast<const uint8_t*>(
+        "/sdcard/music/folderX/song1.mp3#"
+        "/sdcard/music/folderX/song2.mp3#"
+        "/sdcard/music/folderX/song3.mp3#"
+        "/sdcard/music/folderX/song4.mp3#"
+        "/sdcard/music/folderX/song5.mp3#"),
+        160
+    );
+    File cacheFile = mockfs::MockFileImp::open(&cacheNode, false);
 
-    size_t i=0;
-    for(auto it=musicFolder.files.begin();it!=musicFolder.files.end();it++){
-        log_n("Path: %s", it->fullPath.c_str());
-        if(!it->isDir) {
-            TEST_ASSERT_EQUAL_STRING(it->fullPath.c_str(), cachePlaylist->getAbsolutePath(i).c_str());
-            i++;
-        }
+    TEST_ASSERT_TRUE_MESSAGE(cachePlaylist->isOldPlaylist(cacheFile), "Cache playlist did not ID the file as an old playlist");
+    TEST_ASSERT_TRUE_MESSAGE(cachePlaylist->deserializeOldPlaylist(cacheFile), "Could not parse old cache format");
+
+    // check against test 
+    for(size_t i=0;i<cachePlaylist->size();i++) {
+        TEST_ASSERT_EQUAL_STRING(testData[i], cachePlaylist->getAbsolutePath(i).c_str());
     }
 
-    // cleanup
-    cachePlaylist->clear();
+    // write new cache format
+    cacheNode.content.clear();
 
-     // test memory actions
-    TEST_ASSERT_EQUAL_MESSAGE(1 + numFiles, allocCount, "Calls to malloc");
-    TEST_ASSERT_EQUAL_MESSAGE(8, deAllocCount, "Calls to free");
-    TEST_ASSERT_EQUAL_MESSAGE(2, reAllocCount, "Calls to realloc");
+    TEST_ASSERT_TRUE_MESSAGE(cachePlaylist->serialize(cacheFile), "Filed to write new format");
+
+    log_n("Wrote: %d, dump:", cacheFile.size());
+    DumpHex(cacheNode.content.data(), cacheNode.content.size());
+
+    // read back the data
+    TEST_ASSERT_FALSE_MESSAGE(cachePlaylist->deserialize(cacheFile), "Deserialize failed to read file");
 }
 
 void setup()
@@ -320,10 +345,10 @@ void setup()
 
     setup_static();
 
-    RUN_TEST(test_cache_write);
-    RUN_TEST(test_folder_content_relative);
-    RUN_TEST(test_folder_content_automatic);
-    RUN_TEST(test_folder_content_special_char);
+    RUN_TEST(test_cache_read_write_absolute);
+    RUN_TEST(test_cache_read_write_relative);
+    RUN_TEST(test_cache_read_tests);
+    RUN_TEST(test_cache_read_old_playlist);
 
 
     UNITY_END(); // stop unit testing

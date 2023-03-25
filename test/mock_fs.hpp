@@ -18,7 +18,14 @@ struct Node {
         Node n;
         n.fullPath = path;
         if(str)
-            std::copy(str, str + strlen(str), n.content.begin());
+            n.content.insert(n.content.begin(), str, str + strlen(str));
+        return n;
+    }
+
+    static Node fromBuffer(const char* path, const uint8_t *buf, size_t size) {
+        Node n;
+        n.fullPath = path;
+        n.content.insert(n.content.begin(), buf, buf+size);
         return n;
     }
 
@@ -135,7 +142,7 @@ public:
     virtual fs::FileImplPtr openNextFile(const char* mode) override {
         if(!node->isDir || it >= node->files.end())
             return nullptr;
-        auto newFilePtr = std::shared_ptr<fs::FileImpl>(new MockFileImp(&(*it), strcmp(mode, "R") == 0));
+        auto newFilePtr = std::make_shared<MockFileImp>(&(*it), strcmp(mode, "R") == 0);
         it++;
         return newFilePtr;
     };
