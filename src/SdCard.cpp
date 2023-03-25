@@ -233,7 +233,7 @@ Playlist *SdCard_ReturnPlaylist(const char *fileName, const uint32_t _playMode) 
 	// Create linear playlist of caching-file
 	#ifdef CACHED_PLAYLIST_ENABLE
 		// Build absolute path of cacheFile
-		snprintf(cacheFileNameBuf, sizeof(cacheFileNameBuf), "%s/%s", fileName, (const char*) FPSTR(playlistCacheFile));
+		snprintf(cacheFileNameBuf, sizeof(cacheFileNameBuf), "%s/%s", fileName, (const char*)FPSTR(playlistCacheFile));
 
 		// Decide if to use cacheFile. It needs to exist first...
 		if (gFSystem.exists(cacheFileNameBuf)) {     // Check if cacheFile (already) exists
@@ -266,6 +266,7 @@ Playlist *SdCard_ReturnPlaylist(const char *fileName, const uint32_t _playMode) 
 					// reopen for writing
 					cacheFile = gFSystem.open(cacheFileNameBuf, FILE_WRITE);
 					CacheFilePlaylist::serialize(cacheFile, *cachePlaylist);
+					cacheFile.close();
 					return cachePlaylist;
 				}
 				// we had some error reading the cache file, wait for the other to rebuild it
