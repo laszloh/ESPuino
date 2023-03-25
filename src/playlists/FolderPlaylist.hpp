@@ -121,6 +121,14 @@ public:
 		return setBase(base.c_str());
 	}
 
+	const char *getBase() const {
+		return base;
+	}
+
+	bool isRelative() const {
+		return (base!=nullptr);
+	}
+
 	bool push_back(const char *path) {
 		if(count >= capacity) {
 			return false;
