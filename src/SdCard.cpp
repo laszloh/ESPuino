@@ -213,14 +213,14 @@ char *SdCard_pickRandomSubdirectory(char *_directory) {
 
 /* Puts SD-file(s) or directory into a playlist
 	First element of array always contains the number of payload-items. */
-Playlist *SdCard_ReturnPlaylist(const char *fileName, const uint32_t _playMode) {
+std::optional<Playlist*> SdCard_ReturnPlaylist(const char *fileName, const uint32_t _playMode) {
 	bool rebuildCacheFile = false;
 	
 	// Look if file/folder requested really exists. If not => break.
 	File fileOrDirectory = gFSystem.open(fileName);
 	if (!fileOrDirectory) {
 		Log_Println((char *) FPSTR(dirOrFileDoesNotExist), LOGLEVEL_ERROR);
-		return nullptr;
+		return std::nullopt;
 	}
 
 	// Create linear playlist of caching-file
@@ -257,12 +257,10 @@ Playlist *SdCard_ReturnPlaylist(const char *fileName, const uint32_t _playMode) 
 
 	// Parse m3u-playlist and create linear-playlist out of it
 	if (_playMode == LOCAL_M3U) {
-		Playlist *playlist = nullptr;
 		if (fileOrDirectory && !fileOrDirectory.isDirectory() && fileOrDirectory.size()) {
 			// create a m3u playlist and parse the file
 
 			M3UPlaylist *m3uPlaylist = new M3UPlaylist();
-
 			if(m3uPlaylist->parseFile(fileOrDirectory)) {
 				// we got the data
 				return m3uPlaylist;
@@ -270,7 +268,7 @@ Playlist *SdCard_ReturnPlaylist(const char *fileName, const uint32_t _playMode) 
 
 		}
 		// if we reach here, we failed
-		return nullptr;
+		return std::nullopt;
 	}
 
 	// If we reached here, we did not read a cache file nor an m3u file. Means: read filenames from SD and make playlist of it
@@ -292,16 +290,18 @@ Playlist *SdCard_ReturnPlaylist(const char *fileName, const uint32_t _playMode) 
 		// something went wrong
 		Log_Println((char *) FPSTR(unableToAllocateMemForLinearPlaylist), LOGLEVEL_ERROR);
 		delete playlist;
-		return nullptr;
+		return std::nullopt;
 	}
 
-	if(cacheFilePath && rebuildCacheFile) {
-		File cacheFile = gFSystem.open(cacheFilePath.value(), FILE_WRITE);
-		if(cacheFile) {
-			CacheFilePlaylist::serialize(cacheFile, *playlist);
+	#ifdef CACHED_PLAYLIST_ENABLE
+		if(cacheFilePath && rebuildCacheFile) {
+			File cacheFile = gFSystem.open(cacheFilePath.value(), FILE_WRITE);
+			if(cacheFile) {
+				CacheFilePlaylist::serialize(cacheFile, *playlist);
+			}
+			cacheFile.close();
 		}
-		cacheFile.close();
-	}
+	#endif
 
 	snprintf(Log_Buffer, Log_BufferLength, "%s: %d", (char *) FPSTR(numberOfValidFiles), playlist->size());
 	Log_Println(Log_Buffer, LOGLEVEL_NOTICE);
