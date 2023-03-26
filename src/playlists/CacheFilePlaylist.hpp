@@ -74,38 +74,21 @@ public:
 
         // destroy old data, if present
         if(isValid()) {
-            this->clear();
+            clear();
         }
 
         deserializeHeader(cache);
 
-        // // reserve the memory
-        // if(!this->reserve(headerCount)) {
-        //     // we failed to reserve the needed memory
-        //     return false;
-        // }
- 
         // everything was ok read the files
         return readEntries(cache);
     }
-
-    bool setBase(const char *_base) {
-		// this->base = this->stringCopy(_base);
-        // headerFlags.relative = (this->base);
-		// return (this->base);
-	}
-
-    bool setBase(const String base) {
-		return setBase(base.c_str());
-	}
 
     virtual bool isValid() const override {
         return headerValid && FolderPlaylist::isValid();
     }
 
     void clear() {
-		FolderPlaylist::destroy();
-		FolderPlaylist::init();
+		destroy();
         headerValid = false;
         headerFlags = Flags();
         headerCount = 0;
