@@ -862,7 +862,7 @@ void AudioPlayer_TrackQueueDispatcher(const char *_itemToPlay, const uint32_t _l
 	strncpy(filename, _itemToPlay, sizeof(filename));
 	gPlayProperties.startAtFilePos = _lastPlayPos;
 	gPlayProperties.currentTrackNumber = _trackLastPlayed;
-	Playlist *playlist = nullptr;
+	std::optional<Playlist*> playlist = nullptr;
 
 	if (_playMode != WEBSTREAM) {
 		if (_playMode == RANDOM_SUBDIRECTORY_OF_DIRECTORY) {
@@ -879,7 +879,7 @@ void AudioPlayer_TrackQueueDispatcher(const char *_itemToPlay, const uint32_t _l
 
 	// Catch if error occured (e.g. file not found)
 	gPlayProperties.playMode = BUSY; // Show @Neopixel, if uC is busy with creating playlist
-	if (!playlist || playlist->size() == 0) {
+	if (!playlist || playlist.value()->size() == 0) {
 		Log_Println((char *) FPSTR(noMp3FilesInDir), LOGLEVEL_NOTICE);
 		System_IndicateError();
 		if (!gPlayProperties.pausePlay) {
@@ -894,7 +894,7 @@ void AudioPlayer_TrackQueueDispatcher(const char *_itemToPlay, const uint32_t _l
 	}
 
 	gPlayProperties.playMode = _playMode;
-	gPlayProperties.numberOfTracks = playlist->size();
+	gPlayProperties.numberOfTracks = playlist.value()->size();
 	// Set some default-values
 	gPlayProperties.repeatCurrentTrack = false;
 	gPlayProperties.repeatPlaylist = false;
@@ -915,7 +915,7 @@ void AudioPlayer_TrackQueueDispatcher(const char *_itemToPlay, const uint32_t _l
 		}
 
 		case SINGLE_TRACK_LOOP: {
-			playlist->setRepeatTrack(true);
+			playlist.value()->setRepeatTrack(true);
 			Log_Println((char *) FPSTR(modeSingleTrackLoop), LOGLEVEL_NOTICE);
 			break;
 		}
@@ -927,22 +927,22 @@ void AudioPlayer_TrackQueueDispatcher(const char *_itemToPlay, const uint32_t _l
 			gPlayProperties.numberOfTracks = 1; // Limit number to 1 even there are more entries in the playlist
 			Led_ResetToNightBrightness();
 			Log_Println((char *) FPSTR(modeSingleTrackRandom), LOGLEVEL_NOTICE);
-			AudioPlayer_RandomizePlaylist(playlist);
+			AudioPlayer_RandomizePlaylist(playlist.value());
 			break;
 		}
 
 		case AUDIOBOOK: { // Tracks need to be alph. sorted!
 			gPlayProperties.saveLastPlayPosition = true;
 			Log_Println((char *) FPSTR(modeSingleAudiobook), LOGLEVEL_NOTICE);
-			AudioPlayer_SortPlaylist(playlist);
+			AudioPlayer_SortPlaylist(playlist.value());
 			break;
 		}
 
 		case AUDIOBOOK_LOOP: { // Tracks need to be alph. sorted!
-			playlist->setRepeatPlaylist(true);
+			playlist.value()->setRepeatPlaylist(true);
 			gPlayProperties.saveLastPlayPosition = true;
 			Log_Println((char *) FPSTR(modeSingleAudiobookLoop), LOGLEVEL_NOTICE);
-			AudioPlayer_SortPlaylist(playlist);
+			AudioPlayer_SortPlaylist(playlist.value());
 			break;
 		}
 
@@ -950,27 +950,27 @@ void AudioPlayer_TrackQueueDispatcher(const char *_itemToPlay, const uint32_t _l
 		case RANDOM_SUBDIRECTORY_OF_DIRECTORY: {
 			snprintf(Log_Buffer, Log_BufferLength, "%s '%s' ", (char *) FPSTR(modeAllTrackAlphSorted), filename);
 			Log_Println(Log_Buffer, LOGLEVEL_NOTICE);
-			AudioPlayer_SortPlaylist(playlist);
+			AudioPlayer_SortPlaylist(playlist.value());
 			break;
 		}
 
 		case ALL_TRACKS_OF_DIR_RANDOM: {
 			Log_Println((char *) FPSTR(modeAllTrackRandom), LOGLEVEL_NOTICE);
-			AudioPlayer_RandomizePlaylist(playlist);
+			AudioPlayer_RandomizePlaylist(playlist.value());
 			break;
 		}
 
 		case ALL_TRACKS_OF_DIR_SORTED_LOOP: {
 			gPlayProperties.repeatPlaylist = true;
 			Log_Println((char *) FPSTR(modeAllTrackAlphSortedLoop), LOGLEVEL_NOTICE);
-			AudioPlayer_SortPlaylist(playlist);
+			AudioPlayer_SortPlaylist(playlist.value());
 			break;
 		}
 
 		case ALL_TRACKS_OF_DIR_RANDOM_LOOP: {
 			gPlayProperties.repeatPlaylist = true;
 			Log_Println((char *) FPSTR(modeAllTrackRandomLoop), LOGLEVEL_NOTICE);
-			AudioPlayer_RandomizePlaylist(playlist);
+			AudioPlayer_RandomizePlaylist(playlist.value());
 			break;
 		}
 
@@ -1000,7 +1000,7 @@ void AudioPlayer_TrackQueueDispatcher(const char *_itemToPlay, const uint32_t _l
 error:
 	System_IndicateError();
 	gPlayProperties.playMode = NO_PLAYLIST;
-	delete playlist;
+	delete playlist.value();
 }
 
 /* Wraps putString for writing settings into NVS for RFID-cards.
