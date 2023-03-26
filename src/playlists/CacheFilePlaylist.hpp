@@ -190,6 +190,9 @@ protected:
         // read the flags and the count
         headerFlags = read16(cache);
         headerCount = read32(cache);
+        
+        // reserve the memory
+        files.reserve(headerCount);
 
         cache.seek(sizeof(BinaryCacheHeader::crc) + sizeof(BinaryCacheHeader::sep), SeekMode::SeekCur);
         return true;
