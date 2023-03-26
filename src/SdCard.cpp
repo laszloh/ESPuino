@@ -293,13 +293,15 @@ std::optional<Playlist*> SdCard_ReturnPlaylist(const char *fileName, const uint3
 		return std::nullopt;
 	}
 
-	if(cacheFilePath && rebuildCacheFile) {
-		File cacheFile = gFSystem.open(cacheFilePath.value(), FILE_WRITE);
-		if(cacheFile) {
-			CacheFilePlaylist::serialize(cacheFile, *playlist);
+	#ifdef CACHED_PLAYLIST_ENABLE
+		if(cacheFilePath && rebuildCacheFile) {
+			File cacheFile = gFSystem.open(cacheFilePath.value(), FILE_WRITE);
+			if(cacheFile) {
+				CacheFilePlaylist::serialize(cacheFile, *playlist);
+			}
+			cacheFile.close();
 		}
-		cacheFile.close();
-	}
+	#endif
 
 	snprintf(Log_Buffer, Log_BufferLength, "%s: %d", (char *) FPSTR(numberOfValidFiles), playlist->size());
 	Log_Println(Log_Buffer, LOGLEVEL_NOTICE);
