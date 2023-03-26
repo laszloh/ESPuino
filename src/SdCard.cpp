@@ -259,13 +259,18 @@ Playlist *SdCard_ReturnPlaylist(const char *fileName, const uint32_t _playMode) 
 	if (_playMode == LOCAL_M3U) {
 		Playlist *playlist = nullptr;
 		if (fileOrDirectory && !fileOrDirectory.isDirectory() && fileOrDirectory.size()) {
-			// create a m3u plalist and parse the file
+			// create a m3u playlist and parse the file
 
-			// currently not implemented, so just drop this branch
-			return nullptr;
+			M3UPlaylist *m3uPlaylist = new M3UPlaylist();
+
+			if(m3uPlaylist->parseFile(fileOrDirectory)) {
+				// we got the data
+				return m3uPlaylist;
+			}
 
 		}
-		return playlist;
+		// if we reach here, we failed
+		return nullptr;
 	}
 
 	// If we reached here, we did not read a cache file nor an m3u file. Means: read filenames from SD and make playlist of it

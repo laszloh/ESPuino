@@ -8,8 +8,8 @@
 
 class M3UPlaylist : public FolderPlaylist {
 public:
-    M3UPlaylist(char divider = '/') : FolderPlaylist(divider), extended(false), valid(false) { }
-	M3UPlaylist(File &m3uFile, char divider = '/') : FolderPlaylist(divider), extended(false), valid(false) {
+    M3UPlaylist(size_t cap = 64, char divider = '/') : FolderPlaylist(cap, divider), extended(false), valid(false) { }
+	M3UPlaylist(File &m3uFile, size_t cap = 64,char divider = '/') : FolderPlaylist(cap, divider), extended(false), valid(false) {
         valid = parseFile(m3uFile);
 	}
     ~M3UPlaylist() { }
@@ -23,27 +23,16 @@ public:
         }
 
         // normal m3u is just a bunch of filenames, 1 / line
-        size_t lines = 0;
         f.seek(0);
         while(f.available()) {
-            char c = f.read();
-            if(c == '\n') {
-                lines++;
-            }
-        }
-
-        // if(!this->reserve(lines)){
-        //     return false;
-        // }
-
-        f.seek(0);
-        for(size_t i=0;i<lines;i++) {
             String line = f.readStringUntil('\n');
             line.trim();
-            if(!this->push_back(line)) {
+            if(!push_back(line)) {
                 return false;
             }
         }
+		// resize memory to fit our count
+		files.shrink_to_fit();
 
         valid = true;
         return true;
@@ -58,30 +47,11 @@ protected:
     bool extended;
     bool valid;
 
-    struct MetaInfo {
-        size_t duration;
-        String title;
-    };
-
     bool parseExtended(File &f) {
         // extended m3u file format
         // ignore all lines starting with '#'
-        size_t lines = 0;
 
-        f.seek(0);
         while(f.available()) {
-            const String line = f.readStringUntil('\n');
-            if(!line.startsWith("#")){
-                lines++;
-            }
-        }
-
-        // if(!this->reserve(lines)) {
-        //     return false;
-        // }
-
-        f.seek(0);
-        for(size_t i=0;i<lines;i++) {
             String line = f.readStringUntil('\n');
             line.trim(); 
             if(!line.startsWith("#")){
@@ -91,6 +61,8 @@ protected:
                 }
             }
         }
+        // resize memory to fit our count
+		files.shrink_to_fit();
 
         valid = true;
         return true;
