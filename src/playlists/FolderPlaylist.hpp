@@ -17,10 +17,10 @@ protected:
 
 public:
 	FolderPlaylist(size_t _capacity, char _divider = '/') 
-	  : base(pstring()), divider(_divider), files(std::vector<pstring, PsramAllocator<pstring>>(_capacity))
+	  : base(pstring()), files(std::vector<pstring, PsramAllocator<pstring>>(_capacity)), divider(_divider)
 	{ }
 	FolderPlaylist(char _divider = '/') 
-	  : base(pstring()),  divider(_divider), files(std::vector<pstring, PsramAllocator<pstring>>())
+	  : base(pstring()), files(std::vector<pstring, PsramAllocator<pstring>>()),  divider(_divider)
 	{ }
 
 	FolderPlaylist(File &folder, char _divider = '/') : divider(_divider) {
@@ -43,9 +43,7 @@ public:
 		// since we are enumerating, we don't have to think about absolute files with different bases 
 		base = getPath(folder);
 
-		// enumerate all files in the folder, we have to do it twice
-		
-		
+		// enumerate all files in the folder
 		while(true) {
 			File entry = folder.openNextFile();
 			if(!entry) {
