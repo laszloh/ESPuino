@@ -162,6 +162,68 @@ public:
 		std::shuffle(files.begin(), files.end(), rnd);
 	}
 
+	class Iterator {
+	public: 
+		using iterator_category = std::forward_iterator_tag;	// could be increased to random_access_iterator_tag
+		using difference_type   = std::ptrdiff_t;
+		using value_type        = pstring;
+		using pointer           = value_type*;
+		using reference         = value_type&;
+
+		class ArrowHelper {
+			value_type value;
+		public:
+			ArrowHelper(value_type _str) : value(_str) {}
+			pointer operator->() {
+				return &value;
+			}
+		};
+
+		__attribute__((always_inline)) inline const ArrowHelper operator->() const {
+			return ArrowHelper(operator*());
+		}
+
+		__attribute__((always_inline)) inline const value_type operator*() const {
+			return m_folder->base + m_folder->divider + *m_ptr;
+		}
+
+		// Constructor
+		__attribute__((always_inline)) inline Iterator(FolderPlaylist *folder, pointer ptr) : m_folder(folder), m_ptr(ptr) {}
+
+		// Copy Constructor & assignment
+		__attribute__((always_inline)) inline Iterator(const Iterator &rhs) : m_folder(rhs.m_folder), m_ptr(rhs.m_ptr) {}
+		__attribute__((always_inline)) inline Iterator &operator=(const Iterator &rhs) = default;
+
+		// Pointer increment
+		__attribute__((always_inline)) inline Iterator &operator++() {
+			m_ptr++;
+			return *this;
+		}
+		__attribute__((always_inline)) inline Iterator &operator++(int) {
+			Iterator tmp(*this);
+			m_ptr++;
+			return tmp;
+		}
+
+		// boolean operators
+		__attribute__((always_inline)) inline operator bool() const {
+			return (m_ptr);
+		}
+		__attribute__((always_inline)) inline bool operator==(const Iterator &rhs) {
+			return (m_ptr == rhs.m_ptr) && (m_folder == rhs.m_folder);
+		}
+		__attribute__((always_inline)) inline bool operator!=(const Iterator &rhs) {
+			return !operator==(rhs);
+		}
+
+	protected:
+		const FolderPlaylist *m_folder;
+		pointer m_ptr;
+	};
+
+	Iterator cbegin() { return Iterator(this, files.data()); }
+	Iterator cend() { return Iterator(this, (files.data() + files.size())); }
+
 protected:
 	virtual void destroy() override {
 		files.clear();
