@@ -39,7 +39,7 @@ public:
     }
 
     virtual bool isValid() const override {
-        // return valid && (this->files);
+        return valid && FolderPlaylist::isValid();
     }
 
 protected:
@@ -53,9 +53,9 @@ protected:
 
         while(f.available()) {
             String line = f.readStringUntil('\n');
-            line.trim(); 
             if(!line.startsWith("#")){
                 // this something we have to save
+                line.trim(); 
                 if(!this->push_back(line)) {
                     return false;
                 }
