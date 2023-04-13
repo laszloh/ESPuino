@@ -59,10 +59,10 @@
     //#define GPIO_HP_EN                      113         // To enable amp for headphones (GPIO or port-channel)
 
     // Control-buttons (set to 99 to DISABLE; 0->39 for GPIO; 100->115 for port-expander)
-    #define BUTTON_0                      4          // Button 0: GPIO to detect next
-    #define BUTTON_1                  2          // Button 1: GPIO to detect previous (Important: as of 19.11.2020 changed from 33 to 2; make sure to change in SD-MMC-mode)
-    #define BUTTON_2                 0          // Button 2: GPIO to detect pause/play
-    #define BUTTON_3            32          // (set to 99 to disable; 0->39 for GPIO; 100->115 for port-expander)
+    #define BUTTON_0                         4          // Button 0: GPIO to detect next
+    #define BUTTON_1                         2          // Button 1: GPIO to detect previous (Important: as of 19.11.2020 changed from 33 to 2; make sure to change in SD-MMC-mode)
+    #define BUTTON_2                         0          // Button 2: GPIO to detect pause/play
+    #define BUTTON_3                        32          // (set to 99 to disable; 0->39 for GPIO; 100->115 for port-expander)
     #define BUTTON_4                        99          // Button 4: unnamed optional button
     #define BUTTON_5                        99          // Button 5: unnamed optional button
 

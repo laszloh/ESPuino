@@ -64,10 +64,10 @@
     #define GPIO_PA_EN                      108         // To enable/disable amp for loudspeaker; connected to port-expander
 
     // Control-buttons
-    #define BUTTON_0                     102         // Next-Button: connected to port-expander
-    #define BUTTON_1                 100         // Prev-Button: connected to port-expander
-    #define BUTTON_2                101         // Pplay-Button: connected to port-expander
-    #define BUTTON_3            103         // Set to 99 to disable the button; connected to port-expander
+    #define BUTTON_0                        102         // Next-Button: connected to port-expander
+    #define BUTTON_1                        100         // Prev-Button: connected to port-expander
+    #define BUTTON_2                        101         // Pplay-Button: connected to port-expander
+    #define BUTTON_3                        103         // Set to 99 to disable the button; connected to port-expander
     #define BUTTON_4                        104         // Button 4: connected to port-expander
     #define BUTTON_5                        105         // Button 5: connected to port-expander
 
