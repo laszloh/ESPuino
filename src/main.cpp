@@ -58,7 +58,7 @@ uint32_t bootCount = 0;
 
 // I2C
 #ifdef I2C_2_ENABLE
-TwoWire i2cBusTwo = TwoWire(1);
+TwoWire &i2cBusTwo = Wire1;
 #endif
 
 // If a problem occurs, remembering last rfid can lead into a boot loop that's hard to escape of.
@@ -117,10 +117,8 @@ void setup() {
 	Queues_Init();
 
 	// Make sure all wakeups can be enabled *before* initializing RFID, which can enter sleep immediately
-	Button_Init(); // To preseed internal button-storage with values
-
+	button::init(); // To preseed internal button-storage with values
 #ifdef PN5180_ENABLE_LPCD
-	System_Init_LPCD();
 	Rfid_Init();
 #endif
 
@@ -237,7 +235,9 @@ void loop() {
 	}
 	AudioPlayer_Cyclic();
 	Battery_Cyclic();
-	Button_Cyclic();
+
+	button::cyclic();
+
 	System_Cyclic();
 	Rfid_PreferenceLookupHandler();
 

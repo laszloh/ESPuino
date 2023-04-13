@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include "settings.h"
+#include <FastLED.h>
 
 #include "Button.h"
 
@@ -8,325 +9,234 @@
 #include "Port.h"
 #include "System.h"
 
-bool gButtonInitComplete = false;
+namespace button {
+
+bool intiStatus = false;
 
 // Only enable those buttons that are not disabled (99 or >115)
 // 0 -> 39: GPIOs
 // 100 -> 115: Port-expander
-#if (NEXT_BUTTON >= 0 && NEXT_BUTTON <= MAX_GPIO)
-	#define BUTTON_0_ENABLE
-#elif (NEXT_BUTTON >= 100 && NEXT_BUTTON <= 115)
-	#define EXPANDER_0_ENABLE
-#endif
-#if (PREVIOUS_BUTTON >= 0 && PREVIOUS_BUTTON <= MAX_GPIO)
-	#define BUTTON_1_ENABLE
-#elif (PREVIOUS_BUTTON >= 100 && PREVIOUS_BUTTON <= 115)
-	#define EXPANDER_1_ENABLE
-#endif
-#if (PAUSEPLAY_BUTTON >= 0 && PAUSEPLAY_BUTTON <= MAX_GPIO)
-	#define BUTTON_2_ENABLE
-#elif (PAUSEPLAY_BUTTON >= 100 && PAUSEPLAY_BUTTON <= 115)
-	#define EXPANDER_2_ENABLE
-#endif
-#if (ROTARYENCODER_BUTTON >= 0 && ROTARYENCODER_BUTTON <= MAX_GPIO)
-	#define BUTTON_3_ENABLE
-#elif (ROTARYENCODER_BUTTON >= 100 && ROTARYENCODER_BUTTON <= 115)
-	#define EXPANDER_3_ENABLE
-#endif
-#if (BUTTON_4 >= 0 && BUTTON_4 <= MAX_GPIO)
-	#define BUTTON_4_ENABLE
-#elif (BUTTON_4 >= 100 && BUTTON_4 <= 115)
-	#define EXPANDER_4_ENABLE
-#endif
-#if (BUTTON_5 >= 0 && BUTTON_5 <= MAX_GPIO)
-	#define BUTTON_5_ENABLE
-#elif (BUTTON_5 >= 100 && BUTTON_5 <= 115)
-	#define EXPANDER_5_ENABLE
-#endif
+static std::array gButtons = std::to_array<t_button>({
+	{BUTTON_0, BUTTON_0_ACTIVE_STATE, BUTTON_0_SHORT, BUTTON_0_LONG, BUTTON_0_LONG_TRIGGER},
+	{BUTTON_1, BUTTON_1_ACTIVE_STATE, BUTTON_1_SHORT, BUTTON_1_LONG, BUTTON_1_LONG_TRIGGER},
+	{BUTTON_2, BUTTON_2_ACTIVE_STATE, BUTTON_2_SHORT, BUTTON_2_LONG, BUTTON_2_LONG_TRIGGER},
+	{BUTTON_3, BUTTON_3_ACTIVE_STATE, BUTTON_3_SHORT, BUTTON_3_LONG, BUTTON_3_LONG_TRIGGER},
+	{BUTTON_4, BUTTON_4_ACTIVE_STATE, BUTTON_4_SHORT, BUTTON_4_LONG, BUTTON_4_LONG_TRIGGER},
+	{BUTTON_5, BUTTON_5_ACTIVE_STATE, BUTTON_5_SHORT, BUTTON_5_LONG, BUTTON_5_LONG_TRIGGER},
+});
 
-// Allocate gButtons in PSRAM if available
-EXT_RAM_BSS_ATTR t_button gButtons[7]; // next + prev + pplay + rotEnc + button4 + button5 + dummy-button
+struct MultiButtonAction {
+	uint8_t btn1 {99};
+	uint8_t btn2 {99};
+	uint8_t cmd {CMD_NOTHING};
+
+	constexpr MultiButtonAction(uint8_t btn1, uint8_t btn2, uint8_t cmd)
+		: btn1(btn1)
+		, btn2(btn2)
+		, cmd(cmd) { }
+	constexpr MultiButtonAction() { }
+};
+
+/**
+ * @brief Creates the array of MultiButtonActions of all combinations which are enabled
+ *
+ * This function purges all multi button combinations with CMD_NOTHING and returns the remaining active commands as a constexpr std::array of MultiButtonActions.
+ * @return constexpr std::array<MultiButtonAction, [numActions]>
+ */
+consteval auto createMultiButtonArray() {
+	struct MultiButtonHelper {
+		uint8_t btn1, btn2, cmd;
+		constexpr MultiButtonHelper(uint8_t btn1, uint8_t btn2, uint8_t cmd)
+			: btn1(btn1)
+			, btn2(btn2)
+			, cmd(cmd) { }
+	};
+
+	// this is needed since we need to know all the button combination from the settings file
+	constexpr auto buttonToArray = std::to_array<MultiButtonHelper>({
+		// Button 0 combies
+		{0, 1, BUTTON_MULTI_01},
+		{0, 2, BUTTON_MULTI_02},
+		{0, 3, BUTTON_MULTI_03},
+		{0, 4, BUTTON_MULTI_04},
+		{0, 5, BUTTON_MULTI_05},
+
+		// Button 1 combies
+		{1, 2, BUTTON_MULTI_12},
+		{1, 3, BUTTON_MULTI_13},
+		{1, 4, BUTTON_MULTI_14},
+		{1, 5, BUTTON_MULTI_15},
+
+		// Button 2 combies
+		{2, 3, BUTTON_MULTI_23},
+		{2, 4, BUTTON_MULTI_24},
+		{2, 5, BUTTON_MULTI_25},
+
+		// Button 3 combies
+		{3, 4, BUTTON_MULTI_34},
+		{3, 5, BUTTON_MULTI_35},
+
+		// Button 4 combies
+		{4, 5, BUTTON_MULTI_45},
+	});
+
+	// this lambda calculates the final size of the command array, we are only interested in commands != CMD_NOTHING
+	constexpr auto numMultiEvents = [buttonToArray]() {
+		size_t count = 0;
+		for (const auto e : buttonToArray) {
+			if (e.cmd != CMD_NOTHING) {
+				count++;
+			}
+		}
+
+		return count;
+	};
+
+	// create the return array...
+	std::array<MultiButtonAction, numMultiEvents()> btnActionArray {};
+	size_t idx = 0;
+
+	// and populate it with all combinations with cmd != CMD_NOTHING
+	for (const auto e : buttonToArray) {
+		if (e.cmd != CMD_NOTHING) {
+			// add element to array
+			btnActionArray[idx] = MultiButtonAction(e.btn1, e.btn2, e.cmd);
+			idx++;
+		}
+	}
+
+	// and return it
+	return btnActionArray;
+}
+
+constexpr auto multiBtnActions = createMultiButtonArray(); // The object holding all registered multi button commands
+
 uint8_t gShutdownButton = 99; // Helper used for Neopixel: stores button-number of shutdown-button
-uint16_t gLongPressTime = 0;
+
+void doButtonAction(void);
+
+std::optional<const t_button> getShutdownButton() {
+	if (gShutdownButton != 99) {
+		return gButtons[gShutdownButton];
+	}
+	return std::nullopt;
+}
 
 #ifdef PORT_EXPANDER_ENABLE
 extern bool Port_AllowReadFromPortExpander;
 #endif
 
-static volatile SemaphoreHandle_t Button_TimerSemaphore;
+void init() {
+	// process all buttons
+	uint8_t idx = 0;
+	for (auto it = gButtons.begin(); it != gButtons.end(); it++, idx++) {
+		if (!it->enabled) {
+			continue;
+		}
 
-hw_timer_t *Button_Timer = NULL;
-#if (defined(ESP_ARDUINO_VERSION_MAJOR) && (ESP_ARDUINO_VERSION_MAJOR < 3))
-static void IRAM_ATTR onTimer();
-#else
-static void onTimer();
-#endif
-static void Button_DoButtonActions(void);
-
-void Button_Init() {
-#if (WAKEUP_BUTTON >= 0 && WAKEUP_BUTTON <= MAX_GPIO)
-	if (ESP_ERR_INVALID_ARG == esp_sleep_enable_ext0_wakeup((gpio_num_t) WAKEUP_BUTTON, 0)) {
-		Log_Printf(LOGLEVEL_ERROR, wrongWakeUpGpio, WAKEUP_BUTTON);
-	}
-#endif
-
-#ifdef NEOPIXEL_ENABLE // Try to find button that is used for shutdown via longpress-action (only necessary for Neopixel)
-	#if (defined(BUTTON_0_ENABLE) || defined(EXPANDER_0_ENABLE)) && (BUTTON_0_LONG == CMD_SLEEPMODE)
-	gShutdownButton = 0;
-	#elif (defined(BUTTON_1_ENABLE) || defined(EXPANDER_1_ENABLE)) && (BUTTON_1_LONG == CMD_SLEEPMODE)
-	gShutdownButton = 1;
-	#elif (defined(BUTTON_2_ENABLE) || defined(EXPANDER_2_ENABLE)) && (BUTTON_2_LONG == CMD_SLEEPMODE)
-	gShutdownButton = 2;
-	#elif (defined(BUTTON_3_ENABLE) || defined(EXPANDER_3_ENABLE)) && (BUTTON_3_LONG == CMD_SLEEPMODE)
-	gShutdownButton = 3;
-	#elif (defined(BUTTON_4_ENABLE) || defined(EXPANDER_4_ENABLE)) && (BUTTON_4_LONG == CMD_SLEEPMODE)
-	gShutdownButton = 4;
-	#elif (defined(BUTTON_5_ENABLE) || defined(EXPANDER_5_ENABLE)) && (BUTTON_5_LONG == CMD_SLEEPMODE)
-	gShutdownButton = 5;
-	#endif
-#endif
-
-// Activate internal pullups for all enabled buttons connected to GPIOs
-#ifdef BUTTON_0_ENABLE
-	if (BUTTON_0_ACTIVE_STATE) {
-		pinMode(NEXT_BUTTON, INPUT);
-	} else {
-		pinMode(NEXT_BUTTON, INPUT_PULLUP);
-	}
-#endif
-#ifdef BUTTON_1_ENABLE
-	if (BUTTON_1_ACTIVE_STATE) {
-		pinMode(PREVIOUS_BUTTON, INPUT);
-	} else {
-		pinMode(PREVIOUS_BUTTON, INPUT_PULLUP);
-	}
-#endif
-#ifdef BUTTON_2_ENABLE
-	if (BUTTON_2_ACTIVE_STATE) {
-		pinMode(PAUSEPLAY_BUTTON, INPUT);
-	} else {
-		pinMode(PAUSEPLAY_BUTTON, INPUT_PULLUP);
-	}
-#endif
-#ifdef BUTTON_3_ENABLE
-	if (BUTTON_3_ACTIVE_STATE) {
-		pinMode(ROTARYENCODER_BUTTON, INPUT);
-	} else {
-		pinMode(ROTARYENCODER_BUTTON, INPUT_PULLUP);
-	}
-#endif
-#ifdef BUTTON_4_ENABLE
-	if (BUTTON_4_ACTIVE_STATE) {
-		pinMode(BUTTON_4, INPUT);
-	} else {
-		pinMode(BUTTON_4, INPUT_PULLUP);
-	}
-#endif
-#ifdef BUTTON_5_ENABLE
-	if (BUTTON_5_ACTIVE_STATE) {
-		pinMode(BUTTON_5, INPUT);
-	} else {
-		pinMode(BUTTON_5, INPUT_PULLUP);
-	}
-#endif
-
-	// Create 1000Hz-HW-Timer (currently only used for buttons)
-	Button_TimerSemaphore = xSemaphoreCreateBinary();
-#if (defined(ESP_ARDUINO_VERSION_MAJOR) && (ESP_ARDUINO_VERSION_MAJOR >= 3))
-	Button_Timer = timerBegin(1000000); // Prescaler: CPU-clock in MHz
-	timerAttachInterrupt(Button_Timer, &onTimer);
-	timerAlarm(Button_Timer, 10000, true, 0); // 100 Hz
-#else
-	Button_Timer = timerBegin(0, 240, true); // Prescaler: CPU-clock in MHz
-	timerAttachInterrupt(Button_Timer, &onTimer, true);
-	timerAlarmWrite(Button_Timer, 10000, true); // 100 Hz
-	timerAlarmEnable(Button_Timer);
-#endif
-}
-
-// Read current state of all enabled buttons
-static void Button_ReadAllStates(void) {
-#if defined(BUTTON_0_ENABLE) || defined(EXPANDER_0_ENABLE)
-	gButtons[0].currentState = Port_Read(NEXT_BUTTON) ^ BUTTON_0_ACTIVE_STATE;
-#endif
-#if defined(BUTTON_1_ENABLE) || defined(EXPANDER_1_ENABLE)
-	gButtons[1].currentState = Port_Read(PREVIOUS_BUTTON) ^ BUTTON_1_ACTIVE_STATE;
-#endif
-#if defined(BUTTON_2_ENABLE) || defined(EXPANDER_2_ENABLE)
-	gButtons[2].currentState = Port_Read(PAUSEPLAY_BUTTON) ^ BUTTON_2_ACTIVE_STATE;
-#endif
-#if defined(BUTTON_3_ENABLE) || defined(EXPANDER_3_ENABLE)
-	gButtons[3].currentState = Port_Read(ROTARYENCODER_BUTTON) ^ BUTTON_3_ACTIVE_STATE;
-#endif
-#if defined(BUTTON_4_ENABLE) || defined(EXPANDER_4_ENABLE)
-	gButtons[4].currentState = Port_Read(BUTTON_4) ^ BUTTON_4_ACTIVE_STATE;
-#endif
-#if defined(BUTTON_5_ENABLE) || defined(EXPANDER_5_ENABLE)
-	gButtons[5].currentState = Port_Read(BUTTON_5) ^ BUTTON_5_ACTIVE_STATE;
-#endif
-}
-
-// Update press/release state for a single button with debouncing
-static void Button_UpdateState(t_button &btn, unsigned long currentTimestamp) {
-	bool const stateChanged = btn.currentState != btn.lastState;
-	bool const debounceElapsed = currentTimestamp - btn.lastPressedTimestamp > buttonDebounceInterval;
-
-	if (stateChanged && debounceElapsed) {
-		bool const buttonPressed = !btn.currentState;
-		if (buttonPressed) {
-			btn.isPressed = true;
-			btn.lastPressedTimestamp = currentTimestamp;
-			if (!btn.firstPressedTimestamp) {
-				btn.firstPressedTimestamp = currentTimestamp;
+		if (it->internal) {
+			const auto mode = (it->inverted) ? INPUT_PULLDOWN : INPUT_PULLUP;
+			pinMode(it->gpio, mode);
+			if (it->wakeButton) {
+				// register wakeup
+				if (esp_sleep_enable_ext0_wakeup((gpio_num_t) it->gpio, (it->inverted) ? 1 : 0) == ESP_ERR_INVALID_ARG) {
+					Log_Printf(LOGLEVEL_ERROR, wrongWakeUpGpio, WAKEUP_BUTTON);
+				}
 			}
-		} else {
-			btn.isReleased = true;
-			btn.lastReleasedTimestamp = currentTimestamp;
-			btn.firstPressedTimestamp = 0;
+		}
+
+		if (it->cmdLong == CMD_SLEEPMODE) {
+			gShutdownButton = idx;
 		}
 	}
-	btn.lastState = btn.currentState;
 }
 
 // If timer-semaphore is set, read buttons (unless controls are locked)
-void Button_Cyclic() {
-	if (xSemaphoreTake(Button_TimerSemaphore, 0) != pdTRUE) {
-		return;
-	}
-
-	unsigned long currentTimestamp = millis();
-
+void cyclic() {
+	static CEveryNMillis poll(10);
+	if(poll) {
+		unsigned long currentTimestamp = millis();
 #ifdef PORT_EXPANDER_ENABLE
-	Port_Cyclic();
+		Port_Cyclic();
 #endif
 
-	if (System_AreControlsLocked()) {
-		return;
-	}
-
-	Button_ReadAllStates();
-
-	for (uint8_t i = 0; i < sizeof(gButtons) / sizeof(gButtons[0]); i++) {
-		Button_UpdateState(gButtons[i], currentTimestamp);
-	}
-
-	gButtonInitComplete = true;
-	Button_DoButtonActions();
-}
-
-// Multi-button combination configuration: {btn1, btn2, prefsKey, defaultCmd}
-static const struct {
-	uint8_t btn1;
-	uint8_t btn2;
-	const char *prefsKey;
-	uint8_t defaultCmd;
-} multiButtonCombos[] = {
-	{0, 1, "btnMulti01", BUTTON_MULTI_01},
-	{0, 2, "btnMulti02", BUTTON_MULTI_02},
-	{0, 3, "btnMulti03", BUTTON_MULTI_03},
-	{0, 4, "btnMulti04", BUTTON_MULTI_04},
-	{0, 5, "btnMulti05", BUTTON_MULTI_05},
-	{1, 2, "btnMulti12", BUTTON_MULTI_12},
-	{1, 3, "btnMulti13", BUTTON_MULTI_13},
-	{1, 4, "btnMulti14", BUTTON_MULTI_14},
-	{1, 5, "btnMulti15", BUTTON_MULTI_15},
-	{2, 3, "btnMulti23", BUTTON_MULTI_23},
-	{2, 4, "btnMulti24", BUTTON_MULTI_24},
-	{2, 5, "btnMulti25", BUTTON_MULTI_25},
-	{3, 4, "btnMulti34", BUTTON_MULTI_34},
-	{3, 5, "btnMulti35", BUTTON_MULTI_35},
-	{4, 5, "btnMulti45", BUTTON_MULTI_45},
-};
-
-// Check for multi-button combinations and execute corresponding action
-static bool Button_HandleMultiButtonPress(void) {
-	for (const auto &combo : multiButtonCombos) {
-		if (gButtons[combo.btn1].isPressed && gButtons[combo.btn2].isPressed) {
-			gButtons[combo.btn1].isPressed = false;
-			gButtons[combo.btn2].isPressed = false;
-			Cmd_Action(gPrefsSettings.getUChar(combo.prefsKey, combo.defaultCmd));
-			return true;
-		}
-	}
-	return false;
-}
-
-// Button command configuration: {prefsKeyShort, prefsKeyLong, defaultShort, defaultLong}
-static const struct {
-	const char *prefsKeyShort;
-	const char *prefsKeyLong;
-	uint8_t defaultShort;
-	uint8_t defaultLong;
-} buttonCmdConfig[] = {
-	{"btnShort0", "btnLong0", BUTTON_0_SHORT, BUTTON_0_LONG},
-	{"btnShort1", "btnLong1", BUTTON_1_SHORT, BUTTON_1_LONG},
-	{"btnShort2", "btnLong2", BUTTON_2_SHORT, BUTTON_2_LONG},
-	{"btnShort3", "btnLong3", BUTTON_3_SHORT, BUTTON_3_LONG},
-	{"btnShort4", "btnLong4", BUTTON_4_SHORT, BUTTON_4_LONG},
-	{"btnShort5", "btnLong5", BUTTON_5_SHORT, BUTTON_5_LONG},
-};
-
-// Handle a single button's short/long press action
-static void Button_HandleSinglePress(uint8_t i, unsigned long currentTimestamp) {
-	uint8_t Cmd_Short = gPrefsSettings.getUChar(buttonCmdConfig[i].prefsKeyShort, buttonCmdConfig[i].defaultShort);
-	uint8_t Cmd_Long = gPrefsSettings.getUChar(buttonCmdConfig[i].prefsKeyLong, buttonCmdConfig[i].defaultLong);
-	unsigned long const pressDuration = currentTimestamp - gButtons[i].lastPressedTimestamp;
-	bool const wasReleased = gButtons[i].lastReleasedTimestamp > gButtons[i].lastPressedTimestamp;
-
-	// Handle button release (short or long press completed)
-	if (wasReleased) {
-		unsigned long const releaseDuration = gButtons[i].lastReleasedTimestamp - gButtons[i].lastPressedTimestamp;
-		bool const wasShortPress = releaseDuration < intervalToLongPress;
-
-		if (wasShortPress) {
-			Cmd_Action(Cmd_Short);
-		} else if (Cmd_Long == CMD_SLEEPMODE) {
-			// Sleep-mode only triggers on release to prevent immediate wake-up
-			Cmd_Action(Cmd_Long);
-		}
-
-		gButtons[i].isPressed = false;
-		return;
-	}
-
-	// Handle volume buttons with repeat functionality
-	if (Cmd_Long == CMD_VOLUMEUP || Cmd_Long == CMD_VOLUMEDOWN) {
-		if (pressDuration <= intervalToLongPress) {
+		if (System_AreControlsLocked()) {
 			return;
 		}
-		uint16_t remainder = pressDuration % intervalToLongPress;
-		if (remainder < gLongPressTime) {
-			Cmd_Action(Cmd_Long);
-		}
-		gLongPressTime = remainder;
-		return;
-	}
 
-	// Handle other long-press actions (except sleep mode which triggers on release)
-	if (Cmd_Long != CMD_SLEEPMODE && pressDuration > intervalToLongPress) {
-		gButtons[i].isPressed = false;
-		Cmd_Action(Cmd_Long);
+		// Iterate over all buttons in struct-array
+		for (auto &e : gButtons) {
+			if (!e.enabled) {
+				continue;
+			}
+
+			// Buttons can be mixed between GPIO and port-expander.
+			// But at the same time only one of them can be for example BUTTON_0
+			bool currentState = Port_Read(e.gpio) ^ e.inverted;
+
+			if (currentState != e.lastState && currentTimestamp - e.lastPressedTimestamp > buttonDebounceInterval) {
+				if (!currentState) {
+					e.isPressed = true;
+					e.lastPressedTimestamp = currentTimestamp;
+				} else {
+					e.lastReleasedTimestamp = currentTimestamp;
+				}
+			}
+			e.lastState = currentState;
+		}
 	}
+	intiStatus = true;
+	doButtonAction();
+}
+
+bool isInitComplete() {
+	return intiStatus;
 }
 
 // Do corresponding actions for all buttons
-void Button_DoButtonActions(void) {
-	if (Button_HandleMultiButtonPress()) {
-		return;
+void doButtonAction(void) {
+
+	// check all registered multi buttons for an action
+	for (auto &mb : multiBtnActions) {
+		if (gButtons[mb.btn1].isPressed && gButtons[mb.btn2].isPressed) {
+			gButtons[mb.btn1].isPressed = false;
+			gButtons[mb.btn2].isPressed = false;
+			Cmd_Action(mb.cmd);
+			return;
+		}
 	}
 
-	unsigned long currentTimestamp = millis();
-	for (uint8_t i = 0; i < 7; i++) {
-		if (gButtons[i].isPressed) {
-			Button_HandleSinglePress(i, currentTimestamp);
+	// there was no multi button action, check all single button actions
+	for (auto &e : gButtons) {
+		if (e.isPressed) {
+			if (e.lastReleasedTimestamp > e.lastPressedTimestamp) {
+				if (e.lastReleasedTimestamp - e.lastPressedTimestamp < intervalToLongPress) {
+					// execute the short command
+					Cmd_Action(e.cmdShort);
+				} else if (e.longTrigger == ButtonLongTrigger::OnRelease) {
+					// we have a released long press
+					Cmd_Action(e.cmdLong);
+				}
+				e.isPressed = false;
+			} else {
+				const uint32_t currentTimestamp = millis();
+				if (currentTimestamp - e.lastPressedTimestamp > intervalToLongPress) {
+					if (e.longTrigger == ButtonLongTrigger::OnTimeout) {
+						// we have a long press
+						Cmd_Action(e.cmdLong);
+						e.isPressed = false;
+					} else if (e.longTrigger == ButtonLongTrigger::OnRetigger) {
+						// calculate remainder
+						const uint32_t remainder = (currentTimestamp - e.lastPressedTimestamp) % intervalToLongPress;
+						if (remainder < e.longPressRemainder) {
+							Cmd_Action(e.cmdLong);
+						}
+						e.longPressRemainder = remainder;
+					}
+				}
+			}
 		}
 	}
 }
 
-#if (defined(ESP_ARDUINO_VERSION_MAJOR) && (ESP_ARDUINO_VERSION_MAJOR < 3))
-void IRAM_ATTR onTimer() {
-#else
-void onTimer() {
-#endif
-	xSemaphoreGiveFromISR(Button_TimerSemaphore, NULL);
-}
+} // namespace button

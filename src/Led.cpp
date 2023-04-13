@@ -26,9 +26,6 @@
 	#define LED_VOLUME_INDICATOR_RETURN_DELAY 1000U
 	#define LED_VOLUME_INDICATOR_NUM_CYCLES	  (LED_VOLUME_INDICATOR_RETURN_DELAY / 20)
 
-extern t_button gButtons[7]; // next + prev + pplay + rotEnc + button4 + button5 + dummy-button
-extern uint8_t gShutdownButton;
-
 static uint32_t Led_Indicators = 0u;
 static uint8_t Led_savedBrightness;
 
@@ -333,8 +330,10 @@ void Led_DrawIdleDots(CRGBSet &leds, uint8_t offset, CRGB::HTMLColorCode color) 
 }
 
 bool CheckForPowerButtonAnimation() {
-	if (gShutdownButton < (sizeof(gButtons) / sizeof(gButtons[0])) - 1) { // Only show animation, if CMD_SLEEPMODE was assigned to BUTTON_n_LONG + button is pressed
-		if (gButtons[gShutdownButton].isPressed && (millis() - gButtons[gShutdownButton].firstPressedTimestamp >= 150) && gButtonInitComplete) {
+	auto sleepBtn = button::getShutdownButton();
+	if (sleepBtn) { // Only show animation, if CMD_SLEEPMODE was assigned to BUTTON_n_LONG + button is pressed
+		const uint32_t pressStartTimestamp = sleepBtn->lastReleasedTimestamp - sleepBtn->lastPressedTimestamp;
+		if (sleepBtn->isPressed && (millis() - pressStartTimestamp >= 150) && button::isInitComplete()) {
 			return true;
 		}
 	}
@@ -602,10 +601,16 @@ AnimationReturnType Animation_Shutdown(const bool startNewAnimation, CRGBSet &le
 	if (startNewAnimation) {
 		animationIndex = 0;
 	}
+	auto sleepBtn = button::getShutdownButton();
+	if (!sleepBtn) {
+		// we do not have an animation button o.O
+		return AnimationReturnType(false, 0);
+	}
 
-	if (gLedSettings.numIndicatorLeds == 1) {
+	const uint32_t pressStartTimestamp = sleepBtn->lastReleasedTimestamp - sleepBtn->lastPressedTimestamp;
+	if(gLedSettings.numIndicatorLeds == 1) {
 		leds = CRGB::Black;
-		if (millis() - gButtons[gShutdownButton].firstPressedTimestamp <= intervalToLongPress) {
+		if (millis() - pressStartTimestamp <= intervalToLongPress) {
 			leds[0] = CRGB::Red;
 			animationDelay = 5;
 		} else {
@@ -617,9 +622,9 @@ AnimationReturnType Animation_Shutdown(const bool startNewAnimation, CRGBSet &le
 		}
 		animationActive = false;
 	} else {
-		if ((millis() - gButtons[gShutdownButton].firstPressedTimestamp >= intervalToLongPress) && (animationIndex >= leds.size())) {
+		if ((millis() - pressStartTimestamp >= intervalToLongPress) && (animationIndex >= leds.size())) {
 			animationDelay = 50;
-			if (!gButtons[gShutdownButton].isPressed) {
+			if (!sleepBtn->isPressed) {
 				// increase animation index to bail out, if we had a kombi-button
 				animationIndex++;
 				if (animationIndex >= leds.size() + 3) {
@@ -632,7 +637,7 @@ AnimationReturnType Animation_Shutdown(const bool startNewAnimation, CRGBSet &le
 			}
 			if (animationIndex < leds.size()) {
 				leds[Led_Address(animationIndex)] = CRGB::Red;
-				if (gButtons[gShutdownButton].currentState) {
+				if (!sleepBtn->isPressed) {
 					animationDelay = 5;
 					animationActive = false;
 				} else {

@@ -120,5 +120,12 @@
 #define VIRTUAL_RFID_CARD_09 "900000000009"
 #define VIRTUAL_RFID_CARD_10 "900000000010"
 
+// long button press trigger modi
+enum class ButtonLongTrigger : uint8_t {
+    OnRelease,
+    OnTimeout,
+    OnRetigger
+};
+
 // Debug
 #define PRINT_TASK_STATS 199 // Prints task stats for debugging, needs CONFIG_FREERTOS_USE_TRACE_FACILITY=y and CONFIG_FREERTOS_GENERATE_RUN_TIME_STATS=y in sdkconfig.defaults

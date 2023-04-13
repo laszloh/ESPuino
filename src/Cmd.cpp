@@ -433,6 +433,9 @@ void Cmd_Action(const uint16_t mod) {
 			break;
 		}
 
+		case CMD_NOTHING:
+			break;
+
 		default: {
 			Log_Printf(LOGLEVEL_ERROR, modificatorDoesNotExist, mod);
 			System_IndicateError();
