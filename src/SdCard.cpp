@@ -170,6 +170,45 @@ std::optional<const String> SdCard_pickRandomSubdirectory(const char *_directory
 	return path;
 }
 
+static std::optional<Playlist*> SdCard_ParseM3UPlaylist(File f, bool forceExtended = false) {
+	const String line = f.readStringUntil('\n');
+	bool extended = line.startsWith("#EXTM3U") || forceExtended;
+	FolderPlaylist *playlist = new FolderPlaylist();
+
+	if(extended) {
+        // extended m3u file format
+        // ignore all lines starting with '#'
+
+        while(f.available()) {
+            String line = f.readStringUntil('\n');
+            if(!line.startsWith("#")){
+                // this something we have to save
+                line.trim(); 
+                if(!playlist->push_back(line)) {
+					delete playlist;
+                    return std::nullopt;
+                }
+            }
+        }
+        // resize memory to fit our count
+		playlist->compress();
+        return playlist;
+	}
+
+	// normal m3u is just a bunch of filenames, 1 / line
+	f.seek(0);
+	while(f.available()) {
+		String line = f.readStringUntil('\n');
+		line.trim();
+		if(!playlist->push_back(line)) {
+			delete playlist;
+			return std::nullopt;
+		}
+	}
+	// resize memory to fit our count
+	playlist->compress();
+	return playlist;
+}
 
 /* Puts SD-file(s) or directory into a playlist
 	First element of array always contains the number of payload-items. */
@@ -219,13 +258,7 @@ std::optional<Playlist*> SdCard_ReturnPlaylist(const char *fileName, const uint3
 	if (_playMode == LOCAL_M3U) {
 		if (fileOrDirectory && !fileOrDirectory.isDirectory() && fileOrDirectory.size()) {
 			// create a m3u playlist and parse the file
-
-			M3UPlaylist *m3uPlaylist = new M3UPlaylist();
-			if(m3uPlaylist->parseFile(fileOrDirectory)) {
-				// we got the data
-				return m3uPlaylist;
-			}
-
+			return SdCard_ParseM3UPlaylist(fileOrDirectory);
 		}
 		// if we reach here, we failed
 		return std::nullopt;

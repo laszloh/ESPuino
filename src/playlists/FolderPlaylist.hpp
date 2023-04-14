@@ -107,6 +107,10 @@ public:
 		return push_back(path.c_str());
 	}
 
+	void compress() {
+		files.shrink_to_fit();
+	}
+
 	void clear() {
 		destroy();
 		init();
