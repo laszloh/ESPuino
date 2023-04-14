@@ -43,22 +43,16 @@ public:
 
 		// enumerate all files in the folder
 		while(true) {
-			File entry = folder.openNextFile();
-			if(!entry) {
+			bool isDir;
+			const String path = folder.getNextFileName(&isDir);
+			if(!path) {
 				break;
 			}
-			if(entry.isDirectory()) {
+			if(isDir) {
 				continue;
 			}
-			const char *path;
-			#if ESP_ARDUINO_VERSION_MAJOR >= 2
-				path = entry.name();
-			#else
-				path = entry.name();
-				// remove base, since in Arduino 1, name return the path
-				path = path + base.length();
-			#endif
-			if(fileValid(path)) {
+
+			if(fileValid(path.c_str())) {
 				// push this file into the array
 				bool success = push_back(path);
 				if(!success) {

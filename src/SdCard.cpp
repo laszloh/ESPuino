@@ -124,90 +124,50 @@ bool fileValid(const char *_fileItem) {
 
 
 // Takes a directory as input and returns a random subdirectory from it
-char *SdCard_pickRandomSubdirectory(char *_directory) {
+std::optional<const String> SdCard_pickRandomSubdirectory(const char *_directory) {
 	// Look if file/folder requested really exists. If not => break.
 	File directory = gFSystem.open(_directory);
 	if (!directory) {
+		// does not exists
 		Log_Println((char *) FPSTR(dirOrFileDoesNotExist), LOGLEVEL_ERROR);
-		return NULL;
+		return std::nullopt;
 	}
 	snprintf(Log_Buffer, Log_BufferLength, "%s: %s", (char *) FPSTR(tryToPickRandomDir), _directory);
 	Log_Println(Log_Buffer, LOGLEVEL_NOTICE);
 
-	static uint8_t allocCount = 1;
-	uint16_t allocSize = psramInit() ? 65535 : 1024;   // There's enough PSRAM. So we don't have to care...
-	uint16_t directoryCount = 0;
-	char *buffer = _directory;  // input char* is reused as it's content no longer needed
-	char *subdirectoryList = (char *) x_calloc(allocSize, sizeof(char));
-
-	if (subdirectoryList == NULL) {
-		Log_Println((char *) FPSTR(unableToAllocateMemForLinearPlaylist), LOGLEVEL_ERROR);
-		System_IndicateError();
-		return NULL;
-	}
-
-	// Create linear list of subdirectories with #-delimiters
-	while (true) {
-		File fileItem = directory.openNextFile();
-		if (!fileItem) {
+	size_t dirCount = 0;
+	while(true) {
+		bool isDir;
+		const String path = directory.getNextFileName(&isDir);
+		if(!path) {
 			break;
 		}
-		if (!fileItem.isDirectory()) {
-			continue;
-		} else {
-			const char* path = getPath(fileItem);
-
-			/*snprintf(Log_Buffer, Log_BufferLength, "%s: %s", (char *) FPSTR(nameOfFileFound), buffer);
-			Log_Println(Log_Buffer, LOGLEVEL_INFO);*/
-			if ((strlen(subdirectoryList) + strlen(path) + 2) >= allocCount * allocSize) {
-				char *tmp = (char *) realloc(subdirectoryList, ++allocCount * allocSize);
-				Log_Println((char *) FPSTR(reallocCalled), LOGLEVEL_DEBUG);
-				if (tmp == NULL) {
-					Log_Println((char *) FPSTR(unableToAllocateMemForLinearPlaylist), LOGLEVEL_ERROR);
-					System_IndicateError();
-					free(subdirectoryList);
-					return NULL;
-				}
-				subdirectoryList = tmp;
-			}
-			strcat(subdirectoryList, stringDelimiter);
-			strcat(subdirectoryList, path);
-			directoryCount++;
+		if(isDir) {
+			dirCount++;
 		}
 	}
-	strcat(subdirectoryList, stringDelimiter);
-
-	if (!directoryCount) {
-		free(subdirectoryList);
-		return NULL;
+	if(!dirCount) {
+		// no paths in folder
+		return std::nullopt;
 	}
 
-	uint16_t randomNumber = random(directoryCount) + 1;     // Create random-number with max = subdirectory-count
-	uint16_t delimiterFoundCount = 0;
-	uint32_t a=0;
-	uint8_t b=0;
-
-	// Walk through subdirectory-array and extract randomized subdirectory
-	while (subdirectoryList[a] != '\0') {
-		if (subdirectoryList[a] == '#') {
-			delimiterFoundCount++;
-		} else {
-			if (delimiterFoundCount == randomNumber) {  // Pick subdirectory of linear char* according to random number
-				buffer[b++] = subdirectoryList[a];
-			}
+	const uint32_t randomNumber = esp_random() % dirCount;
+	String path;
+	for(size_t i=0;i<randomNumber;) {
+		bool isDir;
+		path = directory.getNextFileName(&isDir);
+		if(!path) {
+			// we reached the end before finding the correct dir!
+			return std::nullopt;
 		}
-		if (delimiterFoundCount > randomNumber || (b == 254)) {  // It's over when next delimiter is found or buffer is full
-			buffer[b] = '\0';
-			free(subdirectoryList);
-			snprintf(Log_Buffer, Log_BufferLength, "%s: %s", (char *) FPSTR(pickedRandomDir), _directory);
-			Log_Println(Log_Buffer, LOGLEVEL_NOTICE);
-			return buffer;  // Full path of random subdirectory
+		if(isDir) {
+			i++;
 		}
-		a++;
 	}
-
-	free(subdirectoryList);
-	return NULL;
+	snprintf(Log_Buffer, Log_BufferLength, "%s: %s", (char *) FPSTR(pickedRandomDir), path.c_str());
+	Log_Println(Log_Buffer, LOGLEVEL_NOTICE);
+	
+	return path;
 }
 
 

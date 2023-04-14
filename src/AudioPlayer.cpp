@@ -857,24 +857,22 @@ void AudioPlayer_TrackQueueDispatcher(const char *_itemToPlay, const uint32_t _l
 			}
 		}
 	#endif
-	char filename[255];
 
-	strncpy(filename, _itemToPlay, sizeof(filename));
 	gPlayProperties.startAtFilePos = _lastPlayPos;
 	gPlayProperties.currentTrackNumber = _trackLastPlayed;
-	std::optional<Playlist*> playlist = nullptr;
+	std::optional<Playlist*> playlist = std::nullopt;
 
 	if (_playMode != WEBSTREAM) {
 		if (_playMode == RANDOM_SUBDIRECTORY_OF_DIRECTORY) {
-			char *tmp = SdCard_pickRandomSubdirectory(filename);     // *filename (input): target-directory  //   *filename (output): random subdirectory
-			if (tmp != nullptr) {  // If no error occured while extracting random subdirectory
-				playlist = SdCard_ReturnPlaylist(filename, _playMode);    // Provide random subdirectory in order to enter regular playlist-generation
+			auto tmp = SdCard_pickRandomSubdirectory(_itemToPlay);     // *filename (input): target-directory  //   *filename (output): random subdirectory
+			if (tmp) {  // If no error occured while extracting random subdirectory
+				playlist = SdCard_ReturnPlaylist(tmp.value().c_str(), _playMode);    // Provide random subdirectory in order to enter regular playlist-generation
 			}
 		} else {
-			playlist = SdCard_ReturnPlaylist(filename, _playMode);
+			playlist = SdCard_ReturnPlaylist(_itemToPlay, _playMode);
 		}
 	} else {
-		playlist = AudioPlayer_ReturnPlaylistFromWebstream(filename);
+		playlist = AudioPlayer_ReturnPlaylistFromWebstream(_itemToPlay);
 	}
 
 	// Catch if error occured (e.g. file not found)
@@ -948,7 +946,7 @@ void AudioPlayer_TrackQueueDispatcher(const char *_itemToPlay, const uint32_t _l
 
 		case ALL_TRACKS_OF_DIR_SORTED:
 		case RANDOM_SUBDIRECTORY_OF_DIRECTORY: {
-			snprintf(Log_Buffer, Log_BufferLength, "%s '%s' ", (char *) FPSTR(modeAllTrackAlphSorted), filename);
+			snprintf(Log_Buffer, Log_BufferLength, "%s '%s' ", (char *) FPSTR(modeAllTrackAlphSorted), _itemToPlay);
 			Log_Println(Log_Buffer, LOGLEVEL_NOTICE);
 			AudioPlayer_SortPlaylist(playlist.value());
 			break;
