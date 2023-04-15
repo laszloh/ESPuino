@@ -1,5 +1,9 @@
 #pragma once
 
+#include <WString.h>
+#include <string.h>
+#include "cpp.h"
+
 #if MEM_DEBUG == 1
 	#warning Memory access guards are enabled. Disable MEM_DEBUG for production builds
 #endif
@@ -7,6 +11,36 @@
 using sortFunc = int(*)(const void*,const void*);
 
 class Playlist {
+public:
+	Playlist() : repeatTrack(false), repeatPlaylist(false) { }
+	virtual ~Playlist() { }
+
+	bool getRepeatTrack() const { return repeatTrack; }
+	void setRepeatTrack(bool newVal) { repeatTrack = newVal; }
+
+	bool getRepeatPlaylist() const { return repeatPlaylist; }
+	void setRepeatPlaylist(bool newVal) { repeatPlaylist = newVal; }
+
+	virtual size_t size() const = 0;
+
+	virtual bool isValid() const = 0;
+
+	virtual const String getAbsolutePath(size_t idx) const = 0;
+
+	virtual const String getFilename(size_t idx) const = 0;
+
+	static int alphabeticSort(const void *x, const void *y) {
+		const char *a = static_cast<const char*>(x);
+		const char *b = static_cast<const char*>(y);
+
+		return strcmp(a, b);
+	}
+
+	virtual void sort(sortFunc func = alphabeticSort) { }
+
+	virtual void randomize() { }
+
+
 protected:
 
 	template <typename T>
@@ -78,32 +112,39 @@ protected:
 	bool repeatTrack;
 	bool repeatPlaylist;
 
-public:
-	Playlist() : repeatTrack(false), repeatPlaylist(false) { }
-	virtual ~Playlist() { }
+	static constexpr auto audioFileSufix = std::to_array<const char*>({
+		".mp3",
+		".aac",
+		".m3u",
+		".m4a",
+		".wav",
+		".flac",
+		".aac"
+	});
 
-	bool getRepeatTrack() const { return repeatTrack; }
-	void setRepeatTrack(bool newVal) { repeatTrack = newVal; }
+	// Check if file-type is correct
+	bool fileValid(const String _fileItem) {
+		if(!_fileItem)
+			return false;
 
-	bool getRepeatPlaylist() const { return repeatPlaylist; }
-	void setRepeatPlaylist(bool newVal) { repeatPlaylist = newVal; }
+		// check for http address 
+		if(_fileItem.startsWith("http://") || _fileItem.startsWith("https://")) {
+			return true;
+		}
 
-	virtual size_t size() const = 0;
+		// Ignore hidden files starting with a '.'
+		//    lastIndex is -1 if '/' is not found --> first index will be 0
+		int fileNameIndex = _fileItem.lastIndexOf('/') + 1;	
+		if(_fileItem[fileNameIndex] == '.') {
+			return false;
+		}
 
-	virtual bool isValid() const = 0;
-
-	virtual const String getAbsolutePath(size_t idx) const = 0;
-
-	virtual const String getFilename(size_t idx) const = 0;
-
-	static int alphabeticSort(const void *x, const void *y) {
-		const char *a = static_cast<const char*>(x);
-		const char *b = static_cast<const char*>(y);
-
-		return strcmp(a, b);
+		for(const auto e:audioFileSufix) {
+			if(_fileItem.endsWith(e)) {
+				return true;
+			}
+		}
+		return false;
 	}
 
-	virtual void sort(sortFunc func = alphabeticSort) { }
-
-	virtual void randomize() { }
 };

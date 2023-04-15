@@ -15,8 +15,12 @@ public:
 	virtual ~WebstreamPlaylist() override {
 	};
 
-	void setUrl(const char *_url) {
-		url = url;
+	bool setUrl(const char *_url) {
+		if(fileValid(_url)) {
+			url = _url;
+			return true;
+		}
+		return false;
 	}
 
 	virtual size_t size() const override { return (url.length()) ? 1 : 0; }

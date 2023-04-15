@@ -52,7 +52,7 @@ public:
 				continue;
 			}
 
-			if(fileValid(path.c_str())) {
+			if(fileValid(path)) {
 				// push this file into the array
 				bool success = push_back(path);
 				if(!success) {
@@ -223,33 +223,13 @@ public:
 	Iterator cend() { return Iterator(this, (files.data() + files.size())); }
 
 protected:
+
 	virtual void destroy() override {
 		files.clear();
-		base = pstring();
+		base.clear();
 	}
 
 	void init() {
 		divider = '/';
 	}
-
-	// Check if file-type is correct
-	bool fileValid(const char *_fileItem) {
-		if(!_fileItem)
-			return false;
-
-		// if we are in absolute mode...
-		if(!isRelative()) {
-			_fileItem = strrchr(_fileItem, divider);	//... extract the file name from path
-		}
-
-		return (!startsWith(_fileItem, (char *) "/.")) && (
-				endsWith(_fileItem, ".mp3") || endsWith(_fileItem, ".MP3") ||
-				endsWith(_fileItem, ".aac") || endsWith(_fileItem, ".AAC") ||
-				endsWith(_fileItem, ".m3u") || endsWith(_fileItem, ".M3U") ||
-				endsWith(_fileItem, ".m4a") || endsWith(_fileItem, ".M4A") ||
-				endsWith(_fileItem, ".wav") || endsWith(_fileItem, ".WAV") ||
-				endsWith(_fileItem, ".flac") || endsWith(_fileItem, ".FLAC") ||
-				endsWith(_fileItem, ".asx") || endsWith(_fileItem, ".ASX"));
-	}
-
 };
