@@ -1,9 +1,5 @@
 #pragma once
 
-#include <Arduino.h>
-#include <ArduinoJson.h>
-#include "Common.h"
-
 #if MEM_DEBUG == 1
 	#warning Memory access guards are enabled. Disable MEM_DEBUG for production builds
 #endif
