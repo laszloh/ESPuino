@@ -121,7 +121,8 @@ void Cmd_Action(const uint16_t mod) {
 		}
 
 		case CMD_SLEEP_AFTER_5_TRACKS: {
-			if (gPlayProperties.playMode == NO_PLAYLIST || !gPlayProperties.playlist) {
+			const Playlist &playlist = AudioPlayer_GetPlaylist();
+			if (gPlayProperties.playMode == NO_PLAYLIST || !playlist) {
 				Log_Println(modificatorNotallowedWhenIdle, LOGLEVEL_NOTICE);
 				System_IndicateError();
 				return;
@@ -132,7 +133,7 @@ void Cmd_Action(const uint16_t mod) {
 			gPlayProperties.sleepAfter5Tracks = !gPlayProperties.sleepAfter5Tracks;
 
 			if (gPlayProperties.sleepAfter5Tracks) {
-				if (gPlayProperties.currentTrackNumber + 5 > gPlayProperties.playlist->size()) {
+				if (gPlayProperties.currentTrackNumber + 5 > playlist.size()) {
 					// execute a sleep after end of playlist
 					Cmd_Action(CMD_SLEEP_AFTER_END_OF_PLAYLIST);
 					break;

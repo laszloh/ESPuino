@@ -5,18 +5,17 @@
 #include <optional>
 
 #ifndef AUDIOPLAYER_PLAYLIST_SORT_MODE_DEFAULT
-	#define AUDIOPLAYER_PLAYLIST_SORT_MODE_DEFAULT playlistSortMode::STRNATCASECMP
+	#define AUDIOPLAYER_PLAYLIST_SORT_MODE_DEFAULT PlaylistSortMode::STRNATCASECMP
 #endif
 
-enum class playlistSortMode : uint8_t {
+enum class PlaylistSortMode : uint8_t {
 	STRCMP = 1,
 	STRNATCMP = 2,
 	STRNATCASECMP = 3,
 };
 
 typedef struct { // Bit field
-	uint8_t playMode; // playMode
-	Playlist *playlist; // playlist
+	uint8_t playMode : 4; // playMode
 	char title[255]; // current title
 	bool repeatCurrentTrack		: 1; // If current track should be looped
 	bool repeatPlaylist			: 1; // If whole playlist should be looped
@@ -68,8 +67,10 @@ void AudioPlayer_SetPlaylist(const char *_itemToPlay, const uint32_t _lastPlayPo
 void AudioPlayer_SetTrackControl(const uint8_t trackCommand);
 void AudioPlayer_PauseOnMinVolume(const uint8_t oldVolume, const uint8_t newVolume);
 
-playlistSortMode AudioPlayer_GetPlaylistSortMode(void);
-bool AudioPlayer_SetPlaylistSortMode(playlistSortMode value);
+const Playlist &AudioPlayer_GetPlaylist(void);
+
+PlaylistSortMode AudioPlayer_GetPlaylistSortMode(void);
+bool AudioPlayer_SetPlaylistSortMode(PlaylistSortMode value);
 bool AudioPlayer_SetPlaylistSortMode(uint8_t value);
 uint8_t AudioPlayer_GetCurrentVolume(void);
 void AudioPlayer_SetCurrentVolume(uint8_t value);
@@ -88,4 +89,6 @@ time_t AudioPlayer_GetPlayTimeSinceStart(void);
 time_t AudioPlayer_GetPlayTimeAllTime(void);
 uint32_t AudioPlayer_GetCurrentTime(void);
 uint32_t AudioPlayer_GetFileDuration(void);
+
+const String AudioPlayer_getCurrentTrackPath(size_t track);
 String AudioPlayer_GetStationLogoUrl(void);

@@ -477,12 +477,13 @@ void Mqtt_ClientCallback(const char *topic_buf, uint32_t topic_length, const cha
 				System_IndicateOk();
 				return;
 			} else if (payload_str == "EO5T") {
-				if (gPlayProperties.playMode == NO_PLAYLIST || !gPlayProperties.playlist) {
+				const Playlist &playlist = AudioPlayer_GetPlaylist();
+				if (gPlayProperties.playMode == NO_PLAYLIST || !playlist) {
 					Log_Println(modificatorNotallowedWhenIdle, LOGLEVEL_NOTICE);
 					System_IndicateError();
 					return;
 				}
-				if ((gPlayProperties.playlist->size() - 1) >= (gPlayProperties.currentTrackNumber + 5)) {
+				if ((playlist.size() - 1) >= (gPlayProperties.currentTrackNumber + 5)) {
 					gPlayProperties.playUntilTrackNumber = gPlayProperties.currentTrackNumber + 5;
 				} else {
 					gPlayProperties.sleepAfterPlaylist = true; // If +5 tracks is > than active playlist, take end of current playlist

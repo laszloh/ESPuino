@@ -8,6 +8,8 @@
 #include "Log.h"
 #include "MemX.h"
 #include "System.h"
+#include "playlists/FolderPlaylist.hpp"
+#include "playlists/WebstreamPlaylist.hpp"
 
 #include <esp_random.h>
 #include <esp_vfs_fat.h>
@@ -143,104 +145,34 @@ void SdCard_PrintInfo() {
 	Log_Printf(LOGLEVEL_NOTICE, sdInfo, cardSize, freeSize);
 }
 
-// Check if file-type is correct
-bool fileValid(const char *_fileItem) {
-	// clang-format off
-	// all supported extension
-	constexpr std::array audioFileSufix = {
-		".mp3",
-		".aac",
-		".m4a",
-		".wav",
-		".flac",
-		".ogg",
-		".oga",
-		".opus",
-		// playlists
-		".m3u",
-		".m3u8",
-		".pls",
-		".asx"
-	};
-	// clang-format on
-	constexpr size_t maxExtLen = strlen(*std::max_element(audioFileSufix.begin(), audioFileSufix.end(), [](const char *a, const char *b) {
-		return strlen(a) < strlen(b);
-	}));
-
-	if (!_fileItem || !strlen(_fileItem)) {
-		// invalid entry
-		return false;
-	}
-
-	// check for streams
-	if (strncmp(_fileItem, "http://", strlen("http://")) == 0 || strncmp(_fileItem, "https://", strlen("https://")) == 0) {
-		// this is a stream
-		return true;
-	}
-
-	// check for files which start with "/."
-	const char *lastSlashPtr = strrchr(_fileItem, '/');
-	if (lastSlashPtr == nullptr) {
-		// we have a relative filename without any slashes...
-		// set the pointer so that it points to the first character AFTER a +1
-		lastSlashPtr = _fileItem - 1;
-	}
-	if (*(lastSlashPtr + 1) == '.') {
-		// we have a hidden file
-		// Log_Printf(LOGLEVEL_DEBUG, "File is hidden: %s", _fileItem);
-		return false;
-	}
-
-	// extract the file extension
-	const char *extStartPtr = strrchr(_fileItem, '.');
-	if (extStartPtr == nullptr) {
-		// no extension found
-		// Log_Printf(LOGLEVEL_DEBUG, "File has no extension: %s", _fileItem);
-		return false;
-	}
-	const size_t extLen = strlen(extStartPtr);
-	if (extLen > maxExtLen) {
-		// extension too long, we do not care anymore
-		// Log_Printf(LOGLEVEL_DEBUG, "File not supported (extension to long): %s", _fileItem);
-		return false;
-	}
-	char extBuffer[maxExtLen + 1] = {0};
-	memcpy(extBuffer, extStartPtr, extLen);
-
-	// make the extension lower case (without using non standard C functions)
-	for (size_t i = 0; i < extLen; i++) {
-		extBuffer[i] = tolower(extBuffer[i]);
-	}
-
-	// check extension against all supported values
-	for (const auto &e : audioFileSufix) {
-		if (strcmp(extBuffer, e) == 0) {
-			// hit we found the extension
-			return true;
-		}
-	}
-	// miss, we did not find the extension
-	// Log_Printf(LOGLEVEL_DEBUG, "File not supported: %s", _fileItem);
-	return false;
-}
-
 // Takes a directory as input and returns a random subdirectory from it
 const String SdCard_pickRandomSubdirectory(const char *_directory) {
-	// Look if folder requested really exists and is a folder. If not => break.
+	constexpr bool fileNameSupport = (ESP_ARDUINO_VERSION >= ESP_ARDUINO_VERSION_VAL(2, 0, 8));
+	const uint32_t listStartTimestamp = millis();
+
+	// Look if file/folder requested really exists. If not => break.
 	File directory = gFSystem.open(_directory);
-	if (!directory || !directory.isDirectory()) {
-		Log_Printf(LOGLEVEL_ERROR, dirOrFileDoesNotExist, _directory);
-		return String();
+	if (!directory) {
+		// does not exists
+		Log_Println(dirOrFileDoesNotExist, LOGLEVEL_ERROR);
+		return String {};
 	}
 	Log_Printf(LOGLEVEL_NOTICE, tryToPickRandomDir, _directory);
 
-	// iterate through and count all dirs
 	size_t dirCount = 0;
-	while (1) {
+	while (true) {
 		bool isDir;
-		const String name = directory.getNextFileName(&isDir);
-		if (name.isEmpty()) {
-			break;
+		if constexpr (fileNameSupport) {
+			const String path = directory.getNextFileName(&isDir);
+			if (path.isEmpty()) {
+				break;
+			}
+		} else {
+			File fileItem = directory.openNextFile();
+			if (!fileItem) {
+				break;
+			}
+			isDir = fileItem.isDirectory();
 		}
 		if (isDir) {
 			dirCount++;
@@ -248,147 +180,114 @@ const String SdCard_pickRandomSubdirectory(const char *_directory) {
 	}
 	if (!dirCount) {
 		// no paths in folder
-		return String();
+		return String {};
 	}
 
 	const uint32_t randomNumber = esp_random() % dirCount;
-	directory.rewindDirectory();
-	dirCount = 0;
-	while (1) {
+	String path;
+	for (size_t i = 0; i < randomNumber;) {
 		bool isDir;
-		const String name = directory.getNextFileName(&isDir);
-		if (name.isEmpty()) {
-			break;
+		if constexpr (fileNameSupport) {
+			path = directory.getNextFileName(&isDir);
+		} else {
+			File fileItem = directory.openNextFile();
+			if (!fileItem) {
+				path = "";
+			} else {
+				path = getPath(fileItem);
+				isDir = fileItem.isDirectory();
+			}
+		}
+		if (path.isEmpty()) {
+			// we reached the end before finding the correct dir!
+			return String {};
 		}
 		if (isDir) {
-			if (dirCount == randomNumber) {
-				return name;
-			}
-			dirCount++;
+			i++;
 		}
 	}
-
-	// if we reached here, something went wrong
-	return String();
+	Log_Printf(LOGLEVEL_NOTICE, pickedRandomDir, path.c_str());
+	Log_Printf(LOGLEVEL_DEBUG, "pick random directory from SD-card finished: %lu ms", (millis() - listStartTimestamp));
+	return path;
 }
 
-static bool SdCard_allocAndSave(Playlist *playlist, const String &s) {
-	const size_t len = s.length() + 1;
-	char *entry = static_cast<char *>(x_malloc(len));
-	if (!entry) {
-		// OOM, free playlist and return
-		Log_Println(unableToAllocateMemForLinearPlaylist, LOGLEVEL_ERROR);
-		freePlaylist(playlist);
-		return false;
-	}
-	s.toCharArray(entry, len);
-	playlist->push_back(entry);
-	return true;
-};
+static std::unique_ptr<Playlist> SdCard_ParseM3UPlaylist(File f, bool forceExtended = false) {
+	const String line = f.readStringUntil('\n');
+	bool extended = line.startsWith("#EXTM3U") || forceExtended;
+	auto playlist = std::make_unique<FolderPlaylist>();
 
-static std::optional<Playlist *> SdCard_ParseM3UPlaylist(File file) {
-	Playlist *playlist = allocatePlaylist();
+	if (extended) {
+		// extended m3u file format
+		// ignore all lines starting with '#'
 
-	// reserve a sane amount of memory to reduce heap fragmentation
-	playlist->reserve(64);
-	// normal m3u is just a bunch of filenames, 1 / line
-	// extended m3u file format can also include comments or special directives, prefaced by the "#" character
-	// -> ignore all lines starting with '#'
-
-	while (file.available()) {
-		String line = file.readStringUntil('\n');
-		if (!line.startsWith("#")) {
-			// this something we have to save
-			line.trim();
-			// save string
-			if (!SdCard_allocAndSave(playlist, line)) {
-				return std::nullopt;
+		while (f.available()) {
+			String line = f.readStringUntil('\n');
+			if (!line.startsWith("#")) {
+				// this something we have to save
+				line.trim();
+				if (!playlist->push_back(line)) {
+					return nullptr;
+				}
 			}
 		}
+		// resize memory to fit our count
+		playlist->compress();
+		return playlist;
 	}
 
-	// resize std::vector memory to fit our count
-	playlist->shrink_to_fit();
+	// normal m3u is just a bunch of filenames, 1 / line
+	f.seek(0);
+	while (f.available()) {
+		String line = f.readStringUntil('\n');
+		line.trim();
+		if (!playlist->push_back(line)) {
+			return nullptr;
+		}
+	}
+	// resize memory to fit our count
+	playlist->compress();
 	return playlist;
 }
 
 /* Puts SD-file(s) or directory into a playlist
 	First element of array always contains the number of payload-items. */
-std::optional<Playlist *> SdCard_ReturnPlaylist(const char *fileName, const uint32_t _playMode, const uint8_t _maxRecursionDepth, bool _recursionMode) {
+std::unique_ptr<Playlist> SdCard_ReturnPlaylist(const char *fileName, const uint32_t _playMode, const uint8_t _maxRecursionDepth, bool _recursionMode) {
 	// Look if file/folder requested really exists. If not => break.
 	File fileOrDirectory = gFSystem.open(fileName);
 	if (!fileOrDirectory) {
-		Log_Printf(LOGLEVEL_ERROR, dirOrFileDoesNotExist, fileName);
-		return std::nullopt;
+		Log_Println(dirOrFileDoesNotExist, LOGLEVEL_ERROR);
+		return nullptr;
 	}
 
 	// Parse m3u-playlist and create linear-playlist out of it
 	if (_playMode == LOCAL_M3U) {
-		if (!fileOrDirectory.isDirectory() && fileOrDirectory.size() > 0) {
-			// function takes care of everything
+		if (fileOrDirectory && !fileOrDirectory.isDirectory() && fileOrDirectory.size()) {
+			// create a m3u playlist and parse the file
 			return SdCard_ParseM3UPlaylist(fileOrDirectory);
 		}
+		// if we reach here, we failed
+		return nullptr;
 	}
-
-	// if we reach this code, it was not a m3u
-
-	static Playlist *playlist = nullptr; // static because of possible recursion
-	if (_recursionMode == false) {
-		Log_Printf(LOGLEVEL_DEBUG, freeMemory, ESP.getFreeHeap());
-		playlist = allocatePlaylist();
-		Log_Printf(LOGLEVEL_NOTICE, playlistRecDepth, _maxRecursionDepth);
-	}
-
-	static uint8_t currentRecDepth = 0;
 
 	// File-mode
 	if (!fileOrDirectory.isDirectory()) {
-		if (!SdCard_allocAndSave(playlist, fileOrDirectory.path())) {
-			// OOM, function already took care of house cleaning
-			return std::nullopt;
-		}
-		return playlist;
-	}
-
-	// Directory-mode (linear-playlist)
-	playlist->reserve(64); // reserve a sane amount of memory to reduce the number of reallocs
-	size_t hiddenFiles = 0;
-	while (true) {
-		bool isDir;
-		const String name = fileOrDirectory.getNextFileName(&isDir);
-		if (name.isEmpty()) {
-			break;
-		}
-		if (isDir) {
-			//  Jump into directory if recursion is allowed
-			if (currentRecDepth < _maxRecursionDepth) {
-				currentRecDepth++;
-				// Log_Printf(LOGLEVEL_DEBUG, "Added folder: %s, depth of recursion: %d\n", name.c_str(), currentRecDepth);
-				SdCard_ReturnPlaylist(name.c_str(), _playMode, _maxRecursionDepth, true);
-				currentRecDepth--;
-			} else {
-				continue;
-			}
-		}
-		// Don't support filenames that start with "." and only allow .mp3 and other supported audio file formats
-		if (fileValid(name.c_str())) {
-			// save it to the vector
-			if (!SdCard_allocAndSave(playlist, name)) {
-				// OOM, function already took care of house cleaning
-				return std::nullopt;
-			}
-		} else {
-			hiddenFiles++;
+		const char *path = getPath(fileOrDirectory);
+		if (Playlist::fileValid(path)) {
+			return std::make_unique<WebstreamPlaylist>(path);
 		}
 	}
-	playlist->shrink_to_fit();
 
-	// Only show sum up at last run (when no recursion is active)
-	if (!_recursionMode) {
-		Log_Printf(LOGLEVEL_NOTICE, numberOfValidFiles, playlist->size());
-		Log_Printf(LOGLEVEL_DEBUG, "Hidden files: %u", hiddenFiles);
+	// Folder mode
+	auto playlist = std::make_unique<FolderPlaylist>();
+	playlist->createFromFolder(fileOrDirectory);
+	if (!playlist->isValid()) {
+		// something went wrong
+		Log_Println(unableToAllocateMemForLinearPlaylist, LOGLEVEL_ERROR);
+		return nullptr;
 	}
 
+	// we are finished
+	Log_Printf(LOGLEVEL_NOTICE, numberOfValidFiles, playlist->size());
 	return playlist;
 }
 
@@ -415,20 +314,18 @@ int16_t SdCard_findNextOrPrevDirectoryTrack(const Playlist &_playlist, size_t cu
 		return -1;
 	}
 
-	std::string_view basepathOfCurrentTrack = SdCard_Basepath(_playlist[currentTrackIndexInPlaylist]); // Get basepath of current track
+	const auto currentFile = _playlist.getAbsolutePath(currentTrackIndexInPlaylist);
+	std::string_view basepathOfCurrentTrack = SdCard_Basepath(currentFile.c_str()); // Get basepath of current track
 
 	// Look forwards
 	if (direction == SearchDirection::Forward) {
-		if (_playlist[currentTrackIndexInPlaylist] != nullptr) {
-			for (uint16_t i = (currentTrackIndexInPlaylist + 1); i < _playlist.size(); ++i) { // Iterate through playlist and start with current track +1
-				std::string_view basepathOfTrackToLookUp = SdCard_Basepath(_playlist[i]);
-				if (basepathOfTrackToLookUp != basepathOfCurrentTrack) {
-					Log_Printf(LOGLEVEL_DEBUG, jumpForwardsToFolder, basepathOfTrackToLookUp.data(), "\n");
-					return i; // Return first track after basepath change
-				}
+		for (uint16_t i = currentTrackIndexInPlaylist + 1; i < _playlist.size(); i++) {
+			const auto nextFile = _playlist.getAbsolutePath(i);
+			std::string_view basepathOfTrackToLookUp = SdCard_Basepath(nextFile.c_str());
+			if (basepathOfTrackToLookUp != basepathOfCurrentTrack) {
+				Log_Printf(LOGLEVEL_DEBUG, jumpForwardsToFolder, basepathOfTrackToLookUp.data(), "\n");
+				return i; // Return first track after basepath change
 			}
-		} else {
-			return -1;
 		}
 
 		// Look backwards
@@ -438,24 +335,26 @@ int16_t SdCard_findNextOrPrevDirectoryTrack(const Playlist &_playlist, size_t cu
 			return currentTrackIndexInPlaylist;
 		}
 
-		if (_playlist[currentTrackIndexInPlaylist] != nullptr) {
-			for (uint16_t i = (currentTrackIndexInPlaylist - 1); i > 0; i--) {
-				std::string_view basepathOfTrackToLookUp = SdCard_Basepath(_playlist[i]);
-				if (basepathOfTrackToLookUp != basepathOfCurrentTrack) { // Look for the 1st basepath change...
+		if (currentTrackIndexInPlaylist != 1) {
+			for (uint16_t i = currentTrackIndexInPlaylist - 1; i > 0; i--) {
+				const auto prevFile = _playlist.getAbsolutePath(i);
+				std::string_view basepathOfTrackToLookUp = SdCard_Basepath(prevFile.c_str());
+				if (basepathOfTrackToLookUp != basepathOfCurrentTrack) {
 					for (uint16_t j = i - 1; j > 0; j--) {
-						std::string_view basepathOfTrackToLookUpInner = SdCard_Basepath(_playlist[j]);
+						const auto prevInnerFile = _playlist.getAbsolutePath(j);
+						std::string_view basepathOfTrackToLookUpInner = SdCard_Basepath(prevInnerFile.c_str());
 						if (basepathOfTrackToLookUpInner != basepathOfTrackToLookUp) { // ...but keep on looking for the 2nd change...
 							Log_Printf(LOGLEVEL_DEBUG, jumpBackwardsToFolder, basepathOfTrackToLookUpInner.data(), "\n");
 							return j + 1; // ...just to add +1 to get the previous element before the 2nd change
 						}
 					}
+					Log_Printf(LOGLEVEL_DEBUG, jumpForwardsToFolder, basepathOfTrackToLookUp.data(), "\n");
+					return i; // Return first track after basepath change
 				}
 			}
 		} else {
-			return -1;
+			return 0;
 		}
-		// If index 0 (first track) was hit meanwhile -> return it!
-		return 0;
 	}
 
 	// If no jump possible, return -1

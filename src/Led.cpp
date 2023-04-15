@@ -1063,9 +1063,10 @@ AnimationReturnType Animation_PlaylistProgress(const bool startNewAnimation, CRG
 	static uint32_t staticLastTrack = 0; // variable to remember the last track (for connecting animations)
 
 	if (gLedSettings.numIndicatorLeds >= 4) {
-		const uint16_t currentTrack = (gPlayProperties.playlist) ? gPlayProperties.playlist->size() : 0;
-		if (currentTrack > 1 && gPlayProperties.currentTrackNumber < currentTrack) {
-			const uint32_t ledValue = std::clamp<uint32_t>(map(gPlayProperties.currentTrackNumber, 0, currentTrack - 1, 0, leds.size() * gLedSettings.dimmableStates), 0, leds.size() * gLedSettings.dimmableStates);
+		const Playlist &playlist = AudioPlayer_GetPlaylist();
+		const uint16_t lastTrack = (playlist) ? playlist.size() : 0;
+		if (lastTrack > 1 && gPlayProperties.currentTrackNumber < lastTrack) {
+			const uint32_t ledValue = std::clamp<uint32_t>(map(gPlayProperties.currentTrackNumber, 0, lastTrack - 1, 0, leds.size() * gLedSettings.dimmableStates), 0, leds.size() * gLedSettings.dimmableStates);
 			const uint8_t fullLeds = ledValue / gLedSettings.dimmableStates;
 			const uint8_t lastLed = ledValue % gLedSettings.dimmableStates;
 			static LedPlaylistProgressStates animationState = LedPlaylistProgressStates::Done; // Statemachine-variable of this animation

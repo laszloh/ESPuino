@@ -1,5 +1,10 @@
 #pragma once
 
+#include <FS.h>
+
+// FilePathLength
+#define MAX_FILEPATH_LENTGH 256
+
 constexpr char stringDelimiter[] = "#"; // Character used to encapsulate data in linear NVS-strings (don't change)
 constexpr char stringOuterDelimiter[] = "^"; // Character used to encapsulate encapsulated data along with RFID-ID in backup-file
 
@@ -18,6 +23,14 @@ inline bool isNumber(const char *str) {
 		return true;
 	} else {
 		return false;
+	}
+}
+
+inline const char *getPath(File &f) {
+	if constexpr (ESP_ARDUINO_VERSION_MAJOR >= 2) {
+		return f.path();
+	} else {
+		return f.name();
 	}
 }
 

@@ -1489,7 +1489,8 @@ void Web_SendWebsocketData(uint32_t client, WebsocketCodeType code) {
 		JsonObject entry = object["trackinfo"].to<JsonObject>();
 		entry["pausePlay"] = gPlayProperties.pausePlay;
 		entry["currentTrackNumber"] = gPlayProperties.currentTrackNumber + 1;
-		entry["numberOfTracks"] = (gPlayProperties.playlist) ? gPlayProperties.playlist->size() : 0;
+		const Playlist &playlist = AudioPlayer_GetPlaylist();
+		entry["numberOfTracks"] = (playlist) ? playlist.size() : 0;
 		entry["volume"] = AudioPlayer_GetCurrentVolume();
 		entry["name"] = gPlayProperties.title;
 		entry["posPercent"] = gPlayProperties.currentRelPos;
@@ -2440,8 +2441,8 @@ void Web_DumpSdToNvs(const char *_filename) {
 
 // handle album cover image request
 static void handleCoverImageRequest(AsyncWebServerRequest *request) {
-
-	if (!gPlayProperties.coverFilePos || !gPlayProperties.playlist) {
+	const Playlist &playlist = AudioPlayer_GetPlaylist();
+	if (!gPlayProperties.coverFilePos || !playlist) {
 		String stationLogoUrl = AudioPlayer_GetStationLogoUrl();
 		if (stationLogoUrl != "") {
 			// serve station logo
@@ -2464,10 +2465,10 @@ static void handleCoverImageRequest(AsyncWebServerRequest *request) {
 			}
 		return;
 	}
-	if (gPlayProperties.currentTrackNumber >= gPlayProperties.playlist->size()) {
+	if (gPlayProperties.currentTrackNumber >= playlist.size()) {
 		return;
 	}
-	const char *coverFileName = gPlayProperties.playlist->at(gPlayProperties.currentTrackNumber);
+	const char *coverFileName = playlist.getAbsolutePath(gPlayProperties.currentTrackNumber).c_str();
 	String decodedCover = "/.cache";
 	decodedCover.concat(coverFileName);
 
