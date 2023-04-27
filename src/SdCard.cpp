@@ -104,24 +104,6 @@ void SdCard_PrintInfo() {
 	Log_Println(Log_Buffer, LOGLEVEL_NOTICE);
 }
 
-
-// Check if file-type is correct
-bool fileValid(const char *_fileItem) {
-	const char ch = '/';
-	char *subst;
-	subst = strrchr(_fileItem, ch); // Don't use files that start with .
-
-	return (!startsWith(subst, (char *) "/.")) && (
-			endsWith(_fileItem, ".mp3") || endsWith(_fileItem, ".MP3") ||
-			endsWith(_fileItem, ".aac") || endsWith(_fileItem, ".AAC") ||
-			endsWith(_fileItem, ".m3u") || endsWith(_fileItem, ".M3U") ||
-			endsWith(_fileItem, ".m4a") || endsWith(_fileItem, ".M4A") ||
-			endsWith(_fileItem, ".wav") || endsWith(_fileItem, ".WAV") ||
-			endsWith(_fileItem, ".flac") || endsWith(_fileItem, ".FLAC") ||
-			endsWith(_fileItem, ".asx") || endsWith(_fileItem, ".ASX"));
-}
-
-
 // Takes a directory as input and returns a random subdirectory from it
 std::optional<const String> SdCard_pickRandomSubdirectory(const char *_directory) {
 	// Look if file/folder requested really exists. If not => break.
@@ -270,7 +252,7 @@ std::optional<Playlist*> SdCard_ReturnPlaylist(const char *fileName, const uint3
 	if (!fileOrDirectory.isDirectory()) {
 		Log_Println((char *) FPSTR(fileModeDetected), LOGLEVEL_INFO);
 		const char *path = getPath(fileOrDirectory);
-		if (fileValid(path)) {
+		if (Playlist::fileValid(path)) {
 			return new WebstreamPlaylist(path);
 		}
 	}
