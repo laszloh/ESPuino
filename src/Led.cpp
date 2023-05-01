@@ -32,11 +32,8 @@
 	#endif
 
 	// Time in milliseconds the volume indicator is visible
-	#define LED_VOLUME_INDICATOR_RETURN_DELAY 1000U
-	#define LED_VOLUME_INDICATOR_NUM_CYCLES	  (LED_VOLUME_INDICATOR_RETURN_DELAY / 20)
-
-extern t_button gButtons[7]; // next + prev + pplay + rotEnc + button4 + button5 + dummy-button
-extern uint8_t gShutdownButton;
+	#define LED_VOLUME_INDICATOR_RETURN_DELAY	1000U
+	#define LED_VOLUME_INDICATOR_NUM_CYCLES		(LED_VOLUME_INDICATOR_RETURN_DELAY / 20)
 
 static uint32_t Led_Indicators = 0u;
 
@@ -241,14 +238,15 @@ void Led_DrawIdleDots(CRGBSet &leds, uint8_t offset, CRGB::HTMLColorCode color) 
 	}
 }
 
-bool CheckForPowerButtonAnimation() {
-	if (gShutdownButton < (sizeof(gButtons) / sizeof(gButtons[0])) - 1) { // Only show animation, if CMD_SLEEPMODE was assigned to BUTTON_n_LONG + button is pressed
-		if (gButtons[gShutdownButton].isPressed && (millis() - gButtons[gShutdownButton].firstPressedTimestamp >= 150) && gButtonInitComplete) {
-			return true;
+	bool CheckForPowerButtonAnimation() {
+		auto sleepBtn = getShutdownButton();
+		if (sleepBtn) { // Only show animation, if CMD_SLEEPMODE was assigned to BUTTON_n_LONG + button is pressed
+			if(sleepBtn->isPressed && (millis() - sleepBtn->firstPressedTimestamp >= 150) && gButtonInitComplete) {
+				return true;
+			}
 		}
+		return false;
 	}
-	return false;
-}
 #endif
 
 #ifdef NEOPIXEL_ENABLE
@@ -465,61 +463,66 @@ AnimationReturnType Animation_Boot(const bool startNewAnimation, CRGBSet &leds) 
 	return AnimationReturnType(false, 500, true); // always wait 500 ms
 }
 
-// --------------------------------
-// Shutdown Animation
-// --------------------------------
-AnimationReturnType Animation_Shutdown(const bool startNewAnimation, CRGBSet &leds) {
-	// return values
-	bool animationActive = true;
-	int32_t animationDelay = 0;
-	// static vars
-	static bool singleLedStatus = false;
-	static uint32_t animationIndex = 0;
-	if (startNewAnimation) {
-		animationIndex = 0;
-	}
+	// --------------------------------
+	// Shutdown Animation
+	// --------------------------------
+	AnimationReturnType Animation_Shutdown(const bool startNewAnimation, CRGBSet &leds) {
+		// return values
+		bool animationActive = true;
+		int32_t animationDelay = 0;
+		// static vars
+		static bool singleLedStatus = false;
+		static uint32_t animationIndex = 0;
+		if (startNewAnimation) {
+			animationIndex = 0;
+		}
+		auto sleepBtn = getShutdownButton();
+		if(!sleepBtn) {
+			// we do not have an animation button o.O
+			return AnimationReturnType(false, 0);
+		}
 
-	if constexpr (NUM_INDICATOR_LEDS == 1) {
-		leds = CRGB::Black;
-		if (millis() - gButtons[gShutdownButton].firstPressedTimestamp <= intervalToLongPress) {
-			leds[0] = CRGB::Red;
-			animationDelay = 5;
-		} else {
-			if (singleLedStatus) {
+		if constexpr(NUM_INDICATOR_LEDS == 1) {
+			leds = CRGB::Black;
+			if (millis() - sleepBtn->firstPressedTimestamp <= intervalToLongPress) {
 				leds[0] = CRGB::Red;
-			}
-			singleLedStatus = !singleLedStatus;
-			animationDelay = 50;
-		}
-		animationActive = false;
-	} else {
-		if ((millis() - gButtons[gShutdownButton].firstPressedTimestamp >= intervalToLongPress) && (animationIndex >= leds.size())) {
-			animationDelay = 50;
-			if (!gButtons[gShutdownButton].isPressed) {
-				// increase animation index to bail out, if we had a kombi-button
-				animationIndex++;
-				if (animationIndex >= leds.size() + 3) {
-					animationActive = false; // this is approx. 150ms after the button is released
+				animationDelay = 5;
+			} else {
+				if (singleLedStatus) {
+					leds[0] = CRGB::Red;
 				}
+				singleLedStatus = !singleLedStatus;
+				animationDelay = 50;
 			}
+			animationActive = false;
 		} else {
-			if (animationIndex == 0) {
-				leds = CRGB::Black;
-			}
-			if (animationIndex < leds.size()) {
-				leds[Led_Address(animationIndex)] = CRGB::Red;
-				if (gButtons[gShutdownButton].currentState) {
-					animationDelay = 5;
-					animationActive = false;
-				} else {
-					animationDelay = intervalToLongPress / leds.size();
+			if ((millis() - sleepBtn->firstPressedTimestamp >= intervalToLongPress) && (animationIndex >= leds.size())) {
+				animationDelay = 50;
+				if (!sleepBtn->isPressed) {
+					// increase animation index to bail out, if we had a kombi-button
+					animationIndex++;
+					if (animationIndex >= leds.size() + 3) {
+						animationActive = false;	// this is approx. 150ms after the button is released
+					}
 				}
-				animationIndex++;
+			} else {
+				if (animationIndex == 0) {
+					leds = CRGB::Black;
+				}
+				if (animationIndex < leds.size()) {
+					leds[Led_Address(animationIndex)] = CRGB::Red;
+					if (sleepBtn->currentState) {
+						animationDelay = 5;
+						animationActive = false;
+					} else {
+						animationDelay = intervalToLongPress / leds.size();
+					}
+					animationIndex++;
+				}
 			}
 		}
+		return AnimationReturnType(animationActive, animationDelay, true);
 	}
-	return AnimationReturnType(animationActive, animationDelay, true);
-}
 
 // --------------------------------
 // Error Animation

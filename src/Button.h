@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Arduino.h>
+#include <array>
 #include "settings.h"
 
 struct t_button {
@@ -30,7 +31,7 @@ struct t_button {
 
 constexpr size_t x = sizeof(t_button);
 
-extern uint8_t gShutdownButton;
+std::optional<const t_button> getShutdownButton();
 extern bool gButtonInitComplete;
 
 void Button_Init(void);
