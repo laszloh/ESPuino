@@ -14,7 +14,7 @@ bool gButtonInitComplete = false;
 // Only enable those buttons that are not disabled (99 or >115)
 // 0 -> 39: GPIOs
 // 100 -> 115: Port-expander
-auto gButtons = std::to_array<t_button>({
+static auto gButtons = std::to_array<t_button>({
 	{BUTTON_0, BUTTON_0_ACTIVE_STATE, BUTTON_0_SHORT, BUTTON_0_LONG},
 	{BUTTON_1, BUTTON_1_ACTIVE_STATE, BUTTON_1_SHORT, BUTTON_1_LONG},
 	{BUTTON_2, BUTTON_2_ACTIVE_STATE, BUTTON_2_SHORT, BUTTON_2_LONG},
@@ -103,10 +103,17 @@ constexpr auto createMultiButtonArray() {
 	return btnActionArray;
 }
 
-constexpr auto multiBtnActions = createMultiButtonArray();	// The object holding all registered multi button commands
+static constexpr auto multiBtnActions = createMultiButtonArray();	// The object holding all registered multi button commands
 
-uint8_t gShutdownButton = 99; // Helper used for Neopixel: stores button-number of shutdown-button
+static uint8_t gShutdownButton = 99; // Helper used for Neopixel: stores button-number of shutdown-button
 uint16_t gLongPressTime = 0;
+
+std::optional<const t_button> getShutdownButton() {
+	if(gShutdownButton != 99) {
+		return gButtons[gShutdownButton];
+	}
+	return std::nullopt;
+}
 
 #ifdef PORT_EXPANDER_ENABLE
 extern bool Port_AllowReadFromPortExpander;
