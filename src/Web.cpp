@@ -1228,8 +1228,8 @@ void explorerHandleFileStorageTask(void *parameter) {
 
 	// pause some tasks to get more free CPU time for the upload
 	vTaskSuspend(AudioTaskHandle);
-	Led_TaskPause();
-	Rfid_TaskPause();
+	Led_TaskPause(); 
+	rfid::taskPause();
 
 	for (;;) {
 		// check buffer is full with enough data or all data already sent
@@ -1266,7 +1266,7 @@ void explorerHandleFileStorageTask(void *parameter) {
 				// resume the paused tasks
 				Led_TaskResume();
 				vTaskResume(AudioTaskHandle);
-				Rfid_TaskResume();
+				rfid::taskResume();
 				// just delete task without signaling (abort)
 				vTaskDelete(NULL);
 				return;
@@ -1278,7 +1278,7 @@ void explorerHandleFileStorageTask(void *parameter) {
 	// resume the paused tasks
 	Led_TaskResume();
 	vTaskResume(AudioTaskHandle);
-	Rfid_TaskResume();
+	rfid::taskResume();
 	// send signal to upload function to terminate
 	xQueueSend(explorerFileUploadStatusQueue, &value, 0);
 	vTaskDelete(NULL);

@@ -71,9 +71,9 @@
 
 
 	//################## select RFID reader ##############################
-	#define RFID_READER_TYPE_MFRC522_SPI    // use MFRC522 via SPI
-	//#define RFID_READER_TYPE_MFRC522_I2C  // use MFRC522 via I2C
-	//#define RFID_READER_TYPE_PN5180       // use PN5180 via SPI
+	//#define RFID_READER_TYPE_MFRC522        // use MFRC522
+	//#define RFID_READER_TYPE_PN532  // use PN532
+	#define RFID_READER_TYPE_PN5180       // use PN5180 via SPI
 
 	#ifdef RFID_READER_TYPE_MFRC522_I2C
 		#define MFRC522_ADDR 0x28           // default I2C-address of MFRC522
@@ -81,6 +81,12 @@
 
 	#ifdef RFID_READER_TYPE_PN5180
 		//#define PN5180_ENABLE_LPCD        // Wakes up ESPuino if RFID-tag was applied while deepsleep is active. Only ISO-14443-tags are supported for wakeup!
+		#define RFID_READER_NFC15693_PASSWORD 1
+		// default factory password for ICODE-SLIX2,  add your own codes which should be used to unlock the tags (all codes will be tried in order until one works)
+		constexpr uint8_t rfidPassword[][4] = {
+			{0x0F, 0x0F, 0x0F, 0x0F},
+			{0xAB, 0xEF, 0x00, 0x00}
+		};
 	#endif
 
 	#if defined(RFID_READER_TYPE_MFRC522_I2C) || defined(RFID_READER_TYPE_MFRC522_SPI)

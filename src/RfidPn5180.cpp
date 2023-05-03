@@ -105,20 +105,21 @@ void Rfid_Cyclic(void) {
 	// Not necessary as cyclic stuff performed by task Rfid_Task()
 }
 
-void Rfid_Task(void *parameter) {
-	static PN5180ISO14443 nfc14443(RFID_CS, RFID_BUSY, RFID_RST);
-	static PN5180ISO15693 nfc15693(RFID_CS, RFID_BUSY, RFID_RST);
-	uint32_t lastTimeDetected14443 = 0;
-	uint32_t lastTimeDetected15693 = 0;
-	#ifdef PAUSE_WHEN_RFID_REMOVED
-	byte lastValidcardId[cardIdSize];
-	bool cardAppliedCurrentRun = false;
-	bool cardAppliedLastRun = false;
-	#endif
-	uint8_t stateMachine = RFID_PN5180_STATE_INIT;
-	static byte cardId[cardIdSize], lastCardId[cardIdSize];
-	uint8_t uid[10];
-	bool showDisablePrivacyNotification = true;
+	void Rfid_Task(void *parameter) {
+		constexpr size_t cardIdSize = 4;
+		static PN5180ISO14443 nfc14443(RFID_CS, RFID_BUSY, RFID_RST);
+		static PN5180ISO15693 nfc15693(RFID_CS, RFID_BUSY, RFID_RST);
+		uint32_t lastTimeDetected14443 = 0;
+		uint32_t lastTimeDetected15693 = 0;
+		#ifdef PAUSE_WHEN_RFID_REMOVED
+			byte lastValidcardId[cardIdSize];
+			bool cardAppliedCurrentRun = false;
+			bool cardAppliedLastRun = false;
+		#endif
+		uint8_t stateMachine = RFID_PN5180_STATE_INIT;
+		static byte cardId[cardIdSize], lastCardId[cardIdSize];
+		uint8_t uid[10];
+		bool showDisablePrivacyNotification = true;
 
 	// wait until queues are created
 	while (gRfidCardQueue == NULL) {
