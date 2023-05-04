@@ -3,7 +3,6 @@
 #include <PN5180.h>
 #include <PN5180ISO14443.h>
 #include <PN5180ISO15693.h>
-#include "rfid.hpp"
 
 namespace rfid::driver
 {
@@ -12,6 +11,8 @@ namespace implementation
 
 class RfidPN1580 : public RfidDriverBase<RfidPN1580> {
 	using RfidDriverBase::cardChangeEvent;
+	using RfidDriverBase::message;
+	using RfidDriverBase::accessGuard;
 
 public:
 	void init() {
@@ -192,15 +193,30 @@ private:
 
 			if(cardReceived) {
 				// check if it is the same card
-				if(memcmp(uid, lastCardId, sizeof(lastCardId)) == 0) {
+				if(memcmp(uid, lastCardId,cardIdSize) == 0) {
 					// same card, reset reader
 					nfc14443Fsm = Nfc14443Fsm::reset;
 					nfc15693Fsm = Nfc15693Fsm::reset;
 				}
 				continue;
-			}
 
-			memcpy(lastCardId, uid, sizeof(lastCardId));
+				memcpy(lastCardId, uid, cardIdSize);
+
+				const String hexString = binToHex(uid, cardIdSize);
+				Log_Printf(LOGLEVEL_NOTICE, rfidTagDetected, hexString.c_str());
+				Log_Printf(LOGLEVEL_NOTICE, "Card type: %s", (fsm == MainFsm::nfc14443) ? "ISO-14443" : "ISO-15693");
+
+				// get the access guard
+				std::unique_lock guard(driver->accessGuard, std::defer_lock);
+				
+				guard.lock();
+				driver->message.event = Message::Event::CardApplied;
+				memcpy(uid, driver->message.cardId, cardIdSize);
+				guard.unlock();
+
+				// signal the event
+				xSemaphoreGive(driver->cardChangeEvent);
+			}
 		}
 	}
 
@@ -208,10 +224,6 @@ private:
 
 	TaskHandle_t taskHandle{nullptr};
 	bool enableLpcdShutdown{false};
-
-	SemaphoreHandle_t accessGuard{xSemaphoreCreateBinary()};
-	bool cardPresent{false};
-	String cardId{String()};
 };
 
 } // namespace implementation

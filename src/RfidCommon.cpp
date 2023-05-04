@@ -14,19 +14,39 @@
 
 #include "driver/rfid/rfid.hpp"
 
-namespace rfid
-{
-
-driver::RfidDriver rfidDriver;
-
 unsigned long Rfid_LastRfidCheckTimestamp = 0;
 char gCurrentRfidTagId[cardIdStringSize] = ""; // No crap here as otherwise it could be shown in GUI
 #ifdef DONT_ACCEPT_SAME_RFID_TWICE_ENABLE
 	char gOldRfidTagId[cardIdStringSize] = "X";     // Init with crap
 #endif
 
+
+namespace rfid
+{
+
+using RfidMessage = driver::RfidDriver::Message;
+using namespace driver;
+
+RfidDriver rfidDriver;
+
 void init() {
 	rfidDriver.init();
+}
+
+void exit() {
+	taskPause();
+}
+
+void taskPause() {
+	rfidDriver.suspend(true);
+}
+
+void taskResume() {
+	rfidDriver.suspend(false);
+}
+
+void wakeupCheck() {
+	rfidDriver.wakeupCheck();
 }
 
 // Tries to lookup RFID-tag-string in NVS and extracts parameter from it if found
@@ -34,18 +54,19 @@ void preferenceLookupHandler() {
 	// wait for a card change event
 	bool cardChangeEvent = rfidDriver.waitForCardEvent(0);
 	if(cardChangeEvent) {
+		RfidMessage msg = rfidDriver.getLastEvent();
+
 		// we got the semaphore
 		System_UpdateActivityTimer();
 
-		bool cardPresent = rfidDriver.isCardPresent();
-		if(cardPresent) {
+		if(msg.event == RfidMessage::Event::CardApplied) {
 			char _file[255];
 			uint32_t _lastPlayPos = 0;
 			uint16_t _trackLastPlayed = 0;
 			uint32_t _playMode = 1;
 
 			// card was put on reader
-			const String rfidTagId = rfidDriver.getCardId();
+			const String rfidTagId = RfidDriver::binToDec(msg.cardId, RfidDriver::cardIdSize);
 			Log_Printf(LOGLEVEL_INFO, rfidTagReceived, rfidTagId.c_str());
 			Web_SendWebsocketData(0, 10); // Push new rfidTagId to all websocket-clients
 
@@ -118,18 +139,6 @@ void preferenceLookupHandler() {
 		}
 	}
 
-}
-
-void taskPause() {
-	rfidDriver.suspend(true);
-}
-
-void taskResume() {
-	rfidDriver.suspend(false);
-}
-
-void wakeupCheck() {
-	rfidDriver.wakeupCheck();
 }
 
 } // namespace rfid

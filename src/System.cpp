@@ -225,7 +225,7 @@ void System_DeepSleepManager(void) {
 		delay(200);
 // .. for LPCD
 #if defined(RFID_READER_TYPE_MFRC522_SPI) || defined(RFID_READER_TYPE_MFRC522_I2C) || defined(RFID_READER_TYPE_PN5180)
-		Rfid_Exit();
+		rfid::exit();
 #endif
 #ifdef PORT_EXPANDER_ENABLE
 		Port_Exit();
