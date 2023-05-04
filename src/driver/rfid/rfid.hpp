@@ -14,20 +14,28 @@ class RfidDriverBase : crtp<T, RfidDriver> {
             this->underlying().init();
         }
 
+        bool isCardPresent() {
+            return this->underlying().isCardPresent();
+        }
+
+        const String getCardId() {
+            return this->underlying().getCardId();
+        }
+
+        void suspend(bool enable) {
+            this->underlying().suspend(enable);
+        }
+
+        void wakeupCheck() {
+            this->underlying().wakeupCheck();
+        }
+
         SemaphoreHandle_t &getCardChangeSemaphore() {
             return cardChangeEvent;
         }
 
         bool waitForCardEvent(uint32_t ms) {
             return xSemaphoreTake(cardChangeEvent, ms / portTICK_PERIOD_MS);
-        }
-
-        bool isCardPresent() {
-            this->underlying().isCardPresent();
-        }
-
-        const String getCardId() {
-            this->underlying().getCardId();
         }
 
     protected:
