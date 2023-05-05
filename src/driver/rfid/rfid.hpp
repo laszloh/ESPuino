@@ -7,24 +7,50 @@
 
 namespace rfid::driver
 {
+struct Message {
+    static constexpr size_t cardIdSize = 4;
+
+    enum class Event : uint8_t {
+        NoCard = 0,
+        CardRemoved,
+        CardApplied,
+        CardPresent
+    };
+
+    Event event;
+    uint8_t cardId[cardIdSize];
+
+    const String toString() const {
+        char buf[3 * cardIdSize] = {0};
+
+        for(int i = 0; i < cardIdSize; i++) {
+            const size_t idx = i * 3;
+            buf[idx] = cardId[i] / 100;
+            buf[idx + 1] = (cardId[i] % 100) / 10;
+            buf[idx + 2] = (cardId[i] % 100) % 10;
+        }
+
+        return buf;
+    }
+
+    const String toHexString() const {
+        char buf[3 * cardIdSize] = {0};
+
+        constexpr char hexDigits[] = "0123456789ABCDEF";
+        for(size_t i = 0; i < cardIdSize; i++) {
+            const size_t idx = i * 3;
+            buf[idx] = hexDigits[(cardId[i]>>4) & 0x0F];
+            buf[idx + 1] = hexDigits[cardId[i] & 0x0F];
+            buf[idx + 2] = (i < cardIdSize - 1) ? '-' : '\0';
+        }
+
+        return buf;
+    }
+
+};
 
 template<typename T>
 class RfidDriverBase : crtp<T, RfidDriverBase> {
-    public:
-        static constexpr size_t cardIdSize = 4;
-
-        struct Message {
-            enum class Event : uint8_t {
-                NoCard = 0,
-                CardRemoved,
-                CardApplied,
-                CardPresent
-            };
-
-            Event event;
-            uint8_t cardId[cardIdSize];
-        };
-
     public:
         void init() {
             this->underlying().init();
@@ -47,37 +73,33 @@ class RfidDriverBase : crtp<T, RfidDriverBase> {
             return xSemaphoreTake(cardChangeEvent, ms / portTICK_PERIOD_MS);
         }
 
-        static const String binToHex(uint8_t *buffer, size_t len) {
-            char buf[3 * len] = {0};
-
-            constexpr char hexDigits[] = "0123456789ABCDEF";
-            for(size_t i = 0; i < len; i++) {
-                const size_t idx = i * 3;
-                buf[idx] = hexDigits[(buffer[i]>>4) & 0x0F];
-                buf[idx + 1] = hexDigits[buffer[i] & 0x0F];
-                buf[idx + 2] = (i < len -1) ? '-' : '\0';
-            }
-
-            return buf;
-        }
-
-        static const String binToDec(uint8_t *buffer, size_t len) {
-            char buf[3 * len] = {0};
-
-            for(int i = 0; i < len; i++) {
-                const size_t idx = i * 3;
-                buf[idx] = buffer[i] / 100;
-                buf[idx + 1] = (buffer[i] % 100) / 10;
-                buf[idx + 2] = (buffer[i] % 100) % 10;
-            }
-
-            return buf;
-        }
 
     protected:
         SemaphoreHandle_t cardChangeEvent{xSemaphoreCreateBinary()};
         std::mutex accessGuard;
         Message message;
+
+        void signalEvent(Message::Event event, uint8_t cardId[] = nullptr) {
+            // get the access guard
+            std::lock_guard guard(accessGuard);
+            message.event = event;
+            if(cardId) {
+                memcpy(message.cardId, cardId, Message::cardIdSize);
+            } else {
+                memset(message.cardId, 0, sizeof(message.cardId));
+            }
+
+            // signal the event
+            xSemaphoreGive(cardChangeEvent);
+        }
+
+        void signalEvent(Message msg) {
+            std::lock_guard guard(accessGuard);
+            message = msg;
+
+            // signal the event
+            xSemaphoreGive(cardChangeEvent);
+        }
 
     private:
         RfidDriverBase() {}

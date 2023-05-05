@@ -24,7 +24,6 @@ char gCurrentRfidTagId[cardIdStringSize] = ""; // No crap here as otherwise it c
 namespace rfid
 {
 
-using RfidMessage = driver::RfidDriver::Message;
 using namespace driver;
 
 RfidDriver rfidDriver;
@@ -54,19 +53,19 @@ void preferenceLookupHandler() {
 	// wait for a card change event
 	bool cardChangeEvent = rfidDriver.waitForCardEvent(0);
 	if(cardChangeEvent) {
-		RfidMessage msg = rfidDriver.getLastEvent();
+		Message msg = rfidDriver.getLastEvent();
 
 		// we got the semaphore
 		System_UpdateActivityTimer();
 
-		if(msg.event == RfidMessage::Event::CardApplied) {
+		if(msg.event == Message::Event::CardApplied) {
 			char _file[255];
 			uint32_t _lastPlayPos = 0;
 			uint16_t _trackLastPlayed = 0;
 			uint32_t _playMode = 1;
 
 			// card was put on reader
-			const String rfidTagId = RfidDriver::binToDec(msg.cardId, RfidDriver::cardIdSize);
+			const String rfidTagId = msg.toString();
 			Log_Printf(LOGLEVEL_INFO, rfidTagReceived, rfidTagId.c_str());
 			Web_SendWebsocketData(0, 10); // Push new rfidTagId to all websocket-clients
 

@@ -13,6 +13,7 @@ class RfidPN1580 : public RfidDriverBase<RfidPN1580> {
 	using RfidDriverBase::cardChangeEvent;
 	using RfidDriverBase::message;
 	using RfidDriverBase::accessGuard;
+	using RfidDriverBase::signalEvent;
 
 public:
 	void init() {
@@ -38,14 +39,6 @@ public:
 			2 | portPRIVILEGE_BIT,
 			&taskHandle,
 			ARDUINO_RUNNING_CORE);
-	}
-
-	bool isCardPresent() {
-		return true;
-	}
-
-	const String getCardId() {
-		return "123456789012";
 	}
 
 	void suspend(bool enable) {
@@ -81,16 +74,11 @@ private:
 		Nfc15693Fsm nfc15693Fsm = Nfc15693Fsm::reset;
 		uint32_t lastTimeCardDetect = 0;
 		uint8_t uid[10];
-		uint8_t lastCardId[cardIdSize];
-
-#ifdef PAUSE_WHEN_RFID_REMOVED
-		byte lastValidcardId[cardIdSize];
-		bool cardAppliedCurrentRun = false;
+		uint8_t lastCardId[Message::cardIdSize];
 		bool cardAppliedLastRun = false;
-#endif
 
 		while (1) {
-			bool cardReceived;
+			bool cardReceived = false;
 
 			vTaskDelay(portTICK_RATE_MS * 10u);
 
@@ -124,18 +112,12 @@ private:
 						if (nfc14443.readCardSerial(uid) >= 4) {
 							cardReceived = true;
 							lastTimeCardDetect = millis();
-#ifdef PAUSE_WHEN_RFID_REMOVED
-							cardAppliedCurrentRun = true;
-#endif
 						} else {
 							// Reset to dummy-value if no card is there
 							// Necessary to differentiate between "card is still applied" and "card is re-applied again after removal"
 							// lastTimeCardDetect is used to prevent "new card detection with old card" with single events where no card was detected
 							if (!lastTimeCardDetect || (millis() - lastTimeCardDetect) >= RfidPN1580::cardDetectTimeout) {
 								lastTimeCardDetect = 0;
-#ifdef PAUSE_WHEN_RFID_REMOVED
-							cardAppliedCurrentRun = false;
-#endif
 								memset(lastCardId, 0, sizeof(lastCardId));
 
 								// try nfc15693
@@ -152,29 +134,53 @@ private:
 					case Nfc15693Fsm::reset:
 						nfc15693.reset();
 						nfc15693.setupRF();
+
+						nfc15693Fsm = Nfc15693Fsm::readcard;
 						break;
 
 					case Nfc15693Fsm::disablePrivacyMode:
-						break;
+					{
+							// we are in privacy mode, try to unlock first
+							constexpr size_t rfidPwdCount = sizeof(rfidPassword) / sizeof(rfidPassword[0]);
+
+							// try all passwords until one works
+							for(size_t i=0;i<rfidPwdCount;i++) {
+								uint8_t pwd[4];
+								memcpy(pwd, rfidPassword[i], 4);
+
+								ISO15693ErrorCode ret = nfc15693.disablePrivacyMode(pwd);
+								if(ret == ISO15693_EC_OK) {
+									Log_Printf(LOGLEVEL_NOTICE, rfid15693TagUnlocked, i);
+									nfc15693Fsm = Nfc15693Fsm::readcard;
+									break;
+								}
+							}
+							// none of our password worked
+							Log_Println(rfid15693TagUnlockFailed, LOGLEVEL_ERROR);
+
+							nfc15693Fsm = Nfc15693Fsm::reset;
+					}
+					break;
 
 					case Nfc15693Fsm::readcard:
 					{
-					// try to read ISO15693 inventory
-					ISO15693ErrorCode ret = nfc15693.getInventory(uid);
-					if (ret == ISO15693_EC_OK) {
-						cardReceived = true;
-						lastTimeCardDetect = millis();
-#ifdef PAUSE_WHEN_RFID_REMOVED
-						cardAppliedCurrentRun = true;
-#endif
+						// try to read ISO15693 inventory
+						ISO15693ErrorCode ret = nfc15693.getInventory(uid);
+						if (ret == ISO15693_EC_OK) {
+							cardReceived = true;
+							lastTimeCardDetect = millis();
+						} else if(ret == ISO15693_EC_BLOCK_IS_LOCKED) {
+							// we have a locked chip, try to unlock
+							nfc15693Fsm = Nfc15693Fsm::disablePrivacyMode;
 						} else {
 							// lastTimeDetected15693 is used to prevent "new card detection with old card" with single events where no card was detected
 							if (!lastTimeCardDetect || (millis() - lastTimeCardDetect >= 400)) {
 								lastTimeCardDetect = 0;
-#ifdef PAUSE_WHEN_RFID_REMOVED
-								cardAppliedCurrentRun = false;
-#endif
 								memset(lastCardId, 0, sizeof(lastCardId));
+
+								// try nfc14443 next
+								nfc15693Fsm = Nfc15693Fsm::reset;
+								fsm = MainFsm::nfc14443;
 							}
 						}
 					}
@@ -182,43 +188,42 @@ private:
 				}
 				break;
 			}
-
-#ifdef PAUSE_WHEN_RFID_REMOVED
-			if (!cardAppliedCurrentRun && cardAppliedLastRun && !gPlayProperties.pausePlay && System_GetOperationMode() != OPMODE_BLUETOOTH_SINK) {   // Card removed => pause
-				AudioPlayer_TrackControlToQueueSender(PAUSEPLAY);
-				Log_Println(rfidTagRemoved, LOGLEVEL_NOTICE);
-			}
-			cardAppliedLastRun = cardAppliedCurrentRun;
-#endif
-
+	
 			if(cardReceived) {
 				// check if it is the same card
-				if(memcmp(uid, lastCardId,cardIdSize) == 0) {
+				if(memcmp(uid, lastCardId, Message::cardIdSize) == 0) {
 					// same card, reset reader
 					nfc14443Fsm = Nfc14443Fsm::reset;
 					nfc15693Fsm = Nfc15693Fsm::reset;
 				}
 				continue;
 
-				memcpy(lastCardId, uid, cardIdSize);
+				memcpy(lastCardId, uid, Message::cardIdSize);
 
-				const String hexString = binToHex(uid, cardIdSize);
-				Log_Printf(LOGLEVEL_NOTICE, rfidTagDetected, hexString.c_str());
+				Message msg;
+				msg.event = Message::Event::CardApplied;
+				memcpy(msg.cardId, uid,  Message::cardIdSize);
+
+				Log_Printf(LOGLEVEL_NOTICE, rfidTagDetected, msg.toHexString().c_str());
 				Log_Printf(LOGLEVEL_NOTICE, "Card type: %s", (fsm == MainFsm::nfc14443) ? "ISO-14443" : "ISO-15693");
 
-				// get the access guard
-				std::unique_lock guard(driver->accessGuard, std::defer_lock);
-				
-				guard.lock();
-				driver->message.event = Message::Event::CardApplied;
-				memcpy(uid, driver->message.cardId, cardIdSize);
-				guard.unlock();
+				driver->signalEvent(Message::Event::CardApplied, uid);
+			} else if (!cardReceived && cardAppliedLastRun) {
+				driver->signalEvent(Message::Event::CardRemoved);
+				Log_Println(rfidTagRemoved, LOGLEVEL_NOTICE);
+			} else {
+				// signal card is still missing & reset state machines
+				driver->signalEvent(Message::Event::NoCard);
 
-				// signal the event
-				xSemaphoreGive(driver->cardChangeEvent);
+				fsm = MainFsm::nfc14443;
+				nfc14443Fsm = Nfc14443Fsm::reset;
+				nfc15693Fsm = Nfc15693Fsm::reset;
 			}
+
+			cardAppliedLastRun = cardReceived;
 		}
 	}
+
 
 	static constexpr uint32_t cardDetectTimeout = 1000;
 
