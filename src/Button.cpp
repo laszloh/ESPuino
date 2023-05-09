@@ -9,7 +9,10 @@
 #include "System.h"
 #include "cpp.h"
 
-bool gButtonInitComplete = false;
+namespace button
+{
+
+bool intiStatus = false;
 
 // Only enable those buttons that are not disabled (99 or >115)
 // 0 -> 39: GPIOs
@@ -103,10 +106,16 @@ constexpr auto createMultiButtonArray() {
 	return btnActionArray;
 }
 
-static constexpr auto multiBtnActions = createMultiButtonArray();	// The object holding all registered multi button commands
+constexpr auto multiBtnActions = createMultiButtonArray();	// The object holding all registered multi button commands
 
-static uint8_t gShutdownButton = 99; // Helper used for Neopixel: stores button-number of shutdown-button
+uint8_t gShutdownButton = 99; // Helper used for Neopixel: stores button-number of shutdown-button
 uint16_t gLongPressTime = 0;
+
+volatile SemaphoreHandle_t Button_TimerSemaphore;
+hw_timer_t *Button_Timer = NULL;
+void IRAM_ATTR onTimer();
+
+void doButtonAction(void);
 
 std::optional<const t_button> getShutdownButton() {
 	if(gShutdownButton != 99) {
@@ -119,13 +128,7 @@ std::optional<const t_button> getShutdownButton() {
 extern bool Port_AllowReadFromPortExpander;
 #endif
 
-static volatile SemaphoreHandle_t Button_TimerSemaphore;
-
-hw_timer_t *Button_Timer = NULL;
-static void IRAM_ATTR onTimer();
-static void Button_DoButtonActions(void);
-
-void Button_Init() {
+void init() {
 	// process all buttons
 	uint8_t idx = 0;
 	for(auto it = gButtons.begin(); it != gButtons.end(); it++, idx++) {
@@ -158,7 +161,7 @@ void Button_Init() {
 }
 
 // If timer-semaphore is set, read buttons (unless controls are locked)
-void Button_Cyclic() {
+void cyclic() {
 	if (xSemaphoreTake(Button_TimerSemaphore, 0) == pdTRUE) {
 		unsigned long currentTimestamp = millis();
 #ifdef PORT_EXPANDER_ENABLE
@@ -195,12 +198,16 @@ void Button_Cyclic() {
 			e.lastState = e.currentState;
 		}
 	}
-	gButtonInitComplete = true;
-	Button_DoButtonActions();
+	intiStatus = true;
+	doButtonAction();
+}
+
+bool isInitComplete() {
+	return intiStatus;
 }
 
 // Do corresponding actions for all buttons
-void Button_DoButtonActions(void) {
+void doButtonAction(void) {
 
 	// check all registered multi buttons for an action
 	for(auto &mb : multiBtnActions) {
@@ -253,3 +260,5 @@ void Button_DoButtonActions(void) {
 void IRAM_ATTR onTimer() {
 	xSemaphoreGiveFromISR(Button_TimerSemaphore, NULL);
 }
+
+} // namespace button

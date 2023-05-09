@@ -239,9 +239,9 @@ void Led_DrawIdleDots(CRGBSet &leds, uint8_t offset, CRGB::HTMLColorCode color) 
 }
 
 	bool CheckForPowerButtonAnimation() {
-		auto sleepBtn = getShutdownButton();
+		auto sleepBtn = button::getShutdownButton();
 		if (sleepBtn) { // Only show animation, if CMD_SLEEPMODE was assigned to BUTTON_n_LONG + button is pressed
-			if(sleepBtn->isPressed && (millis() - sleepBtn->firstPressedTimestamp >= 150) && gButtonInitComplete) {
+			if(sleepBtn->isPressed && (millis() - sleepBtn->firstPressedTimestamp >= 150) && button::isInitComplete()) {
 				return true;
 			}
 		}
@@ -476,7 +476,7 @@ AnimationReturnType Animation_Boot(const bool startNewAnimation, CRGBSet &leds) 
 		if (startNewAnimation) {
 			animationIndex = 0;
 		}
-		auto sleepBtn = getShutdownButton();
+		auto sleepBtn = button::getShutdownButton();
 		if(!sleepBtn) {
 			// we do not have an animation button o.O
 			return AnimationReturnType(false, 0);
