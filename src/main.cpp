@@ -66,7 +66,7 @@ static AC101 ac(&i2cBusOne);
 
 // I2C
 #ifdef I2C_2_ENABLE
-TwoWire i2cBusTwo = TwoWire(1);
+	TwoWire &i2cBusTwo = Wire1;
 #endif
 
 #ifdef PLAY_LAST_RFID_AFTER_REBOOT
@@ -127,10 +127,10 @@ void setup() {
 	Queues_Init();
 
 	// Make sure all wakeups can be enabled *before* initializing RFID, which can enter sleep immediately
-	Button_Init(); // To preseed internal button-storage with values
-#ifdef PN5180_ENABLE_LPCD
-	rfid::init();
-#endif
+	button::init();  // To preseed internal button-storage with values
+	#ifdef PN5180_ENABLE_LPCD
+		rfid::init();
+	#endif
 
 	System_Init();
 
@@ -261,8 +261,8 @@ void loop() {
 
 	AudioPlayer_Cyclic();
 	Battery_Cyclic();
-	// Port_Cyclic(); // called by button (controlled via hw-timer)
-	Button_Cyclic();
+	//Port_Cyclic(); // called by button (controlled via hw-timer)
+	button::cyclic();
 	System_Cyclic();
 	rfid::cyclic();
 
