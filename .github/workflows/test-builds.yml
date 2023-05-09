@@ -3,8 +3,10 @@ run-name: Build all boards
 on: 
   workflow_dispatch:
   workflow_run:
-    workflows: [clang-format-check]
-    types: [completed]
+    workflows: 
+      - clang-format-check
+    types: 
+      - completed
 
 jobs:
   test_builds:
