@@ -247,6 +247,16 @@ void Audio_setTitle(const char *format, ...) {
 #endif
 }
 
+const String AudioPlayer_getCurrentTrackPath(size_t track) {
+	std::lock_guard guard(playlist_mutex);
+	if(track >= playlist->size()) {
+		// requested track is larger than the array
+		return String();
+	}
+	// return the absolute path
+	return playlist->getAbsolutePath(track);
+}
+
 // Set maxVolume depending on headphone-adjustment is enabled and headphone is/is not connected
 // Enable/disable PA/HP-amps initially
 void AudioPlayer_SetupVolumeAndAmps(void) {
