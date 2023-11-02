@@ -20,6 +20,7 @@
 #include "Web.h"
 #include "Wlan.h"
 #include "main.h"
+#include "utils.h"
 
 #include <esp_task_wdt.h>
 #include <freertos/task.h>
@@ -61,20 +62,19 @@ static void AudioPlayer_ClearCover(void);
 void AudioPlayer_Init(void) {
 	// load playtime total from NVS
 	playTimeSecTotal = gPrefsSettings.getULong("playTimeTotal", 0);
+	uint32_t nvsInitialVolume;
 
-#ifndef USE_LAST_VOLUME_AFTER_REBOOT
-	// Get initial volume from NVS
-	uint32_t nvsInitialVolume = gPrefsSettings.getUInt("initVolume", 0);
-#else
-	// Get volume used at last shutdown
-	uint32_t nvsInitialVolume = gPrefsSettings.getUInt("previousVolume", 999);
-	if (nvsInitialVolume == 999) {
-		gPrefsSettings.putUInt("previousVolume", AudioPlayer_GetInitVolume());
-		nvsInitialVolume = AudioPlayer_GetInitVolume();
+	if constexpr (IS_ENABLED(USE_LAST_VOLUME_AFTER_REBOOT)) {
+		nvsInitialVolume = gPrefsSettings.getUInt("previousVolume", 999);
+		if (nvsInitialVolume == 999) {
+			gPrefsSettings.putUInt("previousVolume", AudioPlayer_GetInitVolume());
+			nvsInitialVolume = AudioPlayer_GetInitVolume();
+		} else {
+			Log_Println(rememberLastVolume, LOGLEVEL_ERROR);
+		}
 	} else {
-		Log_Println(rememberLastVolume, LOGLEVEL_ERROR);
+		nvsInitialVolume = gPrefsSettings.getUInt("initVolume", 0);
 	}
-#endif
 
 	if (nvsInitialVolume) {
 		AudioPlayer_SetInitVolume(nvsInitialVolume);
@@ -95,22 +95,22 @@ void AudioPlayer_Init(void) {
 		Log_Println(wroteMaxLoudnessForSpeakerToNvs, LOGLEVEL_ERROR);
 	}
 
-#ifdef HEADPHONE_ADJUST_ENABLE
-	#if (HP_DETECT >= 0 && HP_DETECT <= MAX_GPIO)
-	pinMode(HP_DETECT, INPUT_PULLUP);
-	#endif
-	AudioPlayer_HeadphoneLastDetectionState = Audio_Detect_Mode_HP(Port_Read(HP_DETECT));
+	if constexpr (IS_ENABLED(HEADPHONE_ADJUST_ENABLE)) {
+		if constexpr (HP_DETECT >= 0 && HP_DETECT <= MAX_GPIO) {
+			pinMode(HP_DETECT, INPUT_PULLUP);
+		}
+		AudioPlayer_HeadphoneLastDetectionState = Audio_Detect_Mode_HP(Port_Read(HP_DETECT));
 
-	// Get maximum volume for headphone from NVS
-	uint32_t nvsAudioPlayer_MaxVolumeHeadphone = gPrefsSettings.getUInt("maxVolumeHp", 0);
-	if (nvsAudioPlayer_MaxVolumeHeadphone) {
-		AudioPlayer_MaxVolumeHeadphone = nvsAudioPlayer_MaxVolumeHeadphone;
-		Log_Printf(LOGLEVEL_INFO, restoredMaxLoudnessForHeadphoneFromNvs, nvsAudioPlayer_MaxVolumeHeadphone);
-	} else {
-		gPrefsSettings.putUInt("maxVolumeHp", nvsAudioPlayer_MaxVolumeHeadphone);
-		Log_Println(wroteMaxLoudnessForHeadphoneToNvs, LOGLEVEL_ERROR);
+		// Get maximum volume for headphone from NVS
+		uint32_t nvsAudioPlayer_MaxVolumeHeadphone = gPrefsSettings.getUInt("maxVolumeHp", 0);
+		if (nvsAudioPlayer_MaxVolumeHeadphone) {
+			AudioPlayer_MaxVolumeHeadphone = nvsAudioPlayer_MaxVolumeHeadphone;
+			Log_Printf(LOGLEVEL_INFO, restoredMaxLoudnessForHeadphoneFromNvs, nvsAudioPlayer_MaxVolumeHeadphone);
+		} else {
+			gPrefsSettings.putUInt("maxVolumeHp", nvsAudioPlayer_MaxVolumeHeadphone);
+			Log_Println(wroteMaxLoudnessForHeadphoneToNvs, LOGLEVEL_ERROR);
+		}
 	}
-#endif
 	// Adjust volume depending on headphone is connected and volume-adjustment is enabled
 	AudioPlayer_SetupVolumeAndAmps();
 
@@ -137,15 +137,15 @@ void AudioPlayer_Exit(void) {
 	// save playtime total to NVS
 	playTimeSecTotal += playTimeSecSinceStart;
 	gPrefsSettings.putULong("playTimeTotal", playTimeSecTotal);
-// Make sure last playposition for audiobook is saved when playback is active while shutdown was initiated
-#ifdef SAVE_PLAYPOS_BEFORE_SHUTDOWN
-	if (!gPlayProperties.pausePlay && (gPlayProperties.playMode == AUDIOBOOK || gPlayProperties.playMode == AUDIOBOOK_LOOP)) {
-		AudioPlayer_TrackControlToQueueSender(PAUSEPLAY);
-		while (!gPlayProperties.pausePlay) { // Make sure to wait until playback is paused in order to be sure that playposition saved in NVS
-			vTaskDelay(portTICK_PERIOD_MS * 100u);
+	// Make sure last playposition for audiobook is saved when playback is active while shutdown was initiated
+	if constexpr (IS_ENABLED(SAVE_PLAYPOS_BEFORE_SHUTDOWN)) {
+		if (!gPlayProperties.pausePlay && (gPlayProperties.playMode == AUDIOBOOK || gPlayProperties.playMode == AUDIOBOOK_LOOP)) {
+			AudioPlayer_TrackControlToQueueSender(PAUSEPLAY);
+			while (!gPlayProperties.pausePlay) { // Make sure to wait until playback is paused in order to be sure that playposition saved in NVS
+				vTaskDelay(portTICK_PERIOD_MS * 100u);
+			}
 		}
 	}
-#endif
 }
 
 static uint32_t lastPlayingTimestamp = 0;
@@ -162,12 +162,7 @@ void AudioPlayer_Cyclic(void) {
 // Wrapper-function to reverse detection of connected headphones.
 // Normally headphones are supposed to be plugged in if a given GPIO/channel is LOW/false.
 bool Audio_Detect_Mode_HP(bool _state) {
-#ifndef DETECT_HP_ON_HIGH
-	return _state;
-#else
-	return !_state;
-#endif
-}
+	return _state ^ IS_ENABLED(DETECT_HP_ON_HIGH)}
 
 uint8_t AudioPlayer_GetCurrentVolume(void) {
 	return AudioPlayer_CurrentVolume;
@@ -227,94 +222,88 @@ void Audio_setTitle(const char *format, ...) {
 
 	// notify web ui and mqtt
 	Web_SendWebsocketData(0, 30);
-#ifdef MQTT_ENABLE
-	publishMqtt(topicTrackState, gPlayProperties.title, false);
-#endif
+	if constexpr (IS_ENABLED(MQTT_ENABLE)) {
+		publishMqtt(topicTrackState, gPlayProperties.title, false);
+	}
 }
 
 // Set maxVolume depending on headphone-adjustment is enabled and headphone is/is not connected
 // Enable/disable PA/HP-amps initially
 void AudioPlayer_SetupVolumeAndAmps(void) {
-#ifdef PLAY_MONO_SPEAKER
-	gPlayProperties.currentPlayMono = true;
-	gPlayProperties.newPlayMono = true;
-#else
-	gPlayProperties.currentPlayMono = false;
-	gPlayProperties.newPlayMono = false;
-#endif
+	constexpr bool monoPlayback = IS_ENABLED(PLAY_MONO_SPEAKER)
+									  gPlayProperties.currentPlayMono
+		= monoPlayback;
+	gPlayProperties.newPlayMono = monoPlayback;
 
-#ifndef HEADPHONE_ADJUST_ENABLE
-	AudioPlayer_MaxVolume = AudioPlayer_MaxVolumeSpeaker;
-	// If automatic HP-detection is not used, we enabled both (PA / HP) if defined
-	#ifdef GPIO_PA_EN
-	Port_Write(GPIO_PA_EN, true, true);
-	#endif
-	#ifdef GPIO_HP_EN
-	Port_Write(GPIO_HP_EN, true, true);
-	#endif
-#else
-	if (Audio_Detect_Mode_HP(Port_Read(HP_DETECT))) {
-		AudioPlayer_MaxVolume = AudioPlayer_MaxVolumeSpeaker; // 1 if headphone is not connected
-	#ifdef GPIO_PA_EN
-		Port_Write(GPIO_PA_EN, true, true);
-	#endif
-	#ifdef GPIO_HP_EN
-		Port_Write(GPIO_HP_EN, false, true);
-	#endif
+	if constexpr (IS_ENABLED(HEADPHONE_ADJUST_ENABLE)) {
+		if (Audio_Detect_Mode_HP(Port_Read(HP_DETECT))) {
+			AudioPlayer_MaxVolume = AudioPlayer_MaxVolumeSpeaker; // 1 if headphone is not connected
+#ifdef GPIO_PA_EN
+			Port_Write(GPIO_PA_EN, true, true);
+#endif
+#ifdef GPIO_HP_EN
+			Port_Write(GPIO_HP_EN, false, true);
+#endif
+		} else {
+			AudioPlayer_MaxVolume = AudioPlayer_MaxVolumeHeadphone; // 0 if headphone is connected (put to GND)
+			gPlayProperties.newPlayMono = false; // always stereo for headphones!
+
+#ifdef GPIO_PA_EN
+			Port_Write(GPIO_PA_EN, false, true);
+#endif
+#ifdef GPIO_HP_EN
+			Port_Write(GPIO_HP_EN, true, true);
+#endif
+		}
+		Log_Printf(LOGLEVEL_INFO, maxVolumeSet, AudioPlayer_MaxVolume);
+		return;
 	} else {
-		AudioPlayer_MaxVolume = AudioPlayer_MaxVolumeHeadphone; // 0 if headphone is connected (put to GND)
-		gPlayProperties.newPlayMono = false; // always stereo for headphones!
-
-	#ifdef GPIO_PA_EN
-		Port_Write(GPIO_PA_EN, false, true);
-	#endif
-	#ifdef GPIO_HP_EN
-		Port_Write(GPIO_HP_EN, true, true);
-	#endif
-	}
-	Log_Printf(LOGLEVEL_INFO, maxVolumeSet, AudioPlayer_MaxVolume);
-	return;
+		AudioPlayer_MaxVolume = AudioPlayer_MaxVolumeSpeaker;
+// If automatic HP-detection is not used, we enabled both (PA / HP) if defined
+#ifdef GPIO_PA_EN
+		Port_Write(GPIO_PA_EN, true, true);
 #endif
+#ifdef GPIO_HP_EN
+		Port_Write(GPIO_HP_EN, true, true);
+#endif
+	}
 }
 
 void AudioPlayer_HeadphoneVolumeManager(void) {
-#ifdef HEADPHONE_ADJUST_ENABLE
-	bool currentHeadPhoneDetectionState = Audio_Detect_Mode_HP(Port_Read(HP_DETECT));
+	if constexpr (IS_ENABLED(HEADPHONE_ADJUST_ENABLE)) {
+		bool currentHeadPhoneDetectionState = Audio_Detect_Mode_HP(Port_Read(HP_DETECT));
+		constexpr bool monoPlayback = IS_ENABLED(PLAY_MONO_SPEAKER);
 
-	if (AudioPlayer_HeadphoneLastDetectionState != currentHeadPhoneDetectionState && (millis() - AudioPlayer_HeadphoneLastDetectionTimestamp >= headphoneLastDetectionDebounce)) {
-		if (currentHeadPhoneDetectionState) {
-			AudioPlayer_MaxVolume = AudioPlayer_MaxVolumeSpeaker;
-	#ifdef PLAY_MONO_SPEAKER
-			gPlayProperties.newPlayMono = true;
-	#else
-			gPlayProperties.newPlayMono = false;
-	#endif
+		if (AudioPlayer_HeadphoneLastDetectionState != currentHeadPhoneDetectionState && (millis() - AudioPlayer_HeadphoneLastDetectionTimestamp >= headphoneLastDetectionDebounce)) {
+			if (currentHeadPhoneDetectionState) {
+				AudioPlayer_MaxVolume = AudioPlayer_MaxVolumeSpeaker;
+				gPlayProperties.newPlayMono = monoPlayback;
 
-	#ifdef GPIO_PA_EN
-			Port_Write(GPIO_PA_EN, true, false);
-	#endif
-	#ifdef GPIO_HP_EN
-			Port_Write(GPIO_HP_EN, false, false);
-	#endif
-		} else {
-			AudioPlayer_MaxVolume = AudioPlayer_MaxVolumeHeadphone;
-			gPlayProperties.newPlayMono = false; // Always stereo for headphones
-			if (AudioPlayer_GetCurrentVolume() > AudioPlayer_MaxVolume) {
-				AudioPlayer_VolumeToQueueSender(AudioPlayer_MaxVolume, true); // Lower volume for headphone if headphone's maxvolume is exceeded by volume set in speaker-mode
-			}
-
-	#ifdef GPIO_PA_EN
-			Port_Write(GPIO_PA_EN, false, false);
-	#endif
-	#ifdef GPIO_HP_EN
-			Port_Write(GPIO_HP_EN, true, false);
-	#endif
-		}
-		AudioPlayer_HeadphoneLastDetectionState = currentHeadPhoneDetectionState;
-		AudioPlayer_HeadphoneLastDetectionTimestamp = millis();
-		Log_Printf(LOGLEVEL_INFO, maxVolumeSet, AudioPlayer_MaxVolume);
-	}
+#ifdef GPIO_PA_EN
+				Port_Write(GPIO_PA_EN, true, false);
 #endif
+#ifdef GPIO_HP_EN
+				Port_Write(GPIO_HP_EN, false, false);
+#endif
+			} else {
+				AudioPlayer_MaxVolume = AudioPlayer_MaxVolumeHeadphone;
+				gPlayProperties.newPlayMono = false; // Always stereo for headphones
+				if (AudioPlayer_GetCurrentVolume() > AudioPlayer_MaxVolume) {
+					AudioPlayer_VolumeToQueueSender(AudioPlayer_MaxVolume, true); // Lower volume for headphone if headphone's maxvolume is exceeded by volume set in speaker-mode
+				}
+
+#ifdef GPIO_PA_EN
+				Port_Write(GPIO_PA_EN, false, false);
+#endif
+#ifdef GPIO_HP_EN
+				Port_Write(GPIO_HP_EN, true, false);
+#endif
+			}
+			AudioPlayer_HeadphoneLastDetectionState = currentHeadPhoneDetectionState;
+			AudioPlayer_HeadphoneLastDetectionTimestamp = millis();
+			Log_Printf(LOGLEVEL_INFO, maxVolumeSet, AudioPlayer_MaxVolume);
+		}
+	}
 }
 
 class AudioCustom : public Audio {
@@ -326,16 +315,16 @@ public:
 
 // Function to play music as task
 void AudioPlayer_Task(void *parameter) {
-#ifdef BOARD_HAS_PSRAM
-	AudioCustom *audio = new AudioCustom();
-#else
-	static Audio audioAsStatic; // Don't use heap as it's needed for other stuff :-)
-	Audio *audio = &audioAsStatic;
-#endif
+	Audio *audio;
 
-#ifdef I2S_COMM_FMT_LSB_ENABLE
-	audio->setI2SCommFMT_LSB(true);
-#endif
+	if (psramFound()) {
+		audio = new AudioCustom();
+	} else {
+		static Audio audioAsStatic;
+		*audio = &audioAsStatic;
+	}
+
+	audio->setI2SCommFMT_LSB(IS_ENABLED(I2S_COMM_FMT_LSB_ENABLE));
 
 	uint8_t settleCount = 0;
 	AudioPlayer_CurrentVolume = AudioPlayer_GetInitVolume();
@@ -361,9 +350,9 @@ void AudioPlayer_Task(void *parameter) {
 			Log_Printf(LOGLEVEL_INFO, newLoudnessReceivedQueue, currentVolume);
 			audio->setVolume(currentVolume, VOLUMECURVE);
 			Web_SendWebsocketData(0, 50);
-#ifdef MQTT_ENABLE
-			publishMqtt(topicLoudnessState, currentVolume, false);
-#endif
+			if constexpr (IS_ENABLED(MQTT_ENABLE)) {
+				publishMqtt(topicLoudnessState, currentVolume, false);
+			}
 		}
 
 		if (xQueueReceive(gTrackControlQueue, &trackCommand, 0) == pdPASS) {
@@ -380,10 +369,10 @@ void AudioPlayer_Task(void *parameter) {
 				Log_Printf(LOGLEVEL_NOTICE, newPlaylistReceived, gPlayProperties.numberOfTracks);
 				Log_Printf(LOGLEVEL_DEBUG, "Free heap: %u", ESP.getFreeHeap());
 
-#ifdef MQTT_ENABLE
-				publishMqtt(topicPlaymodeState, gPlayProperties.playMode, false);
-				publishMqtt(topicRepeatModeState, AudioPlayer_GetRepeatMode(), false);
-#endif
+				if constexpr (IS_ENABLED(MQTT_ENABLE)) {
+					publishMqtt(topicPlaymodeState, gPlayProperties.playMode, false);
+					publishMqtt(topicRepeatModeState, AudioPlayer_GetRepeatMode(), false);
+				}
 
 				// If we're in audiobook-mode and apply a modification-card, we don't
 				// want to save lastPlayPosition for the mod-card but for the card that holds the playlist
@@ -461,9 +450,9 @@ void AudioPlayer_Task(void *parameter) {
 					}
 					if (gPlayProperties.repeatCurrentTrack) { // End loop if button was pressed
 						gPlayProperties.repeatCurrentTrack = false;
-#ifdef MQTT_ENABLE
-						publishMqtt(topicRepeatModeState, AudioPlayer_GetRepeatMode(), false);
-#endif
+						if constexpr (IS_ENABLED(MQTT_ENABLE)) {
+							publishMqtt(topicRepeatModeState, AudioPlayer_GetRepeatMode(), false);
+						}
 					}
 					// Allow next track if current track played in playlist isn't the last track.
 					// Exception: loop-playlist is active. In this case playback restarts at the first track of the playlist.
@@ -496,9 +485,9 @@ void AudioPlayer_Task(void *parameter) {
 					}
 					if (gPlayProperties.repeatCurrentTrack) { // End loop if button was pressed
 						gPlayProperties.repeatCurrentTrack = false;
-#ifdef MQTT_ENABLE
-						publishMqtt(topicRepeatModeState, AudioPlayer_GetRepeatMode(), false);
-#endif
+						if constexpr (IS_ENABLED(MQTT_ENABLE)) {
+							publishMqtt(topicRepeatModeState, AudioPlayer_GetRepeatMode(), false);
+						}
 					}
 					if (gPlayProperties.playMode == WEBSTREAM) {
 						Log_Println(trackChangeWebstream, LOGLEVEL_INFO);
@@ -620,9 +609,9 @@ void AudioPlayer_Task(void *parameter) {
 					gPlayProperties.playMode = NO_PLAYLIST;
 					Audio_setTitle(noPlaylist);
 					AudioPlayer_ClearCover();
-#ifdef MQTT_ENABLE
-					publishMqtt(topicPlaymodeState, gPlayProperties.playMode, false);
-#endif
+					if constexpr (IS_ENABLED(MQTT_ENABLE)) {
+						publishMqtt(topicPlaymodeState, gPlayProperties.playMode, false);
+					}
 					gPlayProperties.currentTrackNumber = 0;
 					gPlayProperties.numberOfTracks = 0;
 					if (gPlayProperties.sleepAfterPlaylist) {
@@ -723,13 +712,10 @@ void AudioPlayer_Task(void *parameter) {
 			gPlayProperties.tellMode = TTS_NONE;
 			String ipText = Wlan_GetIpAddress();
 			bool speechOk;
-#if (LANGUAGE == DE)
-			ipText.replace(".", "Punkt"); // make IP as text (replace thousand separator)
-			speechOk = audio->connecttospeech(ipText.c_str(), "de");
-#else
-			ipText.replace(".", "point");
-			speechOk = audio->connecttospeech(ipText.c_str(), "en");
-#endif
+			constexpr const char *pointWord = (LANGUAGE == DE) ? "Punkt" : "point";
+			constexpr const char *language = (LANGUAGE == DE) ? "de" : "en";
+			ipText.replace(".".pointWord);
+			speechOk = audio->connecttospeech(ipText.c_str(), language);
 			if (!speechOk) {
 				System_IndicateError();
 			}
@@ -742,17 +728,17 @@ void AudioPlayer_Task(void *parameter) {
 			getLocalTime(&timeinfo);
 			static char timeStringBuff[64];
 			bool speechOk;
-#if (LANGUAGE == DE)
-			snprintf(timeStringBuff, sizeof(timeStringBuff), "Es ist %02d:%02d Uhr", timeinfo.tm_hour, timeinfo.tm_min);
-			speechOk = audio->connecttospeech(timeStringBuff, "de");
-#else
-			if (timeinfo.tm_hour > 12) {
-				snprintf(timeStringBuff, sizeof(timeStringBuff), "It is %02d:%02d PM", timeinfo.tm_hour - 12, timeinfo.tm_min);
+			if constexpr (LANGUAGE == DE) {
+				snprintf(timeStringBuff, sizeof(timeStringBuff), "Es ist %02d:%02d Uhr", timeinfo.tm_hour, timeinfo.tm_min);
+				speechOk = audio->connecttospeech(timeStringBuff, "de");
 			} else {
-				snprintf(timeStringBuff, sizeof(timeStringBuff), "It is %02d:%02d AM", timeinfo.tm_hour, timeinfo.tm_min);
+				if (timeinfo.tm_hour > 12) {
+					snprintf(timeStringBuff, sizeof(timeStringBuff), "It is %02d:%02d PM", timeinfo.tm_hour - 12, timeinfo.tm_min);
+				} else {
+					snprintf(timeStringBuff, sizeof(timeStringBuff), "It is %02d:%02d AM", timeinfo.tm_hour, timeinfo.tm_min);
+				}
+				speechOk = audio->connecttospeech(timeStringBuff, "en");
 			}
-			speechOk = audio->connecttospeech(timeStringBuff, "en");
-#endif
 			if (!speechOk) {
 				System_IndicateError();
 			}
@@ -818,17 +804,17 @@ void AudioPlayer_Task(void *parameter) {
 		}
 		// esp_task_wdt_reset(); // Don't forget to feed the dog!
 
-#ifdef DONT_ACCEPT_SAME_RFID_TWICE_ENABLE
-		static uint8_t resetOnNextIdle = false;
-		if (gPlayProperties.playlistFinished || gPlayProperties.playMode == NO_PLAYLIST) {
-			if (resetOnNextIdle) {
-				Rfid_ResetOldRfid();
-				resetOnNextIdle = false;
+		if constexpr (IS_ENABLED(DONT_ACCEPT_SAME_RFID_TWICE_ENABLE)) {
+			static uint8_t resetOnNextIdle = false;
+			if (gPlayProperties.playlistFinished || gPlayProperties.playMode == NO_PLAYLIST) {
+				if (resetOnNextIdle) {
+					Rfid_ResetOldRfid();
+					resetOnNextIdle = false;
+				}
+			} else {
+				resetOnNextIdle = true;
 			}
-		} else {
-			resetOnNextIdle = true;
 		}
-#endif
 	}
 	vTaskDelete(NULL);
 }
@@ -872,36 +858,36 @@ void AudioPlayer_VolumeToQueueSender(const int32_t _newVolume, bool reAdjustRota
 
 // Pauses playback if playback is active and volume is changes from minVolume+1 to minVolume (usually 0)
 void AudioPlayer_PauseOnMinVolume(const uint8_t oldVolume, const uint8_t newVolume) {
-#ifdef PAUSE_ON_MIN_VOLUME
-	if (gPlayProperties.playMode == BUSY || gPlayProperties.playMode == NO_PLAYLIST) {
-		return;
-	}
+	if constexpr (IS_ENABLED(PAUSE_ON_MIN_VOLUME)) {
+		if (gPlayProperties.playMode == BUSY || gPlayProperties.playMode == NO_PLAYLIST) {
+			return;
+		}
 
-	if (!gPlayProperties.pausePlay) { // Volume changes from 1 to 0
-		if (oldVolume == AudioPlayer_GetMinVolume() + 1 && newVolume == AudioPlayer_GetMinVolume()) {
-			Cmd_Action(CMD_PLAYPAUSE);
+		if (!gPlayProperties.pausePlay) { // Volume changes from 1 to 0
+			if (oldVolume == AudioPlayer_GetMinVolume() + 1 && newVolume == AudioPlayer_GetMinVolume()) {
+				Cmd_Action(CMD_PLAYPAUSE);
+			}
+		}
+		if (gPlayProperties.pausePlay) { // Volume changes from 0 to 1
+			if (oldVolume == AudioPlayer_GetMinVolume() && newVolume > AudioPlayer_GetMinVolume()) {
+				Cmd_Action(CMD_PLAYPAUSE);
+			}
 		}
 	}
-	if (gPlayProperties.pausePlay) { // Volume changes from 0 to 1
-		if (oldVolume == AudioPlayer_GetMinVolume() && newVolume > AudioPlayer_GetMinVolume()) {
-			Cmd_Action(CMD_PLAYPAUSE);
-		}
-	}
-#endif
 }
 
 // Receives de-serialized RFID-data (from NVS) and dispatches playlists for the given
 // playmode to the track-queue.
 void AudioPlayer_TrackQueueDispatcher(const char *_itemToPlay, const uint32_t _lastPlayPos, const uint32_t _playMode, const uint16_t _trackLastPlayed) {
-// Make sure last playposition for audiobook is saved when new RFID-tag is applied
-#ifdef SAVE_PLAYPOS_WHEN_RFID_CHANGE
-	if (!gPlayProperties.pausePlay && (gPlayProperties.playMode == AUDIOBOOK || gPlayProperties.playMode == AUDIOBOOK_LOOP)) {
-		AudioPlayer_TrackControlToQueueSender(PAUSEPLAY);
-		while (!gPlayProperties.pausePlay) { // Make sure to wait until playback is paused in order to be sure that playposition saved in NVS
-			vTaskDelay(portTICK_PERIOD_MS * 100u);
+	// Make sure last playposition for audiobook is saved when new RFID-tag is applied
+	if constexpr (IS_ENABLED(SAVE_PLAYPOS_WHEN_RFID_CHANGE)) {
+		if (!gPlayProperties.pausePlay && (gPlayProperties.playMode == AUDIOBOOK || gPlayProperties.playMode == AUDIOBOOK_LOOP)) {
+			AudioPlayer_TrackControlToQueueSender(PAUSEPLAY);
+			while (!gPlayProperties.pausePlay) { // Make sure to wait until playback is paused in order to be sure that playposition saved in NVS
+				vTaskDelay(portTICK_PERIOD_MS * 100u);
+			}
 		}
 	}
-#endif
 	char filename[255];
 
 	size_t sizeCpy = strnlen(_itemToPlay, sizeof(filename) - 1); // get the len of the play item (to a max of 254 chars)
@@ -962,10 +948,10 @@ void AudioPlayer_TrackQueueDispatcher(const char *_itemToPlay, const uint32_t _l
 	gPlayProperties.saveLastPlayPosition = false;
 	gPlayProperties.playUntilTrackNumber = 0;
 
-#ifdef PLAY_LAST_RFID_AFTER_REBOOT
-	// Store last RFID-tag to NVS
-	gPrefsSettings.putString("lastRfid", gCurrentRfidTagId);
-#endif
+	if constexpr (IS_ENABLED(PLAY_LAST_RFID_AFTER_REBOOT)) {
+		// Store last RFID-tag to NVS
+		gPrefsSettings.putString("lastRfid", gCurrentRfidTagId);
+	}
 
 	switch (gPlayProperties.playMode) {
 		case SINGLE_TRACK: {
@@ -1161,9 +1147,9 @@ void AudioPlayer_ClearCover(void) {
 	gPlayProperties.coverFilePos = 0;
 	// websocket and mqtt notify cover image has changed
 	Web_SendWebsocketData(0, 40);
-#ifdef MQTT_ENABLE
-	publishMqtt(topicCoverChangedState, "", false);
-#endif
+	if constexpr (IS_ENABLED(MQTT_ENABLE)) {
+		publishMqtt(topicCoverChangedState, "", false);
+	}
 }
 
 // Some mp3-lib-stuff (slightly changed from default)
@@ -1233,9 +1219,9 @@ void audio_id3image(File &file, const size_t pos, const size_t size) {
 	gPlayProperties.coverFileSize = size;
 	// websocket and mqtt notify cover image has changed
 	Web_SendWebsocketData(0, 40);
-#ifdef MQTT_ENABLE
-	publishMqtt(topicCoverChangedState, "", false);
-#endif
+	if constexpr (IS_ENABLED(MQTT_ENABLE)) {
+		publishMqtt(topicCoverChangedState, "", false);
+	}
 }
 
 void audio_eof_speech(const char *info) {
