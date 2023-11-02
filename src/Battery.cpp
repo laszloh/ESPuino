@@ -9,8 +9,8 @@
 #include "Power.h"
 #include "Rfid.h"
 #include "System.h"
+#include "utils.h"
 
-#ifdef BATTERY_MEASURE_ENABLE
 uint8_t batteryCheckInterval = s_batteryCheckInterval;
 
 void Battery_Init(void) {
@@ -24,15 +24,15 @@ void Battery_Init(void) {
 
 	Battery_InitInner();
 
-	#ifdef SHUTDOWN_ON_BAT_CRITICAL
-	if (Battery_IsCritical()) {
-		Battery_LogStatus();
+	if constexpr (IS_ENABLED(SHUTDOWN_ON_BAT_CRITICAL)) {
+		if (Battery_IsCritical()) {
+			Battery_LogStatus();
 
-		Log_Println(batteryCriticalMsg, LOGLEVEL_NOTICE);
-		// Power down and enter deepsleep
-		System_RequestSleep();
+			Log_Println(batteryCriticalMsg, LOGLEVEL_NOTICE);
+			// Power down and enter deepsleep
+			System_RequestSleep();
+		}
 	}
-	#endif
 }
 
 // Measures battery as per interval or after bootup (after allowing a few seconds to settle down)
@@ -48,19 +48,13 @@ void Battery_Cyclic(void) {
 			Led_Indicate(LedIndicatorType::VoltageWarning);
 		}
 
-	#ifdef SHUTDOWN_ON_BAT_CRITICAL
-		if (Battery_IsCritical()) {
-			Log_Println(batteryCriticalMsg, LOGLEVEL_ERROR);
-			System_RequestSleep();
+		if constexpr (IS_ENABLED(SHUTDOWN_ON_BAT_CRITICAL)) {
+			if (Battery_IsCritical()) {
+				Log_Println(batteryCriticalMsg, LOGLEVEL_ERROR);
+				System_RequestSleep();
+			}
 		}
-	#endif
 
 		lastBatteryCheckTimestamp = millis();
 	}
 }
-#else // Battery Measure disabled, add dummy methods
-void Battery_Cyclic(void) {
-}
-void Battery_Init(void) {
-}
-#endif
