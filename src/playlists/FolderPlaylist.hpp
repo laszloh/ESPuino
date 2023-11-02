@@ -1,13 +1,13 @@
 #pragma once
 
-#include <stdint.h>
-#include <WString.h>
+#include "../Playlist.h"
+
 #include <FS.h>
+#include <WString.h>
+#include <random>
+#include <stdint.h>
 #include <string>
 #include <vector>
-#include <random>
-
-#include "../Playlist.h"
 
 class FolderPlaylist : public Playlist {
 protected:
@@ -16,9 +16,12 @@ protected:
 	char divider;
 
 public:
-	FolderPlaylist(size_t _capacity = 64, char _divider = '/') 
-	  : base(pstring()), files(std::vector<pstring, PsramAllocator<pstring>>(_capacity)), divider(_divider) { }
-	FolderPlaylist(File &folder, size_t _capacity = 64, char _divider = '/') : FolderPlaylist(_capacity, divider) {
+	FolderPlaylist(size_t _capacity = 64, char _divider = '/')
+		: base(pstring())
+		, files(std::vector<pstring, PsramAllocator<pstring>>(_capacity))
+		, divider(_divider) { }
+	FolderPlaylist(File &folder, size_t _capacity = 64, char _divider = '/')
+		: FolderPlaylist(_capacity, divider) {
 		createFromFolder(folder);
 	}
 
@@ -28,45 +31,45 @@ public:
 
 	bool createFromFolder(File &folder) {
 		// This is not a folder, so bail out
-		if(!folder || !folder.isDirectory()){
+		if (!folder || !folder.isDirectory()) {
 			return false;
 		}
 
 		// clean up any previously used memory
 		clear();
 
-		// since we are enumerating, we don't have to think about absolute files with different bases 
+		// since we are enumerating, we don't have to think about absolute files with different bases
 		base = getPath(folder);
 
 		// reserve a sane amout of memory
 		files.reserve(64);
 
 		// enumerate all files in the folder
-		while(true) {
+		while (true) {
 			bool isDir;
 			String path;
-			#if defined(HAS_FILEEXPLORER_SPEEDUP) || (ESP_ARDUINO_VERSION >= ESP_ARDUINO_VERSION_VAL(2, 0, 8))
+			if constexpr (fileNameSupport) {
 				path = folder.getNextFileName(&isDir);
-			#else
+			} else {
 				File f = folder.openNextFile();
-				if(!f){
-					path="";
-				}else{
+				if (!f) {
+					path = "";
+				} else {
 					path = getPath(f);
 					isDir = f.isDirectory();
 				}
-			#endif
-			if(path.isEmpty()) {
+			}
+			if (path.isEmpty()) {
 				break;
 			}
-			if(isDir) {
+			if (isDir) {
 				continue;
 			}
 
-			if(fileValid(path)) {
+			if (fileValid(path)) {
 				// push this file into the array
 				bool success = push_back(path);
-				if(!success) {
+				if (!success) {
 					return false;
 				}
 			}
@@ -95,19 +98,19 @@ public:
 
 	bool push_back(const char *path) {
 		log_n("path: %s", path);
-		if(!fileValid(path)) {
+		if (!fileValid(path)) {
 			return false;
 		}
 
 		// here we check if we have to cut up the path (currently it's only a crude check for absolute paths)
-		if(isRelative() && path[0] == '/') {
+		if (isRelative() && path[0] == '/') {
 			// we are in relative mode and got an absolute path, check if the path begins with our base
 			// Also check if the path is so short, that there is no space for a filename in it
-			if( (strncmp(path, base.c_str(), base.length()) != 0) || (strlen(path) <  (base.length() + strlen("/.abc")))) {
+			if ((strncmp(path, base.c_str(), base.length()) != 0) || (strlen(path) < (base.length() + strlen("/.abc")))) {
 				// we refuse files other than our base
 				return false;
 			}
-			path = path + base.length();	// modify pointer to the end of the path
+			path = path + base.length(); // modify pointer to the end of the path
 		}
 
 		files.push_back(path);
@@ -135,10 +138,7 @@ public:
 	virtual bool isValid() const override { return files.size(); }
 
 	virtual const String getAbsolutePath(size_t idx) const override {
-		#if MEM_DEBUG == 1
-			assert(idx < files.size());
-		#endif
-		if(isRelative()) {
+		if (isRelative()) {
 			// we are in relative mode
 			return String(base.c_str()) + divider + files[idx].c_str();
 		}
@@ -146,10 +146,7 @@ public:
 	};
 
 	virtual const String getFilename(size_t idx) const override {
-		#if MEM_DEBUG == 1
-			assert(idx < files.size());
-		#endif
-		if(isRelative()) {
+		if (isRelative()) {
 			return String(files[idx].c_str());
 		}
 		pstring path = files[idx];
@@ -161,7 +158,7 @@ public:
 	}
 
 	virtual void randomize() override {
-		if(files.size() < 2) {
+		if (files.size() < 2) {
 			// we can not randomize less than 2 entries
 			return;
 		}
@@ -172,17 +169,19 @@ public:
 	}
 
 	class Iterator {
-	public: 
-		using iterator_category = std::forward_iterator_tag;	// could be increased to random_access_iterator_tag
-		using difference_type   = std::ptrdiff_t;
-		using value_type        = pstring;
-		using pointer           = value_type*;
-		using reference         = value_type&;
+	public:
+		using iterator_category = std::forward_iterator_tag; // could be increased to random_access_iterator_tag
+		using difference_type = std::ptrdiff_t;
+		using value_type = pstring;
+		using pointer = value_type *;
+		using reference = value_type &;
 
 		class ArrowHelper {
 			value_type value;
+
 		public:
-			ArrowHelper(value_type _str) : value(_str) {}
+			ArrowHelper(value_type _str)
+				: value(_str) { }
 			pointer operator->() {
 				return &value;
 			}
@@ -197,10 +196,14 @@ public:
 		}
 
 		// Constructor
-		__attribute__((always_inline)) inline Iterator(FolderPlaylist *folder, pointer ptr) : m_folder(folder), m_ptr(ptr) {}
+		__attribute__((always_inline)) inline Iterator(FolderPlaylist *folder, pointer ptr)
+			: m_folder(folder)
+			, m_ptr(ptr) { }
 
 		// Copy Constructor & assignment
-		__attribute__((always_inline)) inline Iterator(const Iterator &rhs) : m_folder(rhs.m_folder), m_ptr(rhs.m_ptr) {}
+		__attribute__((always_inline)) inline Iterator(const Iterator &rhs)
+			: m_folder(rhs.m_folder)
+			, m_ptr(rhs.m_ptr) { }
 		__attribute__((always_inline)) inline Iterator &operator=(const Iterator &rhs) = default;
 
 		// Pointer increment
@@ -234,6 +237,7 @@ public:
 	Iterator cend() { return Iterator(this, (files.data() + files.size())); }
 
 protected:
+	static constexpr bool fileNameSupport = (ESP_ARDUINO_VERSION >= ESP_ARDUINO_VERSION_VAL(2, 0, 8));
 
 	virtual void destroy() override {
 		files.clear();
