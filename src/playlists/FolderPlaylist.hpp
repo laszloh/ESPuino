@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../Playlist.h"
+#include "Common.h"
 
 #include <FS.h>
 #include <WString.h>
@@ -211,7 +212,7 @@ public:
 			m_ptr++;
 			return *this;
 		}
-		__attribute__((always_inline)) inline Iterator &operator++(int) {
+		__attribute__((always_inline)) inline Iterator operator++(int) {
 			Iterator tmp(*this);
 			m_ptr++;
 			return tmp;
