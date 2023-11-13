@@ -1,16 +1,8 @@
 #include <Arduino.h>
 #include "settings.h"
 
-#include "Queues.h"
-
 #include "Log.h"
-#include "Playlist.h"
 #include "Rfid.h"
-
-SharedObject<int> gVolume;
-SharedObject<uint8_t> gTrackControl;
-SharedObject<std::unique_ptr<Playlist>> gTrack;
-SharedObject<char[cardIdStringSize]> gRfidCard;
 
 QueueHandle_t gVolumeQueue;
 QueueHandle_t gTrackQueue;
