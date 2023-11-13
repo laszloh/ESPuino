@@ -31,11 +31,11 @@
     #endif
 
     // RFID (via SPI)
-    #define RST_PIN                         99          // Not necessary but has to be set anyway; so let's use a dummy-number
-    #define RFID_CS                         22          // GPIO for chip select (RFID)
+    #define RST_PIN                         99          // Used as dummy for RC522
+    #define RFID_CS                         21          // GPIO for chip select (RFID)
     #define RFID_MOSI                       23          // GPIO for master out slave in (RFID)
-    #define RFID_MISO                       18          // GPIO for master in slave out (RFID)
-    #define RFID_SCK                        19          // GPIO for clock-signal (RFID)
+    #define RFID_MISO                       19          // GPIO for master in slave out (RFID)
+    #define RFID_SCK                        18          // GPIO for clock-signal (RFID)
 
     #ifdef RFID_READER_TYPE_PN5180
         #define RFID_BUSY                   16          // PN5180 BUSY PIN
@@ -50,19 +50,19 @@
     // Rotary encoder
     #ifdef USEROTARY_ENABLE
         //#define REVERSE_ROTARY                        // To reverse encoder's direction; switching CLK / DT in hardware does the same
-        #define ROTARYENCODER_CLK           36          // rotary encoder's CLK
-        #define ROTARYENCODER_DT            39          // Info: Lolin D32 / Lolin D32 pro 35 are using 35 for battery-voltage-monitoring!
+        #define ROTARYENCODER_CLK           39          // rotary encoder's CLK
+        #define ROTARYENCODER_DT            34          // Info: Lolin D32 / Lolin D32 pro 35 are using 35 for battery-voltage-monitoring!
     #endif
 
     // Amp enable (optional)
-    #define GPIO_PA_EN                      13          // To enable amp for loudspeaker (GPIO or port-channel)
+    #define GPIO_PA_EN                      33          // To enable amp for loudspeaker (GPIO or port-channel)
     //#define GPIO_HP_EN                      113         // To enable amp for headphones (GPIO or port-channel)
 
     // Control-buttons (set to 99 to DISABLE; 0->39 for GPIO; 100->115 for port-expander)
-    #define NEXT_BUTTON                      4          // Button 0: GPIO to detect next
-    #define PREVIOUS_BUTTON                 16          // Button 1: GPIO to detect previous (Important: as of 19.11.2020 changed from 33 to 2; make sure to change in SD-MMC-mode)
-    #define PAUSEPLAY_BUTTON                17          // Button 2: GPIO to detect pause/play
-    #define ROTARYENCODER_BUTTON            34          // (set to 99 to disable; 0->39 for GPIO; 100->115 for port-expander)
+    #define NEXT_BUTTON                      5          // Button 0: GPIO to detect next
+    #define PREVIOUS_BUTTON                 22          // Button 1: GPIO to detect previous (Important: as of 19.11.2020 changed from 33 to 2; make sure to change in SD-MMC-mode)
+    #define PAUSEPLAY_BUTTON                12          // Button 2: GPIO to detect pause/play
+    #define ROTARYENCODER_BUTTON            35          // (set to 99 to disable; 0->39 for GPIO; 100->115 for port-expander)
     #define BUTTON_4                        99          // Button 4: unnamed optional button
     #define BUTTON_5                        99          // Button 5: unnamed optional button
 
@@ -92,17 +92,17 @@
     #endif
 
     // (optional) Neopixel
-    #define LED_PIN                         12          // GPIO for Neopixel-signaling
+    #define LED_PIN                         32          // GPIO for Neopixel-signaling
 
     // (optinal) Headphone-detection
     #ifdef HEADPHONE_ADJUST_ENABLE
         //#define DETECT_HP_ON_HIGH                       // Per default headphones are supposed to be connected if HT_DETECT is LOW. DETECT_HP_ON_HIGH will change this behaviour to HIGH.
-        #define HP_DETECT                   22          // GPIO that detects, if there's a plug in the headphone jack or not
+        #define HP_DETECT                   99          // GPIO that detects, if there's a plug in the headphone jack or not
     #endif
 
     // (optional) Monitoring of battery-voltage via ADC
     #ifdef MEASURE_BATTERY_VOLTAGE
-        #define VOLTAGE_READ_PIN            33          // GPIO used to monitor battery-voltage. Change to 35 if you're using Lolin D32 or Lolin D32 pro as it's hard-wired there!
+        #define VOLTAGE_READ_PIN            35          // GPIO used to monitor battery-voltage. Change to 35 if you're using Lolin D32 or Lolin D32 pro as it's hard-wired there!
         constexpr float referenceVoltage = 3.35;                  // Voltage between 3.3V and GND-pin at the develboard in battery-mode (disconnect USB!)
         constexpr float offsetVoltage = 0.1;                      // If voltage measured by ESP isn't 100% accurate, you can add an correction-value here
     #endif
