@@ -24,6 +24,7 @@
 
 #include <esp_task_wdt.h>
 #include <freertos/task.h>
+#include <mutex>
 
 #define AUDIOPLAYER_VOLUME_MAX	21u
 #define AUDIOPLAYER_VOLUME_MIN	0u
