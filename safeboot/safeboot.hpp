@@ -10,6 +10,8 @@
 namespace safeboot {
 
 constexpr const char *firmwarePath = "/firmware.bin";
+constexpr const char *backupPath = "/backup.bin";
+constexpr const char *recoveryPath = "/recovery.bin";
 
 enum class Partition : uint8_t {
 	FACTORY = 0,
