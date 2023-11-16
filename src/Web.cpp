@@ -222,6 +222,8 @@ public:
 			// ESP.restart(); // restart is done via webpage javascript
 		}
 	}
+
+	virtual bool isRequestHandlerTrivial() override { return false; }
 };
 using OtaHandler = ClassicOtaHandler;
 
@@ -232,16 +234,26 @@ public:
 	~FactoryOtaHandler() = default;
 
 	virtual void handleRequest(AsyncWebServerRequest *request) override {
-		if (writeSuccess) {
-			request->send(200, "text/html", restartWebsite);
-			otaRestart();
-		} else {
-			request->send(500);
+		switch (state) {
+			case State::idle:
+			case State::running:
+				break;
+
+			case State::finished:
+				request->send(200, "text/html", restartWebsite);
+				otaRestart();
+				break;
+
+			case State::failed:
+				request->send(500, "text/html", "Uploaf failed");
+				state = State::idle;
+				break;
 		}
 	}
 
 	void sendErrorReply(AsyncWebServerRequest *request) {
-		writeSuccess = false;
+		request->send(500, "text/plain", "Failed to write bytes");
+		state = State::failed;
 		fwFile.close();
 		gFSystem.remove(safeboot::firmwarePath);
 	}
@@ -256,6 +268,7 @@ public:
 				fwFile.close();
 			}
 			fwFile = gFSystem.open(safeboot::firmwarePath, FILE_WRITE);
+			state = State::running;
 			Log_Println(fwStart, LOGLEVEL_NOTICE);
 		}
 
@@ -269,7 +282,7 @@ public:
 		}
 
 		if (final) {
-			writeSuccess = true;
+			state = State::finished;
 			fwFile.close();
 
 			// resume the paused tasks
@@ -283,14 +296,24 @@ public:
 	}
 
 	virtual void otaRestart() override {
-		safeboot::restartToSafeBoot();
+		System_RestartSafeBoot();
 	}
 
+	virtual bool isRequestHandlerTrivial() override { return false; }
+
 protected:
-	bool writeSuccess {false};
+	enum class State : uint8_t {
+		idle,
+		running,
+		finished,
+		failed
+	};
+
+	State state {State::idle};
 	File fwFile {File()};
 };
 using OtaHandler = FactoryOtaHandler;
+
 #else
 
 // no OTA support, so use base class
