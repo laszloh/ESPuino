@@ -28,35 +28,45 @@ fs::FS sdCard = (fs::FS) SD;
 	#error safeboot currently only works with SD Card
 #endif
 
-constexpr size_t FLASH_BLOCK_SIZE = 4096;
+constexpr size_t FLASH_BLOCK_SIZE = 4 * 4096;
 uint8_t buffer[FLASH_BLOCK_SIZE];
 bool inRecovery = false;
 
 bool flashPartition(File &f);
 void prepRecoveryCycle();
 
+inline bool mountSdCard() {
+#ifdef SD_MMC_1BIT_MODE
+	// pinMode(2, INPUT_PULLUP);
+	return SD_MMC.begin("/sdcard", true);
+#else
+	spiSD.begin(SPISD_SCK, SPISD_MISO, SPISD_MOSI, SPISD_CS);
+	spiSD.setFrequency(1000000);
+	return SD.begin(SPISD_CS, spiSD);
+#endif
+}
+
+#ifdef INVERT_POWER
+constexpr bool inverted = true;
+#else
+constexpr bool inverted = false;
+#endif
+
 void setup() {
 	constexpr size_t maxRetries = 10;
 
 	Serial.begin(115200);
 	Serial.print(logo);
+	srand(esp_random());
+
+	pinMode(POWER, OUTPUT);
+	digitalWrite(POWER, (inverted) ? LOW : HIGH);
 
 	log_i("Booting firmware safeboot OTA system");
 
-	const auto mountSD = []() -> bool {
-#ifdef SD_MMC_1BIT_MODE
-		pinMode(2, INPUT_PULLUP);
-		return SD_MMC.begin("/sdcard", true);
-#else
-		spiSD.begin(SPISD_SCK, SPISD_MISO, SPISD_MOSI, SPISD_CS);
-		spiSD.setFrequency(1000000);
-		return SD.begin(SPISD_CS, spiSD);
-#endif
-	};
-
-	log_i("Mounting SDCard in MMC mode");
+	log_i("Mounting SDCard");
 	size_t retries = 0;
-	while (!mountSD()) {
+	while (!mountSdCard()) {
 		retries++;
 		log_e("Mount failed... (%d of %d tries)", retries, maxRetries);
 		delay(100);
@@ -94,15 +104,20 @@ void setup() {
 		safeboot::restartToApplication();
 	}
 
+	log_i("Found firmware file");
 	File fw = sdCard.open(safeboot::firmwarePath, FILE_READ);
 
 	// create a backup
+	log_i("Creating backup at \"%s\"", safeboot::backupPath);
 	auto partition = safeboot::getApplicationPartiton();
 	File backup = sdCard.open(safeboot::backupPath, FILE_WRITE);
 	for (size_t idx = 0; idx < partition->size; idx += FLASH_BLOCK_SIZE) {
+		Serial.print('.');
 		esp_partition_read(partition, idx, buffer, FLASH_BLOCK_SIZE);
 		backup.write(buffer, FLASH_BLOCK_SIZE);
 	}
+	Serial.println();
+	log_i("Backup file written");
 	backup.close();
 
 	// execute the update
@@ -146,7 +161,7 @@ bool flashPartition(File &f) {
 	}
 	while (f.available()) {
 		const size_t len = f.read(buffer, FLASH_BLOCK_SIZE);
-		log_i("Writing %d out of %d", f.position(), fwSize);
+		Serial.print('.');
 
 		ret = esp_ota_write(handle, buffer, len);
 		if (ret != ESP_OK) {
@@ -154,6 +169,7 @@ bool flashPartition(File &f) {
 			prepRecoveryCycle();
 		}
 	}
+	Serial.println();
 	f.close();
 	ret = esp_ota_end(handle);
 	if (ret != ESP_OK) {
