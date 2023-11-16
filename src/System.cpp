@@ -3,6 +3,7 @@
 
 #include "System.h"
 
+#include "../safeboot/safeboot.hpp"
 #include "Audio.h"
 #include "AudioPlayer.h"
 #include "Led.h"
@@ -206,6 +207,14 @@ void System_Restart(void) {
 	// restart the ESP-32
 	Log_Println("restarting..", LOGLEVEL_NOTICE);
 	ESP.restart();
+}
+
+void System_RestartSafeBoot() {
+	// prepare power down (shutdown common modules)
+	System_PreparePowerDown();
+	// restart the ESP-32
+	Log_Println("restarting..", LOGLEVEL_NOTICE);
+	safeboot::restartToSafeBoot();
 }
 
 // Puts uC to deep-sleep if flag is set
