@@ -385,7 +385,7 @@ void webserverStart(void) {
 					// pause some tasks to get more free CPU time for the upload
 					vTaskSuspend(AudioTaskHandle);
 					Led_TaskPause();
-					Rfid_TaskPause();
+					rfid::taskPause();
 					Update.begin();
 					Log_Println(fwStart, LOGLEVEL_NOTICE);
 				}
@@ -398,7 +398,7 @@ void webserverStart(void) {
 					// resume the paused tasks
 					Led_TaskResume();
 					vTaskResume(AudioTaskHandle);
-					Rfid_TaskResume();
+					rfid::taskResume();
 					Log_Println(fwEnd, LOGLEVEL_NOTICE);
 					if (Update.hasError()) {
 						Log_Println(Update.errorString(), LOGLEVEL_ERROR);
