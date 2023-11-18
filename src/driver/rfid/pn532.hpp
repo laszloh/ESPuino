@@ -111,7 +111,7 @@ private:
 					lastTimeCardDetect = 0;
 					if (cardAppliedLastRun) {
 						// send the card removed event
-						driver->signalEvent(Message::Event::CardRemoved);
+						driver->signalEvent(Message::Event::CardRemoved, lastCardId);
 					}
 					cardAppliedLastRun = false;
 					lastCardId = {};

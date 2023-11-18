@@ -24,6 +24,7 @@ namespace rfid {
 using namespace driver;
 
 RfidDriver rfidDriver;
+Message::CardIdType oldRfidCard;
 
 void executeCardAppliedEvent(const Message &msg);
 void executeCardRemoveEvent(const Message &msg);
@@ -60,11 +61,14 @@ void preferenceLookupHandler() {
 
 		switch (msg.event) {
 			case Message::Event::CardApplied:
+				log_n("applied: %s", msg.toDezimalString().c_str());
 				executeCardAppliedEvent(msg);
 				break;
 
 			case Message::Event::CardRemoved:
 				executeCardRemoveEvent(msg);
+				log_n("removed");
+				break;
 
 			case Message::Event::NoCard:
 			case Message::Event::CardPresent:
@@ -144,12 +148,31 @@ void executeCardAppliedEvent(const Message &msg) {
 			}
 #endif
 
+#ifdef PAUSE_WHEN_RFID_REMOVED
+			if (oldRfidCard == msg.cardId) {
+				// resume playback
+				AudioPlayer_TrackControlToQueueSender(PLAY);
+				return;
+			}
+#endif
+
 			AudioPlayer_TrackQueueDispatcher(_file, _lastPlayPos, _playMode, _trackLastPlayed);
 		}
 	}
 }
 
 void executeCardRemoveEvent(const Message &msg) {
+#ifdef PAUSE_WHEN_RFID_REMOVED
+	// save the olf rfid card
+	oldRfidCard = msg.cardId;
+
+	Log_Println(rfidTagRemoved, LOGLEVEL_NOTICE);
+	if (System_GetOperationMode() != OPMODE_BLUETOOTH_SINK && !gPlayProperties.playlistFinished) {
+		AudioPlayer_TrackControlToQueueSender(PAUSE);
+		Log_Println(rfidTagReapplied, LOGLEVEL_NOTICE);
+	}
+
+#endif
 }
 
 } // namespace rfid

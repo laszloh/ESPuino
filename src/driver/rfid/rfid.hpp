@@ -24,13 +24,13 @@ struct Message {
 	CardIdType cardId;
 
 	const String toDezimalString() const {
-		char buf[3 * cardIdSize] = {0};
+		char buf[3 * cardIdSize + 1] = {0};
 
 		for (int i = 0; i < cardIdSize; i++) {
 			const size_t idx = i * 3;
-			buf[idx] = cardId[i] / 100;
-			buf[idx + 1] = (cardId[i] % 100) / 10;
-			buf[idx + 2] = (cardId[i] % 100) % 10;
+			buf[idx] = '0' + cardId[i] / 100;
+			buf[idx + 1] = '0' + (cardId[i] % 100) / 10;
+			buf[idx + 2] = '0' + (cardId[i] % 100) % 10;
 		}
 
 		return buf;
@@ -99,7 +99,7 @@ protected:
 		xSemaphoreGive(cardChangeEvent);
 	}
 
-	void signalEvent(Message msg) {
+	void signalEvent(const Message &msg) {
 		std::lock_guard guard(accessGuard);
 		message = msg;
 
