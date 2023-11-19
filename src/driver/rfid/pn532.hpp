@@ -17,11 +17,6 @@ namespace rfid::driver {
 namespace implementation {
 
 class PN532Driver : public RfidDriverBase<PN532Driver> {
-	using RfidDriverBase::accessGuard;
-	using RfidDriverBase::cardChangeEvent;
-	using RfidDriverBase::message;
-	using RfidDriverBase::signalEvent;
-
 public:
 	void init() {
 #ifdef RFID_READER_TYPE_PN532_SPI

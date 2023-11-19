@@ -11,11 +11,6 @@ namespace rfid::driver {
 namespace implementation {
 
 class RfidPN1580 : public RfidDriverBase<RfidPN1580> {
-	using RfidDriverBase::accessGuard;
-	using RfidDriverBase::cardChangeEvent;
-	using RfidDriverBase::message;
-	using RfidDriverBase::signalEvent;
-
 public:
 	void init() {
 #if defined(PN5180_ENABLE_LPCD)
