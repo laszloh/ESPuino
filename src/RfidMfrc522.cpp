@@ -8,16 +8,15 @@
 #include "Queues.h"
 #include "Rfid.h"
 #include "System.h"
+#include "Wire.h"
 
+#include <MFRC522DriverI2C.h>
+#include <MFRC522DriverPinSimple.h>
+#include <MFRC522DriverSPI.h>
+#include <MFRC522v2.h>
 #include <esp_task_wdt.h>
 
 #if defined(RFID_READER_TYPE_MFRC522)
-	#if defined(INTERFACE_SPI)
-		#include <MFRC522.h>
-	#elif defined(INTERFACE_I2C)
-		#include "Wire.h"
-		#include <MFRC522_I2C.h>
-	#endif
 
 extern unsigned long Rfid_LastRfidCheckTimestamp;
 TaskHandle_t rfidTaskHandle;
@@ -25,10 +24,13 @@ static void Rfid_Task(void *parameter);
 
 	#if defined(INTERFACE_I2C)
 extern TwoWire i2cBusTwo;
-static MFRC522_I2C mfrc522(MFRC522_ADDR, MFRC522_RST_PIN, &i2cBusTwo);
+static MFRC522DriverI2C driver(MFRC522_ADDR, &i2cBusTwo);
 	#elif defined(INTERFACE_SPI)
-static MFRC522 mfrc522(RFID_CS, RST_PIN);
+static MFRC522DriverPinSimple ss_pin(RFID_CS);
+static MFRC522DriverSPI driver(ss_pin);
 	#endif
+
+static MFRC522 mfrc522(driver);
 
 void Rfid_Driver_Init(void) {
 	#ifdef INTERFACE_SPI
