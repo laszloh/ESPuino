@@ -4,6 +4,7 @@
 #include "AudioPlayer.h"
 #include "Cmd.h"
 #include "Common.h"
+#include "HallEffectSensor.h"
 #include "Log.h"
 #include "MemX.h"
 #include "Mqtt.h"
@@ -77,8 +78,13 @@ void Rfid_CardReceivedEvent(const Message &msg) {
 	uint16_t _trackLastPlayed = 0;
 	uint32_t _playMode = 1;
 
-	const String newCardId = msg.cardId.toDezimalString();
 	currentRfidTagId = msg.cardId;
+
+	#ifdef HALLEFFECT_SENSOR_ENABLE
+	currentRfidTagId[currentRfidTagId.size() - 1] += gHallEffectSensor.waitForState(HallEffectWaitMS);
+	#endif
+
+	const String newCardId = currentRfidTagId.toDezimalString();
 
 	Log_Printf(LOGLEVEL_INFO, rfidTagReceived, newCardId.c_str());
 	Web_SendWebsocketData(0, 10); // Push new rfidTagId to all websocket-clients
