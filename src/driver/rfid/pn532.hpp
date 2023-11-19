@@ -77,7 +77,6 @@ private:
 		while (1) {
 			uint8_t uid[10];
 			uint8_t uidLen;
-			Message::CardIdType cardId;
 
 			if constexpr (RFID_SCAN_INTERVAL / 2 >= 20) {
 				vTaskDelay(portTICK_PERIOD_MS * (RFID_SCAN_INTERVAL / 2));
@@ -90,7 +89,8 @@ private:
 			if (cardAppliedCurrentRun) {
 				lastTimeCardDetect = millis();
 				cardAppliedLastRun = true;
-				std::copy(uid, uid + cardId.size(), cardId.begin());
+				Message::CardIdType cardId;
+				cardId.assign(uid);
 
 				if (cardId == lastCardId) {
 					// this is the same card

@@ -298,7 +298,7 @@ private:
 							ISO15693ErrorCode ret = driver->nfc15693.getInventory(uid);
 							if (ret == ISO15693_EC_OK) {
 								cardReceived = true;
-								std::copy(uid, uid + cardId.size(), cardId.begin());
+								cardId.assign(uid);
 								lastTimeCardDetect = millis();
 							} else if (ret == ISO15693_EC_BLOCK_IS_LOCKED) {
 								// we have a locked chip, try to unlock

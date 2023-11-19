@@ -11,7 +11,15 @@
 namespace rfid::driver {
 struct Message {
 	static constexpr size_t cardIdSize = 4;
-	using CardIdType = std::array<uint8_t, cardIdSize>;
+
+	class CardIdType : public std::array<uint8_t, cardIdSize> {
+	public:
+		void assign(const uint8_t *arr, const size_t arrSize = cardIdSize) {
+			std::copy(arr, arr + std::min(arrSize, this->size()), this->begin());
+		}
+	};
+
+	// using CardIdType = std::array<uint8_t, cardIdSize>;
 
 	enum class Event : uint8_t {
 		NoCard = 0,
@@ -89,7 +97,7 @@ protected:
 	std::mutex accessGuard;
 	Message message;
 
-	void signalEvent(const Message::Event event, const std::array<uint8_t, Message::cardIdSize> &cardId = {}) {
+	void signalEvent(const Message::Event event, const Message::CardIdType &cardId = {}) {
 		// get the access guard
 		std::lock_guard guard(accessGuard);
 		message.event = event;
