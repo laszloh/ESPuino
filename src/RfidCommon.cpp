@@ -23,7 +23,7 @@ char gOldRfidTagId[cardIdStringSize] = "X"; // Init with crap
 #endif
 
 // Tries to lookup RFID-tag-string in NVS and extracts parameter from it if found
-void Rfid_PreferenceLookupHandler(void) {
+void Rfid_Cyclic(void) {
 #if defined(RFID_READER_ENABLED)
 	BaseType_t rfidStatus;
 	char rfidTagId[cardIdStringSize];

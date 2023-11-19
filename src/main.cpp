@@ -266,7 +266,7 @@ void loop() {
 	Button_Cyclic();
 	vTaskDelay(portTICK_PERIOD_MS * 1u);
 	System_Cyclic();
-	Rfid_PreferenceLookupHandler();
+	Rfid_Cyclic();
 
 #ifdef PLAY_LAST_RFID_AFTER_REBOOT
 	recoverBootCountFromNvs();
