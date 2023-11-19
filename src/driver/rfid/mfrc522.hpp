@@ -61,10 +61,7 @@ public:
 private:
 	static void Task(void *ptr) {
 		Mfrc522Driver *driver = static_cast<Mfrc522Driver *>(ptr);
-		bool locked = false;
-
 		uint32_t lastTimeCardDetect = 0;
-		MainFsm fsm = MainFsm::noCard;
 		Message::CardIdType lastCardId;
 		bool cardAppliedLastRun = false;
 
@@ -89,7 +86,7 @@ private:
 
 				// Bring card into HALT mode
 				driver->mfrc522.PICC_HaltA();
-				// driver->mfrc522.PCD_StopCrypto1();
+				driver->mfrc522.PCD_StopCrypto1();
 			}
 
 			if (cardAppliedCurrentRun) {
@@ -97,7 +94,7 @@ private:
 				cardAppliedLastRun = true;
 
 				Message::CardIdType cardId;
-				std::copy(driver->mfrc522.uid.uidByte, driver->mfrc522.uid.uidByte + cardId.size(), cardId.begin());
+				cardId.assign(driver->mfrc522.uid.uidByte);
 
 				if (cardId == lastCardId) {
 					// this is the same card
