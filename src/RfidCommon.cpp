@@ -22,7 +22,7 @@ namespace rfid {
 using namespace driver;
 
 RfidDriver rfidDriver;
-Message::CardIdType oldRfidCard;
+CardIdType oldRfidCard;
 
 void executeCardAppliedEvent(const Message &msg);
 void executeCardRemoveEvent(const Message &msg);
