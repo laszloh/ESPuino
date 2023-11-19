@@ -32,7 +32,7 @@ static Message message;
 
 // internal variables
 static CardIdType currentRfidTagId;
-static CardIdType oldRfidTagId;
+static CardIdType oldRfidTagId __attribute__((unused));
 
 void Rfid_Driver_Init();
 void Rfid_CardReceivedEvent(const Message &msg);
@@ -45,14 +45,6 @@ void Rfid_Init() {
 
 // Tries to lookup RFID-tag-string in NVS and extracts parameter from it if found
 void Rfid_Cyclic() {
-
-	BaseType_t rfidStatus;
-	char rfidTagId[cardIdStringSize];
-	char _file[255];
-	uint32_t _lastPlayPos = 0;
-	uint16_t _trackLastPlayed = 0;
-	uint32_t _playMode = 1;
-
 	BaseType_t ret = xSemaphoreTake(rfidEvent, 0);
 	if (ret) {
 		System_UpdateActivityTimer();
@@ -86,6 +78,7 @@ void Rfid_CardReceivedEvent(const Message &msg) {
 	uint32_t _playMode = 1;
 
 	const String newCardId = msg.cardId.toDezimalString();
+	currentRfidTagId = msg.cardId;
 
 	Log_Printf(LOGLEVEL_INFO, rfidTagReceived, newCardId.c_str());
 	Web_SendWebsocketData(0, 10); // Push new rfidTagId to all websocket-clients
@@ -94,7 +87,7 @@ void Rfid_CardReceivedEvent(const Message &msg) {
 		Log_Println(rfidTagUnknownInNvs, LOGLEVEL_ERROR);
 		System_IndicateError();
 	#ifdef DONT_ACCEPT_SAME_RFID_TWICE
-		strncpy(gOldRfidTagId, gCurrentRfidTagId, cardIdStringSize - 1); // Even if not found in NVS: accept it as card last applied
+		oldRfidTagId = currentRfidTagId;
 	#endif
 		// allow to escape from bluetooth mode with an unknown card, switch back to normal mode
 		System_SetOperationMode(OPMODE_NORMAL);
@@ -132,16 +125,16 @@ void Rfid_CardReceivedEvent(const Message &msg) {
 		Cmd_Action(_playMode);
 	} else {
 	#ifdef DONT_ACCEPT_SAME_RFID_TWICE
-		if (strncmp(gCurrentRfidTagId, gOldRfidTagId, 12) == 0) {
+		if (currentRfidTagId == oldRfidTagId) {
 			Log_Printf(LOGLEVEL_ERROR, dontAccepctSameRfid, gCurrentRfidTagId);
 			// System_IndicateError(); // Enable to have shown error @neopixel every time
 			return;
 		} else {
-			strncpy(gOldRfidTagId, gCurrentRfidTagId, 12);
+			oldRfidTagId = currentRfidTagId;
 		}
 	#endif
 	#ifdef MQTT_ENABLE
-		publishMqtt(topicRfidState, gCurrentRfidTagId, false);
+		publishMqtt(topicRfidState, newCardId.c_str(), false);
 	#endif
 
 	#ifdef BLUETOOTH_ENABLE
