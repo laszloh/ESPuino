@@ -3,6 +3,7 @@
 #ifndef __ESPUINO_SETTINGS_H__
     	#define __ESPUINO_SETTINGS_H__
         #include "Arduino.h"
+		#include "Wire.h"
         #include "values.h"
 #if __has_include("settings-override.h")
     	#include "settings-override.h"
@@ -53,10 +54,10 @@
 	//#define IR_CONTROL_ENABLE             // Enables remote control (https://forum.espuino.de/t/neues-feature-fernsteuerung-per-infrarot-fernbedienung/265)
 	//#define PAUSE_WHEN_RFID_REMOVED       // Playback starts when card is applied and pauses automatically, when card is removed (https://forum.espuino.de/t/neues-feature-pausieren-wenn-rfid-karte-entfernt-wurde/541)
 	//#define PAUSE_ON_MIN_VOLUME           // When playback is active and volume is changed to zero, playback is paused automatically. Playback is continued if volume reaches 1. (https://forum.espuino.de/t/neues-feature-pausieren-wenn-rfid-karte-entfernt-wurde/541)
-	//#define DONT_ACCEPT_SAME_RFID_TWICE   // RFID-reader doesn't accept the same RFID-tag twice in a row (unless it's a modification-card or RFID-tag is unknown in NVS). Flag will be ignored silently if PAUSE_WHEN_RFID_REMOVED is active. (https://forum.espuino.de/t/neues-feature-dont-accept-same-rfid-twice/1247)
+	// #define DONT_ACCEPT_SAME_RFID_TWICE   // RFID-reader doesn't accept the same RFID-tag twice in a row (unless it's a modification-card or RFID-tag is unknown in NVS). Flag will be ignored silently if PAUSE_WHEN_RFID_REMOVED is active. (https://forum.espuino.de/t/neues-feature-dont-accept-same-rfid-twice/1247)
 	//#define SAVE_PLAYPOS_BEFORE_SHUTDOWN  // When playback is active and mode audiobook was selected, last play-position is saved automatically when shutdown is initiated
 	//#define SAVE_PLAYPOS_WHEN_RFID_CHANGE // When playback is active and mode audiobook was selected, last play-position is saved automatically for old playlist when new RFID-tag is applied
-	//#define HALLEFFECT_SENSOR_ENABLE      // Support for hallsensor. For fine-tuning please adjust HallEffectSensor.h Please note: only user-support provided (https://forum.espuino.de/t/magnetische-hockey-tags/1449/35)
+	// #define HALLEFFECT_SENSOR_ENABLE      // Support for hallsensor. For fine-tuning please adjust HallEffectSensor.h Please note: only user-support provided (https://forum.espuino.de/t/magnetische-hockey-tags/1449/35)
 	#define VOLUMECURVE 0 					// 0=square, 1=logarithmic (1 is more flatten at lower volume)
 
 	//################## set PAUSE_WHEN_RFID_REMOVED behaviour #############################
@@ -71,17 +72,20 @@
 
 
 	//################## select RFID reader ##############################
-	// #define RFID_READER_TYPE_MFRC522    	// use MFRC522
-	#define RFID_READER_TYPE_PN5180       // use PN5180
+	#define RFID_READER_TYPE_MFRC522    	// use MFRC522
+	// #define RFID_READER_TYPE_PN5180       // use PN5180
 
 	#ifdef RFID_READER_TYPE_MFRC522
-		constexpr uint8_t rfidGain = 0x07 << 4;      // Sensitivity of RC522. For possible values see reference: https://forum.espuino.de/uploads/default/original/1X/9de5f8d35cbc123c1378cad1beceb3f51035cec0.png
+		constexpr inline uint8_t rfidGain = 0x07 << 4;      // Sensitivity of RC522. For possible values see reference: https://forum.espuino.de/uploads/default/original/1X/9de5f8d35cbc123c1378cad1beceb3f51035cec0.png
+		constexpr inline size_t cardDetectTimeout = 100;
+		constexpr inline size_t RFID_SCAN_INTERVAL = 100;   // Interval-time in ms (how often is RFID read?)
 
 		#define INTERFACE_I2C
 		// #define INTERFACE_SPI
 
 		#ifdef INTERFACE_I2C
-			constexpr uint8_t MFRC522_ADDR = 0x28;
+			constexpr inline TwoWire &rfidI2C = Wire;
+			constexpr inline uint8_t MFRC522_ADDR = 0x28;
 		#endif
 	#endif
 
@@ -186,9 +190,6 @@
 
 	//#define CONTROLS_LOCKED_BY_DEFAULT			// If set the controls are locked at boot
 	#define INCLUDE_ROTARY_IN_CONTROLS_LOCK			// If set the rotary encoder is locked if controls are locked
-
-	// RFID-RC522
-	#define RFID_SCAN_INTERVAL 100                      // Interval-time in ms (how often is RFID read?)
 
 	// Automatic restart
 	#ifdef SHUTDOWN_IF_SD_BOOT_FAILS
