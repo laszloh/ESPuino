@@ -23,6 +23,7 @@ using namespace driver;
 
 RfidDriver rfidDriver;
 CardIdType oldRfidCard;
+CardIdType currentRfidCard;
 
 void executeCardAppliedEvent(const Message &msg);
 void executeCardRemoveEvent(const Message &msg);
@@ -59,7 +60,7 @@ void cyclic() {
 
 		switch (msg.event) {
 			case Message::Event::CardApplied:
-				log_n("applied: %s", msg.toDezimalString().c_str());
+				log_n("applied: %s", msg.cardId.toDezimalString().c_str());
 				executeCardAppliedEvent(msg);
 				break;
 
@@ -77,8 +78,16 @@ void cyclic() {
 
 void resetOldRfid() {
 #ifdef DONT_ACCEPT_SAME_RFID_TWICE
-		oldRfidCard = {};
+	oldRfidCard = {};
 #endif
+}
+
+CardIdType &getCurrentRfidTagId() {
+	return currentRfidCard;
+}
+
+void forceEvent(const Message::Event event, const CardIdType &cardId) {
+	rfidDriver.signalEvent(event, cardId);
 }
 
 void executeCardAppliedEvent(const Message &msg) {
@@ -87,7 +96,9 @@ void executeCardAppliedEvent(const Message &msg) {
 	uint16_t _trackLastPlayed = 0;
 	uint32_t _playMode = 1;
 	// card was put on reader
-	const String rfidTagId = msg.toDezimalString();
+	currentRfidCard = msg.cardId;
+
+	const String rfidTagId = currentRfidCard.toDezimalString();
 	Log_Printf(LOGLEVEL_INFO, rfidTagReceived, rfidTagId.c_str());
 	Web_SendWebsocketData(0, 10); // Push new rfidTagId to all websocket-clients
 
@@ -141,7 +152,7 @@ void executeCardAppliedEvent(const Message &msg) {
 			oldRfidCard = msg.cardId;
 #endif
 #ifdef MQTT_ENABLE
-			publishMqtt(topicRfidState, gCurrentRfidTagId, false);
+			publishMqtt(topicRfidState, currentRfidCard.toDezimalString().c_str(), false);
 #endif
 
 #ifdef BLUETOOTH_ENABLE
@@ -168,6 +179,7 @@ void executeCardRemoveEvent(const Message &msg) {
 #ifdef PAUSE_WHEN_RFID_REMOVED
 	// save the olf rfid card
 	oldRfidCard = msg.cardId;
+	currentRfidCard = {};
 
 	Log_Println(rfidTagRemoved, LOGLEVEL_NOTICE);
 	if (System_GetOperationMode() != OPMODE_BLUETOOTH_SINK && !gPlayProperties.playlistFinished) {

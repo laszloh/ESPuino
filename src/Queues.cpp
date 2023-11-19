@@ -7,7 +7,6 @@
 QueueHandle_t gVolumeQueue;
 QueueHandle_t gTrackQueue;
 QueueHandle_t gTrackControlQueue;
-QueueHandle_t gRfidCardQueue;
 
 void Queues_Init(void) {
 	// Create queues

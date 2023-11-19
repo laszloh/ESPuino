@@ -59,7 +59,7 @@ static char **AudioPlayer_ReturnPlaylistFromWebstream(const char *_webUrl);
 static int AudioPlayer_ArrSortHelper(const void *a, const void *b);
 static void AudioPlayer_SortPlaylist(char **arr, int n);
 static void AudioPlayer_RandomizePlaylist(char **str, const uint32_t count);
-static size_t AudioPlayer_NvsRfidWriteWrapper(const char *_rfidCardId, const char *_track, const uint32_t _playPosition, const uint8_t _playMode, const uint16_t _trackLastPlayed, const uint16_t _numberOfTracks);
+static size_t AudioPlayer_NvsRfidWriteWrapper(const rfid::CardIdType &_rfidCardId, const char *_track, const uint32_t _playPosition, const uint8_t _playMode, const uint16_t _trackLastPlayed, const uint16_t _numberOfTracks);
 static void AudioPlayer_ClearCover(void);
 
 void AudioPlayer_Init(void) {
@@ -418,9 +418,13 @@ void AudioPlayer_Task(void *parameter) {
 
 				// If we're in audiobook-mode and apply a modification-card, we don't
 				// want to save lastPlayPosition for the mod-card but for the card that holds the playlist
-				if (gCurrentRfidTagId != NULL) {
-					strncpy(gPlayProperties.playRfidTag, gCurrentRfidTagId, sizeof(gPlayProperties.playRfidTag) / sizeof(gPlayProperties.playRfidTag[0]));
-				}
+				// TODO: this check is always true, so this does not work anymore since #af4bda9
+				// if (gCurrentRfidTagId != NULL) {
+				//		strncpy(gPlayProperties.playRfidTag, gCurrentRfidTagId, sizeof(gPlayProperties.playRfidTag) / sizeof(gPlayProperties.playRfidTag[0]));
+				// }
+				// if (rfid::getCurrentRfidTagId()) {
+					gPlayProperties.playRfidTag = rfid::getCurrentRfidTagId();
+				// }
 			}
 			if (gPlayProperties.trackFinished) {
 				gPlayProperties.trackFinished = false;
@@ -802,7 +806,7 @@ void AudioPlayer_Task(void *parameter) {
 		if (!gPlayProperties.currentSpeechActive && gPlayProperties.lastSpeechActive) {
 			gPlayProperties.lastSpeechActive = false;
 			if (gPlayProperties.playMode != NO_PLAYLIST) {
-				xQueueSend(gRfidCardQueue, gPlayProperties.playRfidTag, 0); // Re-inject previous RFID-ID in order to continue playback
+				rfid::forceEvent(rfid::Message::Event::CardApplied, gPlayProperties.playRfidTag);
 			}
 		}
 
@@ -994,7 +998,7 @@ void AudioPlayer_TrackQueueDispatcher(const char *_itemToPlay, const uint32_t _l
 
 #ifdef PLAY_LAST_RFID_AFTER_REBOOT
 	// Store last RFID-tag to NVS
-	gPrefsSettings.putString("lastRfid", gCurrentRfidTagId);
+	gPrefsSettings.putString("lastRfid", rfid::getCurrentRfidTagId().toDezimalString().c_str());
 #endif
 
 	switch (gPlayProperties.playMode) {
@@ -1099,7 +1103,7 @@ void AudioPlayer_TrackQueueDispatcher(const char *_itemToPlay, const uint32_t _l
 
 /* Wraps putString for writing settings into NVS for RFID-cards.
    Returns number of characters written. */
-size_t AudioPlayer_NvsRfidWriteWrapper(const char *_rfidCardId, const char *_track, const uint32_t _playPosition, const uint8_t _playMode, const uint16_t _trackLastPlayed, const uint16_t _numberOfTracks) {
+size_t AudioPlayer_NvsRfidWriteWrapper(const rfid::CardIdType &_rfidCardId, const char *_track, const uint32_t _playPosition, const uint8_t _playMode, const uint16_t _trackLastPlayed, const uint16_t _numberOfTracks) {
 	if (_playMode == NO_PLAYLIST) {
 		// writing back to NVS with NO_PLAYLIST seems to be a bug - Todo: Find the cause here
 		Log_Printf(LOGLEVEL_ERROR, modeInvalid, _playMode);
@@ -1124,10 +1128,10 @@ size_t AudioPlayer_NvsRfidWriteWrapper(const char *_rfidCardId, const char *_tra
 	}
 
 	snprintf(prefBuf, sizeof(prefBuf) / sizeof(prefBuf[0]), "%s%s%s%u%s%d%s%u", stringDelimiter, trackBuf, stringDelimiter, _playPosition, stringDelimiter, _playMode, stringDelimiter, _trackLastPlayed);
-	Log_Printf(LOGLEVEL_INFO, wroteLastTrackToNvs, prefBuf, _rfidCardId, _playMode, _trackLastPlayed);
+	Log_Printf(LOGLEVEL_INFO, wroteLastTrackToNvs, prefBuf, _rfidCardId.toDezimalString().c_str(), _playMode, _trackLastPlayed);
 	Log_Println(prefBuf, LOGLEVEL_INFO);
 	Led_SetPause(false);
-	return gPrefsRfid.putString(_rfidCardId, prefBuf);
+	return gPrefsRfid.putString(_rfidCardId.toDezimalString().c_str(), prefBuf);
 
 	// Examples for serialized RFID-actions that are stored in NVS
 	// #<file/folder>#<startPlayPositionInBytes>#<playmode>#<trackNumberToStartWith>
