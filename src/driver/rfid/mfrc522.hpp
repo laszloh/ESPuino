@@ -61,26 +61,36 @@ public:
 private:
 	static void Task(void *ptr) {
 		Mfrc522Driver *driver = static_cast<Mfrc522Driver *>(ptr);
+		bool locked = false;
+
 		uint32_t lastTimeCardDetect = 0;
+		MainFsm fsm = MainFsm::noCard;
 		Message::CardIdType lastCardId;
 		bool cardAppliedLastRun = false;
 
 		while (1) {
+			bool cardAppliedCurrentRun = false;
+
 			if constexpr (RFID_SCAN_INTERVAL / 2 >= 20) {
 				vTaskDelay(portTICK_PERIOD_MS * (RFID_SCAN_INTERVAL / 2));
 			} else {
 				vTaskDelay(portTICK_PERIOD_MS * 20);
 			}
 
-			bool cardAppliedCurrentRun = false;
+			uint8_t bufferATQA[8];
+			uint8_t bufferSize = sizeof(bufferATQA);
 
-			if (driver->mfrc522.PICC_IsNewCardPresent() && driver->mfrc522.PICC_ReadCardSerial()) {
-				// card found and read
-				cardAppliedCurrentRun = true;
+			// wake up one card on the reader
+			MFRC522::StatusCode result = driver->mfrc522.PICC_WakeupA(bufferATQA, &bufferSize);
+			if (result == MFRC522::StatusCode::STATUS_OK) {
+				// we found or woke up a card, read id
+				driver->mfrc522.PICC_Select(&driver->mfrc522.uid, 0);
+				cardAppliedCurrentRun = (result == MFRC522::StatusCode::STATUS_OK);
+
+				// Bring card into HALT mode
+				driver->mfrc522.PICC_HaltA();
+				// driver->mfrc522.PCD_StopCrypto1();
 			}
-			// reset card and crypto engine
-			driver->mfrc522.PICC_HaltA();
-			driver->mfrc522.PCD_StopCrypto1();
 
 			if (cardAppliedCurrentRun) {
 				lastTimeCardDetect = millis();
@@ -109,7 +119,7 @@ private:
 					lastTimeCardDetect = 0;
 					if (cardAppliedLastRun) {
 						// send the card removed event
-						driver->signalEvent(Message::Event::CardRemoved);
+						driver->signalEvent(Message::Event::CardRemoved, lastCardId);
 					}
 					cardAppliedLastRun = false;
 					lastCardId = {};
@@ -119,6 +129,12 @@ private:
 	}
 
 	static constexpr uint32_t cardDetectTimeout = 200;
+
+	enum class MainFsm : uint8_t {
+		newCard = 0,
+		locked,
+		noCard
+	};
 
 	TaskHandle_t taskHandle {nullptr};
 

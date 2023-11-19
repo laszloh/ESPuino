@@ -338,7 +338,8 @@ private:
 
 				driver->signalEvent(msg);
 			} else if (!cardReceived && cardAppliedLastRun) {
-				driver->signalEvent(Message::Event::CardRemoved);
+				driver->signalEvent(Message::Event::CardRemoved, lastCardId);
+				lastCardId = {};
 				Log_Println(rfidTagRemoved, LOGLEVEL_NOTICE);
 			} else {
 				// signal card is still missing & reset state machines
