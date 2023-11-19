@@ -1,8 +1,10 @@
 #pragma once
 
-#include <stdint.h>
-#include <array>
+#include "Log.h"
+
 #include <WString.h>
+#include <array>
+#include <stdint.h>
 
 namespace rfid {
 
@@ -12,6 +14,25 @@ class CardIdType : public std::array<uint8_t, cardIdSize> {
 public:
 	void assign(const uint8_t *arr, const size_t arrSize = cardIdSize) {
 		std::copy(arr, arr + std::min(arrSize, size()), begin());
+	}
+
+	void assign(const char *str) {
+		if (strlen(str) < 3 * size()) {
+			Log_Printf(LOGLEVEL_ERROR, "Received string if too shoirt: %s\n", str);
+			return;
+		}
+
+		// convert the string to binary
+		for (int i = 0; i < size(); i++) {
+			char tmp[4] = {0};
+			memcpy(tmp, str + 3 * i, 3);
+			
+			operator[](i) = atoi(tmp);
+		}
+	}
+
+	explicit operator bool() const {
+		return !std::all_of(begin(), end(), [](bool e) { return e == 0; });
 	}
 
 	const String toDezimalString() const {
