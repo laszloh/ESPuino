@@ -11,14 +11,11 @@
 
 #include <esp_task_wdt.h>
 
-#if defined RFID_READER_TYPE_MFRC522_SPI || defined RFID_READER_TYPE_MFRC522_I2C
-	#ifdef RFID_READER_TYPE_MFRC522_SPI
+#if defined(RFID_READER_TYPE_MFRC522)
+	#if defined(INTERFACE_SPI)
 		#include <MFRC522.h>
-	#endif
-	#if defined(RFID_READER_TYPE_MFRC522_I2C) || defined(PORT_EXPANDER_ENABLE)
+	#elif defined(INTERFACE_I2C)
 		#include "Wire.h"
-	#endif
-	#ifdef RFID_READER_TYPE_MFRC522_I2C
 		#include <MFRC522_I2C.h>
 	#endif
 
@@ -26,22 +23,20 @@ extern unsigned long Rfid_LastRfidCheckTimestamp;
 TaskHandle_t rfidTaskHandle;
 static void Rfid_Task(void *parameter);
 
-	#ifdef RFID_READER_TYPE_MFRC522_I2C
+	#if defined(INTERFACE_I2C)
 extern TwoWire i2cBusTwo;
 static MFRC522_I2C mfrc522(MFRC522_ADDR, MFRC522_RST_PIN, &i2cBusTwo);
-	#endif
-	#ifdef RFID_READER_TYPE_MFRC522_SPI
+	#elif defined(INTERFACE_SPI)
 static MFRC522 mfrc522(RFID_CS, RST_PIN);
 	#endif
 
 void Rfid_Init(void) {
-	#ifdef RFID_READER_TYPE_MFRC522_SPI
+	#ifdef INTERFACE_SPI
 	SPI.begin(RFID_SCK, RFID_MISO, RFID_MOSI, RFID_CS);
 	SPI.setFrequency(1000000);
 	#endif
 
 	// Init RC522 Card-Reader
-	#if defined(RFID_READER_TYPE_MFRC522_I2C) || defined(RFID_READER_TYPE_MFRC522_SPI)
 	mfrc522.PCD_Init();
 	delay(10);
 	// Get the MFRC522 firmware version, should be 0x91 or 0x92
@@ -61,7 +56,6 @@ void Rfid_Init(void) {
 		&rfidTaskHandle, /* Task handle. */
 		1 /* Core where the task should run */
 	);
-	#endif
 }
 
 void Rfid_Task(void *parameter) {
@@ -191,7 +185,7 @@ void Rfid_Cyclic(void) {
 }
 
 void Rfid_Exit(void) {
-	#ifndef RFID_READER_TYPE_MFRC522_I2C
+	#ifndef INTERFACE_I2C
 	mfrc522.PCD_SoftPowerDown();
 	#endif
 }

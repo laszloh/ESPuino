@@ -71,20 +71,26 @@
 
 
 	//################## select RFID reader ##############################
-	#define RFID_READER_TYPE_MFRC522_SPI    // use MFRC522 via SPI
-	//#define RFID_READER_TYPE_MFRC522_I2C  // use MFRC522 via I2C
-	//#define RFID_READER_TYPE_PN5180       // use PN5180 via SPI
+	// #define RFID_READER_TYPE_MFRC522    	// use MFRC522
+	#define RFID_READER_TYPE_PN5180       // use PN5180
 
-	#ifdef RFID_READER_TYPE_MFRC522_I2C
-		#define MFRC522_ADDR 0x28           // default I2C-address of MFRC522
+	#ifdef RFID_READER_TYPE_MFRC522
+		constexpr uint8_t rfidGain = 0x07 << 4;      // Sensitivity of RC522. For possible values see reference: https://forum.espuino.de/uploads/default/original/1X/9de5f8d35cbc123c1378cad1beceb3f51035cec0.png
+
+		#define INTERFACE_I2C
+		// #define INTERFACE_SPI
+
+		#ifdef INTERFACE_I2C
+			constexpr uint8_t MFRC522_ADDR = 0x28;
+		#endif
 	#endif
 
 	#ifdef RFID_READER_TYPE_PN5180
 		//#define PN5180_ENABLE_LPCD        // Wakes up ESPuino if RFID-tag was applied while deepsleep is active. Only ISO-14443-tags are supported for wakeup!
 	#endif
 
-	#if defined(RFID_READER_TYPE_MFRC522_I2C) || defined(RFID_READER_TYPE_MFRC522_SPI)
-		constexpr uint8_t rfidGain = 0x07 << 4;      // Sensitivity of RC522. For possible values see reference: https://forum.espuino.de/uploads/default/original/1X/9de5f8d35cbc123c1378cad1beceb3f51035cec0.png
+	#if defined(RFID_READER_TYPE_MFRC522) || defined(RFID_READER_TYPE_PN5180)
+		#define RFID_READER_ENABLED 1
 	#endif
 
 
