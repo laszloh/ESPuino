@@ -19,9 +19,6 @@
 	#error "PAUSE_WHEN_RFID_REMOVED and DONT_ACCEPT_SAME_RFID_TWICE can not be activated at the same time"
 #endif
 
-unsigned long Rfid_LastRfidCheckTimestamp = 0;
-char gCurrentRfidTagId[cardIdStringSize] = ""; // No crap here as otherwise it could be shown in GUI
-
 #if defined(RFID_READER_ENABLED)
 
 extern TaskHandle_t rfidTaskHandle;
@@ -101,7 +98,7 @@ void Rfid_CardReceivedEvent(const Message &msg) {
 	}
 
 	// we know this card, so get all the infos
-	String value = gPrefsRfid.getString(gCurrentRfidTagId);
+	String value = gPrefsRfid.getString(newCardId.c_str());
 	char *token;
 	uint8_t i = 1;
 	token = strtok(value.begin(), stringDelimiter);
@@ -132,7 +129,7 @@ void Rfid_CardReceivedEvent(const Message &msg) {
 	} else {
 	#ifdef DONT_ACCEPT_SAME_RFID_TWICE
 		if (currentRfidTagId == oldRfidTagId) {
-			Log_Printf(LOGLEVEL_ERROR, dontAccepctSameRfid, gCurrentRfidTagId);
+			Log_Printf(LOGLEVEL_ERROR, dontAccepctSameRfid, newCardId.c_str());
 			// System_IndicateError(); // Enable to have shown error @neopixel every time
 			return;
 		}
@@ -204,6 +201,10 @@ void Rfid_SignalEvent(const Message &msg) {
 	xSemaphoreGive(rfidEvent);
 }
 
+const CardIdType &Rfid_GetCurrentTag() {
+	return currentRfidTagId;
+}
+
 #else
 
 // no RFID_READER_ENABLED enabled, implement empty fuctions
@@ -227,6 +228,11 @@ void Rfid_WakeupCheck() {
 }
 
 void Rfid_SignalEvent(const Message &msg) {
+}
+
+const CardIdType &Rfid_GetCurrentTag() {
+	static CardIdType dummy;	// return an empty dummy variable
+	return dummy;
 }
 
 #endif

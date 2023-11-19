@@ -721,7 +721,7 @@ static void settingsToJSON(JsonObject obj, const String section) {
 		// current values
 		JsonObject curObj = obj.createNestedObject("current");
 		curObj["volume"].set(AudioPlayer_GetCurrentVolume());
-		curObj["rfidTagId"] = String(gCurrentRfidTagId);
+		curObj["rfidTagId"] = Rfid_GetCurrentTag().toDezimalString();
 	}
 	if ((section == "") || (section == "general")) {
 		// general settings
@@ -995,7 +995,7 @@ void Web_SendWebsocketData(uint32_t client, uint8_t code) {
 	} else if (code == 2) {
 		object["status"] = "error";
 	} else if (code == 10) {
-		object["rfidId"] = gCurrentRfidTagId;
+		object["rfidId"] = Rfid_GetCurrentTag().toDezimalString();
 	} else if (code == 20) {
 		object["pong"] = "pong";
 		object["rssi"] = Wlan_GetRssi();
@@ -1770,7 +1770,7 @@ static void handleDeleteRFIDRequest(AsyncWebServerRequest *request) {
 		return;
 	}
 	if (gPrefsRfid.isKey(tagId.c_str())) {
-		if (tagId.equals(gCurrentRfidTagId)) {
+		if (tagId == Rfid_GetCurrentTag().toDezimalString()) {
 			// stop playback, tag to delete is in use
 			Cmd_Action(CMD_STOP);
 		}

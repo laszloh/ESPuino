@@ -87,6 +87,4 @@ void Rfid_TaskPause();
 void Rfid_TaskResume();
 void Rfid_WakeupCheck();
 
-constexpr uint8_t cardIdStringSize = (cardIdSize * 3u) + 1u;
-
-extern char gCurrentRfidTagId[cardIdStringSize];
+const CardIdType &Rfid_GetCurrentTag();
