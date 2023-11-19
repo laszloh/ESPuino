@@ -669,7 +669,7 @@ bool JSONToSettings(JsonObject doc) {
 		char rfidString[275];
 		snprintf(rfidString, sizeof(rfidString) / sizeof(rfidString[0]), "%s%s%s0%s%u%s0", stringDelimiter, _fileOrUrlAscii, stringDelimiter, stringDelimiter, _playMode, stringDelimiter);
 		gPrefsRfid.putString(_rfidIdAssinId, rfidString);
-#ifdef DONT_ACCEPT_SAME_RFID_TWICE_ENABLE
+#ifdef DONT_ACCEPT_SAME_RFID_TWICE
 		Rfid_ResetOldRfid(); // Set old rfid-id to crap in order to allow to re-apply a new assigned rfid-tag exactly once
 #endif
 

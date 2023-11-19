@@ -12,9 +12,13 @@
 #include "System.h"
 #include "Web.h"
 
+#if defined(PAUSE_WHEN_RFID_REMOVED) && defined(DONT_ACCEPT_SAME_RFID_TWICE)
+	#error "PAUSE_WHEN_RFID_REMOVED and DONT_ACCEPT_SAME_RFID_TWICE can not be activated at the same time"
+#endif
+
 unsigned long Rfid_LastRfidCheckTimestamp = 0;
 char gCurrentRfidTagId[cardIdStringSize] = ""; // No crap here as otherwise it could be shown in GUI
-#ifdef DONT_ACCEPT_SAME_RFID_TWICE_ENABLE
+#ifdef DONT_ACCEPT_SAME_RFID_TWICE
 char gOldRfidTagId[cardIdStringSize] = "X"; // Init with crap
 #endif
 
@@ -46,6 +50,9 @@ void Rfid_PreferenceLookupHandler(void) {
 		if (!s.compareTo("-1")) {
 			Log_Println(rfidTagUnknownInNvs, LOGLEVEL_ERROR);
 			System_IndicateError();
+	#ifdef DONT_ACCEPT_SAME_RFID_TWICE
+			strncpy(gOldRfidTagId, gCurrentRfidTagId, cardIdStringSize - 1); // Even if not found in NVS: accept it as card last applied
+	#endif
 			// allow to escape from bluetooth mode with an unknown card, switch back to normal mode
 			System_SetOperationMode(OPMODE_NORMAL);
 			return;
@@ -77,7 +84,7 @@ void Rfid_PreferenceLookupHandler(void) {
 				// Modification-cards can change some settings (e.g. introducing track-looping or sleep after track/playlist).
 				Cmd_Action(_playMode);
 			} else {
-	#ifdef DONT_ACCEPT_SAME_RFID_TWICE_ENABLE
+	#ifdef DONT_ACCEPT_SAME_RFID_TWICE
 				if (strncmp(gCurrentRfidTagId, gOldRfidTagId, 12) == 0) {
 					Log_Printf(LOGLEVEL_ERROR, dontAccepctSameRfid, gCurrentRfidTagId);
 					// System_IndicateError(); // Enable to have shown error @neopixel every time
@@ -104,7 +111,7 @@ void Rfid_PreferenceLookupHandler(void) {
 #endif
 }
 
-#ifdef DONT_ACCEPT_SAME_RFID_TWICE_ENABLE
+#ifdef DONT_ACCEPT_SAME_RFID_TWICE
 void Rfid_ResetOldRfid() {
 	strncpy(gOldRfidTagId, "X", cardIdStringSize - 1);
 }
