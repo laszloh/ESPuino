@@ -77,9 +77,7 @@ void cyclic() {
 }
 
 void resetOldRfid() {
-#ifdef DONT_ACCEPT_SAME_RFID_TWICE
 	oldRfidCard = {};
-#endif
 }
 
 CardIdType &getCurrentRfidTagId() {
@@ -145,7 +143,7 @@ void executeCardAppliedEvent(const Message &msg) {
 		} else {
 #ifdef DONT_ACCEPT_SAME_RFID_TWICE
 			if (oldRfidCard == msg.cardId) {
-				Log_Printf(LOGLEVEL_ERROR, dontAccepctSameRfid, msg.toDezimalString().c_str());
+				Log_Printf(LOGLEVEL_ERROR, dontAccepctSameRfid, msg.cardId.toDezimalString().c_str());
 				// System_IndicateError(); // Enable to have shown error @neopixel every time
 				return;
 			}
@@ -163,6 +161,12 @@ void executeCardAppliedEvent(const Message &msg) {
 #endif
 
 #ifdef PAUSE_WHEN_RFID_REMOVED
+#ifdef ACCEPT_SAME_RFID_AFTER_TRACK_END
+			// if we are finished with the playback, "destroy" old card information
+			if(gPlayProperties.trackFinished || gPlayProperties.playlistFinished) {
+				resetOldRfid();
+			}
+#endif
 			if (oldRfidCard == msg.cardId) {
 				// resume playback
 				AudioPlayer_TrackControlToQueueSender(PLAY);
