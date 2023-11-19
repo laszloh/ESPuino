@@ -2,13 +2,12 @@
 
 #include "settings.h"
 
+#include "RfidEvent.h"
 #include "crtp.hpp"
 
 #include <WString.h>
 #include <array>
 #include <mutex>
-
-#include "RfidEvent.h"
 
 namespace rfid::driver {
 
@@ -40,11 +39,6 @@ public:
 		this->underlying().exit();
 	}
 
-protected:
-	SemaphoreHandle_t cardChangeEvent {xSemaphoreCreateBinary()};
-	std::mutex accessGuard;
-	Message message;
-
 	void signalEvent(const Message::Event event, const CardIdType &cardId = {}) {
 		// get the access guard
 		std::lock_guard guard(accessGuard);
@@ -56,12 +50,13 @@ protected:
 	}
 
 	void signalEvent(const Message &msg) {
-		std::lock_guard guard(accessGuard);
-		message = msg;
-
-		// signal the event
-		xSemaphoreGive(cardChangeEvent);
+		signalEvent(msg.event, msg.cardId);
 	}
+
+protected:
+	SemaphoreHandle_t cardChangeEvent {xSemaphoreCreateBinary()};
+	std::mutex accessGuard;
+	Message message;
 
 private:
 	DEFINE_HAS_SIGNATURE(hasInit, T::init, void (T::*)(void));

@@ -17,11 +17,6 @@ namespace rfid::driver {
 namespace implementation {
 
 class Mfrc522Driver : public RfidDriverBase<Mfrc522Driver> {
-	using RfidDriverBase::accessGuard;
-	using RfidDriverBase::cardChangeEvent;
-	using RfidDriverBase::message;
-	using RfidDriverBase::signalEvent;
-
 public:
 	void init() {
 #ifdef RFID_READER_TYPE_MFRC522_SPI
