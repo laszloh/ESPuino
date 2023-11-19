@@ -78,17 +78,15 @@ struct Message {
 	inline bool operator!=(const Message &rhs) { return !operator==(rhs); }
 };
 
-void Rfid_Init(void);
-void Rfid_Cyclic(void);
-void Rfid_Exit(void);
-void Rfid_TaskPause(void);
-void Rfid_TaskResume(void);
-void Rfid_WakeupCheck(void);
+void Rfid_Init();
+void Rfid_Cyclic();
+void Rfid_Exit();
+void Rfid_ResetOldRfid();
+void Rfid_SignalEvent(const Message &msg);
+void Rfid_TaskPause();
+void Rfid_TaskResume();
+void Rfid_WakeupCheck();
 
 constexpr uint8_t cardIdStringSize = (cardIdSize * 3u) + 1u;
 
 extern char gCurrentRfidTagId[cardIdStringSize];
-
-#ifdef DONT_ACCEPT_SAME_RFID_TWICE
-void Rfid_ResetOldRfid(void);
-#endif

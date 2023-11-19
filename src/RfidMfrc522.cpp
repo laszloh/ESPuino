@@ -30,7 +30,7 @@ static MFRC522_I2C mfrc522(MFRC522_ADDR, MFRC522_RST_PIN, &i2cBusTwo);
 static MFRC522 mfrc522(RFID_CS, RST_PIN);
 	#endif
 
-void Rfid_Init(void) {
+void Rfid_Driver_Init(void) {
 	#ifdef INTERFACE_SPI
 	SPI.begin(RFID_SCK, RFID_MISO, RFID_MOSI, RFID_CS);
 	SPI.setFrequency(1000000);
@@ -178,10 +178,6 @@ void Rfid_Task(void *parameter) {
 	#endif
 		}
 	}
-}
-
-void Rfid_Cyclic(void) {
-	// Not necessary as cyclic stuff performed by task Rfid_Task()
 }
 
 void Rfid_Exit(void) {

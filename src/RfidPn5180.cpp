@@ -55,7 +55,7 @@ bool Rfid_GetLpcdShutdownStatus(void) {
 }
 	#endif
 
-void Rfid_Init(void) {
+void Rfid_Driver_Init(void) {
 	#ifdef PN5180_ENABLE_LPCD
 	// Check if wakeup-reason was card-detection (PN5180 only)
 	// This only works if RFID.IRQ is connected to a GPIO and not to a port-expander
@@ -97,10 +97,6 @@ void Rfid_Init(void) {
 		&rfidTaskHandle, /* Task handle. */
 		0 /* Core where the task should run */
 	);
-}
-
-void Rfid_Cyclic(void) {
-	// Not necessary as cyclic stuff performed by task Rfid_Task()
 }
 
 void Rfid_Task(void *parameter) {
