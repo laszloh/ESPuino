@@ -4,6 +4,7 @@ namespace rfid
 {
 
 void init();
+void cyclic();
 void exit();
 void taskPause();
 void taskResume();

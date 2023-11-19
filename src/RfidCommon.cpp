@@ -48,7 +48,7 @@ void wakeupCheck() {
 }
 
 // Tries to lookup RFID-tag-string in NVS and extracts parameter from it if found
-void preferenceLookupHandler() {
+void cyclic() {
 	// wait for a card change event
 	bool cardChangeEvent = rfidDriver.waitForCardEvent(0);
 	if (cardChangeEvent) {

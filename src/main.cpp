@@ -264,7 +264,7 @@ void loop() {
 	// Port_Cyclic(); // called by button (controlled via hw-timer)
 	Button_Cyclic();
 	System_Cyclic();
-	rfid::preferenceLookupHandler();
+	rfid::cyclic();
 
 #ifdef PLAY_LAST_RFID_AFTER_REBOOT
 	recoverBootCountFromNvs();
