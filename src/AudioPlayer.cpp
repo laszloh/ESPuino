@@ -477,6 +477,28 @@ void AudioPlayer_Task(void *parameter) {
 					AudioPlayer_ClearCover();
 					continue;
 
+				case PLAY:
+					trackCommand = NO_ACTION;
+					if (!audio->isRunning()) {
+						// we are paused, so resume playback
+						audio->pauseResume();
+						Log_Println(cmndResumeFromPause, LOGLEVEL_INFO);
+						gPlayProperties.pausePlay = false;
+						Web_SendWebsocketData(0, 30);
+					}
+					continue;
+
+				case PAUSE:
+					trackCommand = NO_ACTION;
+					if (audio->isRunning()) {
+						// we are playinf, so pause playback
+						audio->pauseResume();
+						Log_Println(cmndPause, LOGLEVEL_INFO);
+						gPlayProperties.pausePlay = true;
+						Web_SendWebsocketData(0, 30);
+					}
+					continue;
+
 				case PAUSEPLAY:
 					trackCommand = NO_ACTION;
 					audio->pauseResume();
