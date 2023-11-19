@@ -77,19 +77,17 @@ private:
 				vTaskDelay(portTICK_PERIOD_MS * 20);
 			}
 
-			// driver->mfrc522.PICC_IsNewCardPresent();
-
-			uint8_t bufferATQA[10];
+			uint8_t bufferATQA[8];
 			uint8_t bufferSize = sizeof(bufferATQA);
 
+			// wake up one card on the reader
 			MFRC522::StatusCode result = driver->mfrc522.PICC_WakeupA(bufferATQA, &bufferSize);
-			// log_n("Status code: %d", result);
 			if (result == MFRC522::StatusCode::STATUS_OK) {
 				// we found or woke up a card, read id
 				driver->mfrc522.PICC_Select(&driver->mfrc522.uid, 0);
 				cardAppliedCurrentRun = (result == MFRC522::StatusCode::STATUS_OK);
 
-				// reset card and crypto engine
+				// Bring card into HALT mode
 				driver->mfrc522.PICC_HaltA();
 				// driver->mfrc522.PCD_StopCrypto1();
 			}
