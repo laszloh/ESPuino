@@ -135,12 +135,26 @@ void Rfid_CardReceivedEvent(const Message &msg) {
 			Log_Printf(LOGLEVEL_ERROR, dontAccepctSameRfid, gCurrentRfidTagId);
 			// System_IndicateError(); // Enable to have shown error @neopixel every time
 			return;
-		} else {
-			oldRfidTagId = currentRfidTagId;
 		}
+		oldRfidTagId = currentRfidTagId;
 	#endif
 	#ifdef MQTT_ENABLE
 		publishMqtt(topicRfidState, newCardId.c_str(), false);
+	#endif
+
+	#ifdef PAUSE_WHEN_RFID_REMOVED
+		#ifdef ACCEPT_SAME_RFID_AFTER_TRACK_END
+		// if we are finished with the playback, "destroy" old card information
+		if (gPlayProperties.trackFinished || gPlayProperties.playlistFinished) {
+			Rfid_ResetOldRfid();
+		}
+		#endif
+		if (oldRfidTagId == msg.cardId) {
+			// resume playback
+			AudioPlayer_TrackControlToQueueSender(PLAY);
+			return;
+		}
+		oldRfidTagId = currentRfidTagId;
 	#endif
 
 	#ifdef BLUETOOTH_ENABLE
@@ -154,12 +168,22 @@ void Rfid_CardReceivedEvent(const Message &msg) {
 }
 
 void Rfid_CardRemovedEvent(const Message &msg) {
+	#ifdef PAUSE_WHEN_RFID_REMOVED
+	// save the olf rfid card
+	oldRfidTagId = msg.cardId;
+	currentRfidTagId = {};
+
+	Log_Println(rfidTagRemoved, LOGLEVEL_NOTICE);
+	if (System_GetOperationMode() != OPMODE_BLUETOOTH_SINK) {
+		AudioPlayer_TrackControlToQueueSender(PAUSE);
+		Log_Println(rfidTagReapplied, LOGLEVEL_NOTICE);
+	}
+
+	#endif
 }
 
 void Rfid_ResetOldRfid() {
-	#ifdef DONT_ACCEPT_SAME_RFID_TWICE
-	strncpy(gOldRfidTagId, "X", cardIdStringSize - 1);
-	#endif
+	oldRfidTagId = {};
 }
 
 void Rfid_TaskPause() {
