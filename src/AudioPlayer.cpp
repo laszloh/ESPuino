@@ -873,11 +873,11 @@ void AudioPlayer_Task(void *parameter) {
 		}
 		// esp_task_wdt_reset(); // Don't forget to feed the dog!
 
-#ifdef DONT_ACCEPT_SAME_RFID_TWICE_ENABLE
+#ifdef DONT_ACCEPT_SAME_RFID_TWICE
 		static uint8_t resetOnNextIdle = false;
 		if (gPlayProperties.playlistFinished || gPlayProperties.playMode == NO_PLAYLIST) {
 			if (resetOnNextIdle) {
-				Rfid_ResetOldRfid();
+				rfid::resetOldRfid();
 				resetOnNextIdle = false;
 			}
 		} else {

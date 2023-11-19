@@ -13,10 +13,8 @@
 #include "Web.h"
 #include "driver/rfid/rfid.hpp"
 
-unsigned long Rfid_LastRfidCheckTimestamp = 0;
-char gCurrentRfidTagId[cardIdStringSize] = ""; // No crap here as otherwise it could be shown in GUI
-#ifdef DONT_ACCEPT_SAME_RFID_TWICE_ENABLE
-char gOldRfidTagId[cardIdStringSize] = "X"; // Init with crap
+#if defined(PAUSE_WHEN_RFID_REMOVED) && defined(DONT_ACCEPT_SAME_RFID_TWICE)
+	#error "PAUSE_WHEN_RFID_REMOVED and DONT_ACCEPT_SAME_RFID_TWICE_ENABLE can not be enabled at the same time"
 #endif
 
 namespace rfid {
@@ -77,6 +75,12 @@ void preferenceLookupHandler() {
 	}
 }
 
+void resetOldRfid() {
+#ifdef DONT_ACCEPT_SAME_RFID_TWICE
+		oldRfidCard = {};
+#endif
+}
+
 void executeCardAppliedEvent(const Message &msg) {
 	char _file[255];
 	uint32_t _lastPlayPos = 0;
@@ -92,8 +96,8 @@ void executeCardAppliedEvent(const Message &msg) {
 		// we did not find the RFID Tag in the settings file
 		Log_Println(rfidTagUnknownInNvs, LOGLEVEL_ERROR);
 		System_IndicateError();
-#ifdef DONT_ACCEPT_SAME_RFID_TWICE_ENABLE
-		strncpy(gOldRfidTagId, gCurrentRfidTagId, cardIdStringSize - 1); // Even if not found in NVS: accept it as card last applied
+#ifdef DONT_ACCEPT_SAME_RFID_TWICE
+		oldRfidCard = msg.cardId;
 #endif
 		// allow to escape from bluetooth mode with an unknown card, switch back to normal mode
 		System_SetOperationMode(OPMODE_NORMAL);
@@ -128,14 +132,13 @@ void executeCardAppliedEvent(const Message &msg) {
 			// Modification-cards can change some settings (e.g. introducing track-looping or sleep after track/playlist).
 			Cmd_Action(_playMode);
 		} else {
-#ifdef DONT_ACCEPT_SAME_RFID_TWICE_ENABLE
-			if (strncmp(gCurrentRfidTagId, gOldRfidTagId, 12) == 0) {
-				Log_Printf(LOGLEVEL_ERROR, dontAccepctSameRfid, gCurrentRfidTagId);
+#ifdef DONT_ACCEPT_SAME_RFID_TWICE
+			if (oldRfidCard == msg.cardId) {
+				Log_Printf(LOGLEVEL_ERROR, dontAccepctSameRfid, msg.toDezimalString().c_str());
 				// System_IndicateError(); // Enable to have shown error @neopixel every time
 				return;
-			} else {
-				strncpy(gOldRfidTagId, gCurrentRfidTagId, 12);
 			}
+			oldRfidCard = msg.cardId;
 #endif
 #ifdef MQTT_ENABLE
 			publishMqtt(topicRfidState, gCurrentRfidTagId, false);
