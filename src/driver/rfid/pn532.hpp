@@ -71,7 +71,7 @@ private:
 	static void Task(void *ptr) {
 		PN532Driver *driver = static_cast<PN532Driver *>(ptr);
 		uint32_t lastTimeCardDetect = 0;
-		Message::CardIdType lastCardId;
+		CardIdType lastCardId;
 		bool cardAppliedLastRun = false;
 
 		while (1) {
@@ -89,7 +89,7 @@ private:
 			if (cardAppliedCurrentRun) {
 				lastTimeCardDetect = millis();
 				cardAppliedLastRun = true;
-				Message::CardIdType cardId;
+				CardIdType cardId;
 				cardId.assign(uid);
 
 				if (cardId == lastCardId) {
@@ -103,7 +103,7 @@ private:
 				msg.event = Message::Event::CardApplied;
 				msg.cardId = cardId;
 
-				Log_Printf(LOGLEVEL_NOTICE, rfidTagDetected, msg.toHexString().c_str());
+				Log_Printf(LOGLEVEL_NOTICE, rfidTagDetected, cardId.toHexString().c_str());
 				driver->signalEvent(msg);
 			} else {
 				if (!lastTimeCardDetect || (millis() - lastTimeCardDetect) > cardDetectTimeout) {

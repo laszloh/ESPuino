@@ -197,12 +197,12 @@ private:
 		Nfc14443Fsm nfc14443Fsm = Nfc14443Fsm::reset;
 		Nfc15693Fsm nfc15693Fsm = Nfc15693Fsm::reset;
 		uint32_t lastTimeCardDetect = 0;
-		Message::CardIdType lastCardId;
+		CardIdType lastCardId;
 		bool cardAppliedLastRun = false;
 
 		while (1) {
 			bool cardReceived = false;
-			Message::CardIdType cardId;
+			CardIdType cardId;
 
 			vTaskDelay(portTICK_RATE_MS * 10u);
 #ifdef PN5180_ENABLE_LPCD
@@ -244,7 +244,7 @@ private:
 						case Nfc14443Fsm::readcard:
 							if (driver->nfc14443.readCardSerial(uid) >= 4) {
 								cardReceived = true;
-								std::copy(uid, uid + cardId.size(), cardId.begin());
+								cardId.assign(uid);
 								lastTimeCardDetect = millis();
 							} else {
 								// Reset to dummy-value if no card is there
@@ -333,7 +333,7 @@ private:
 				msg.event = Message::Event::CardApplied;
 				msg.cardId = cardId;
 
-				Log_Printf(LOGLEVEL_NOTICE, rfidTagDetected, msg.toHexString().c_str());
+				Log_Printf(LOGLEVEL_NOTICE, rfidTagDetected, cardId.toHexString().c_str());
 				Log_Printf(LOGLEVEL_NOTICE, "Card type: %s", (fsm == MainFsm::nfc14443) ? "ISO-14443" : "ISO-15693");
 
 				driver->signalEvent(msg);
