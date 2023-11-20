@@ -428,7 +428,7 @@ void AudioPlayer_Task(void *parameter) {
 
 				// TODO: this check is always true, so this does not work anymore since #af4bda9
 				// if (gCurrentRfidTagId != NULL) {
-					gPlayProperties.playRfidTag = Rfid_GetCurrentTag();
+				gPlayProperties.playRfidTag = Rfid_GetCurrentTag();
 				// }
 			}
 			if (gPlayProperties.trackFinished) {
@@ -833,7 +833,11 @@ void AudioPlayer_Task(void *parameter) {
 		if (!gPlayProperties.currentSpeechActive && gPlayProperties.lastSpeechActive) {
 			gPlayProperties.lastSpeechActive = false;
 			if (gPlayProperties.playMode != NO_PLAYLIST) {
-				xQueueSend(gRfidCardQueue, gPlayProperties.playRfidTag, 0); // Re-inject previous RFID-ID in order to continue playback
+				// Re-inject previous RFID-ID in order to continue playback
+				Message msg;
+				msg.event = Message::Event::CardApplied;
+				msg.cardId = gPlayProperties.playRfidTag;
+				Rfid_SignalEvent(msg);
 			}
 		}
 

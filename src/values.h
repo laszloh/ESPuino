@@ -14,7 +14,7 @@
 #define PREVIOUSTRACK 5 // Previous track of playlist
 #define FIRSTTRACK	  6 // First track of playlist
 #define LASTTRACK	  7 // Last track of playlist
-#define PAUSE         8 // Pause the playback
+#define PAUSE		  8 // Pause the playback
 
 // Playmodes
 #define NO_PLAYLIST												  0 // If no playlist is active

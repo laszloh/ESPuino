@@ -231,7 +231,7 @@ void Rfid_SignalEvent(const Message &msg) {
 }
 
 const CardIdType &Rfid_GetCurrentTag() {
-	static CardIdType dummy;	// return an empty dummy variable
+	static CardIdType dummy; // return an empty dummy variable
 	return dummy;
 }
 
