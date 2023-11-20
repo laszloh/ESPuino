@@ -90,6 +90,15 @@
 	#endif
 
 	#ifdef RFID_READER_TYPE_PN5180
+		constexpr inline size_t cardDetectTimeout = 1000;
+
+		// add all passwords which shall be tested to unlock an ICODE-SLIX2 tag
+		// https://de.ifixit.com/Antworten/Ansehen/513422/nfc+Chips+f%C3%BCr+tonies+kaufen
+		constexpr inline auto slix2Passwords = std::to_array<uint8_t[4]>({
+			{0x0F, 0x0F, 0x0F, 0x0F},	// default factory password for ICODE-SLIX2
+			{0x5B, 0xE6, 0xDF, 0xF7},	// example custom password
+		});
+
 		//#define PN5180_ENABLE_LPCD        // Wakes up ESPuino if RFID-tag was applied while deepsleep is active. Only ISO-14443-tags are supported for wakeup!
 	#endif
 
