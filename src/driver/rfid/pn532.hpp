@@ -7,9 +7,7 @@
 #include "SPI.h"
 #include "Wire.h"
 
-#include <PN532.h>
-#include <PN532_I2C.h>
-#include <PN532_SPI.h>
+#include <Adafruit_PN532.h>
 
 extern TwoWire i2cBusTwo;
 
@@ -21,9 +19,8 @@ public:
 	void init() {
 #ifdef RFID_READER_TYPE_PN532_SPI
 		SPI.begin(RFID_SCK, RFID_MISO, RFID_MOSI, RFID_CS);
-		SPI.setFrequency(1000000);
+		SPI.setFrequency(5000000);
 #endif
-		reset();
 		pn532.begin();
 
 		const uint32_t version = pn532.getFirmwareVersion();
@@ -58,7 +55,7 @@ public:
 	void wakeupCheck() { }
 
 	void exit() {
-		pn532.powerDownMode();
+		shutDown();
 		vTaskDelete(taskHandle);
 	}
 
@@ -79,8 +76,7 @@ private:
 				vTaskDelay(portTICK_PERIOD_MS * 20);
 			}
 
-			bool cardAppliedCurrentRun = driver->pn532.readPassiveTargetID(PN532_MIFARE_ISO14443A, uid, &uidLen, 5);
-
+			bool cardAppliedCurrentRun = driver->pn532.readPassiveTargetID(PN532_MIFARE_ISO14443A, uid, &uidLen);
 			if (cardAppliedCurrentRun) {
 				lastTimeCardDetect = millis();
 				cardAppliedLastRun = true;
@@ -115,27 +111,24 @@ private:
 		}
 	}
 
-	void reset() const {
-		if constexpr (rstPin < GPIO_PIN_COUNT && GPIO_IS_VALID_GPIO(rstPin)) {
-			pinMode(rstPin, OUTPUT);
-			digitalWrite(rstPin, LOW);
-			delayMicroseconds(100);
-			digitalWrite(rstPin, HIGH);
-			delay(10);
-		}
+	bool shutDown() {
+		uint8_t buffer[3];
+		buffer[0] = PN532_COMMAND_POWERDOWN;
+		buffer[1] = 0x20; //(0x20, for SPI) (0x28 for SPI and RF detectionThe wakeup source(s) you want too use
+		buffer[2] = 0x01; // To eneable the IRQ, 0x00 if you dont want too use the IRQ
+
+		return pn532.sendCommandCheckAck(buffer, 3);
 	}
 
 	static constexpr uint32_t cardDetectTimeout = 200;
-	static constexpr size_t rstPin = RST_PIN;
 
 	TaskHandle_t taskHandle {nullptr};
 
 #if defined(RFID_READER_TYPE_PN532_I2C)
-	PN532_I2C driver {NP532_I2C(i2cBusTwo)};
+	Adafruit_PN532 pn532 {Adafruit_PN532(RFID_IRQ, 99, i2cBusTwo)}; // Create PN532 instance.
 #elif defined(RFID_READER_TYPE_PN532_SPI)
-	PN532_SPI driver {PN532_SPI(SPI, RFID_CS)};
+	Adafruit_PN532 pn532 {Adafruit_PN532(RFID_CS, &SPI)};
 #endif
-	PN532 pn532 {PN532(driver)}; // Create MFRC522 instance.
 };
 
 } // namespace implementation
