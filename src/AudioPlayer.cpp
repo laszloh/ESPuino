@@ -135,7 +135,7 @@ void AudioPlayer_Init(void) {
 			NULL, /* Task input parameter */
 			2 | portPRIVILEGE_BIT, /* Priority of the task */
 			&AudioTaskHandle, /* Task handle. */
-			1 /* Core where the task should run */
+			0 /* Core where the task should run */
 		);
 	}
 }
