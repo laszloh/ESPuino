@@ -199,7 +199,7 @@ public:
 			// pause some tasks to get more free CPU time for the upload
 			vTaskSuspend(AudioTaskHandle);
 			Led_TaskPause();
-			Rfid_TaskPause();
+			rfid::taskPause();
 			Update.begin();
 			Log_Println(fwStart, LOGLEVEL_NOTICE);
 		}
@@ -212,7 +212,7 @@ public:
 			// resume the paused tasks
 			Led_TaskResume();
 			vTaskResume(AudioTaskHandle);
-			Rfid_TaskResume();
+			rfid::taskResume();
 			Log_Println(fwEnd, LOGLEVEL_NOTICE);
 			if (Update.hasError()) {
 				Log_Println(Update.errorString(), LOGLEVEL_ERROR);
@@ -550,15 +550,31 @@ void webserverStart(void) {
 			response->println("<meta http-equiv='refresh' content='2'>"); // refresh page every 2 seconds
 			response->println("</head><body>Tasklist:<div class='text'><pre>");
 			// show tasklist
-			char *pbuffer = (char *) calloc(2048, 1);
+			char pbuffer[2048];
 			vTaskList(pbuffer);
 			response->println(pbuffer);
 			response->println("</pre></div><br><br>Runtime statistics:<div class='text'><pre>");
 			// show vTaskGetRunTimeStats()
-			vTaskGetRunTimeStats(pbuffer);
-			response->println(pbuffer);
+			const size_t taskCount = uxTaskGetNumberOfTasks();
+			xTASK_STATUS *tasks = new xTASK_STATUS[taskCount];
+			size_t totalRunTime;
+			uxTaskGetSystemState(tasks, taskCount, &totalRunTime);
+			totalRunTime /= 100;
+			if (totalRunTime > 0) {
+				response->printf("%20s\t%s\t%10s\t%s\r\n", "Name", "Core", "Runtime", "Percent");
+				for (size_t i = 0; i < taskCount; i++) {
+					const size_t runTimePercent = tasks[i].ulRunTimeCounter / totalRunTime;
+					if (runTimePercent > 0) {
+						response->printf("%20s\t%d\t%10u\t%u%%\r\n", tasks[i].pcTaskName, tasks[i].xCoreID, tasks[i].ulRunTimeCounter, runTimePercent);
+					} else {
+						response->printf("%20s\t%d\t%10u\t<1%%\r\n", tasks[i].pcTaskName, tasks[i].xCoreID, tasks[i].ulRunTimeCounter);
+					}
+				}
+			}
+			delete[] tasks;
+			// vTaskGetRunTimeStats(pbuffer);
+			// response->println(pbuffer);
 			response->println("</pre></div></body></html>");
-			free(pbuffer);
 			// send the response last
 			request->send(response);
 		});
@@ -1336,7 +1352,7 @@ void explorerHandleFileStorageTask(void *parameter) {
 
 	// pause some tasks to get more free CPU time for the upload
 	vTaskSuspend(AudioTaskHandle);
-	Led_TaskPause(); 
+	Led_TaskPause();
 	rfid::taskPause();
 
 	for (;;) {
