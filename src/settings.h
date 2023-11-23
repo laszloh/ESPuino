@@ -72,8 +72,8 @@
 
 
 	//################## select RFID reader ##############################
-	#define RFID_READER_TYPE_MFRC522      // use MFRC522
-	// #define RFID_READER_TYPE_PN532        // use PN532
+	// #define RFID_READER_TYPE_MFRC522      // use MFRC522
+	#define RFID_READER_TYPE_PN532        // use PN532
 	// #define RFID_READER_TYPE_PN5180       // use PN5180 via SPI
 
 	#ifdef RFID_READER_TYPE_MFRC522
@@ -104,6 +104,10 @@
 			{{0x0F, 0x0F, 0x0F, 0x0F}},
 			{{0xAB, 0xEF, 0x00, 0x00}}
 		});
+	#endif
+
+	#if defined(RFID_READER_TYPE_MFRC522) || defined(RFID_READER_TYPE_PN532) || defined(RFID_READER_TYPE_PN5180)
+		#define RFID_READER_ENABLE 1
 	#endif
 
 
@@ -334,6 +338,8 @@
 		#include "settings-azdelivery_sdmmc.h"              // Pre-configured settings for AZ Delivery ESP32 NodeMCU / Devkit C (https://forum.espuino.de/t/az-delivery-esp32-nodemcu-devkit-c-mit-sd-mmc-und-pn5180-als-rfid-leser/634)
 	#elif (HAL == 9)
 		#include "settings-lolin_d32_sdmmc_pe.h"            // Pre-configured settings for Lolin D32 (non-pro) with SDMMC + port-expander (https://forum.espuino.de/t/espuino-minid32-pro-lolin-d32-pro-mit-sd-mmc-und-port-expander-smd/866)
+	#elif (HAL == 97)
+		#include "settings-ttgo_t8_sdmmc.h"            // Pre-configured settings for Lolin D32 (non-pro) with SDMMC + port-expander (https://forum.espuino.de/t/espuino-minid32-pro-lolin-d32-pro-mit-sd-mmc-und-port-expander-smd/866)
 	#elif (HAL == 99)
 		#include "settings-custom.h"                        // Contains all user-relevant settings custom-board
 	#endif
