@@ -62,10 +62,10 @@
 	//#define GPIO_HP_EN                    112         	// To enable amp for headphones (GPIO or port-channel)
 
 	// Control-buttons
-	#define NEXT_BUTTON			102		// Button 0: GPIO to detect next
-	#define PREVIOUS_BUTTON			100		// Button 1: GPIO to detect previous
-	#define PAUSEPLAY_BUTTON		101		// Button 2: GPIO to detect pause/play
-	#define ROTARYENCODER_BUTTON		105		// rotary encoder's button
+	#define BUTTON_0			102		// Button 0: GPIO to detect next
+	#define BUTTON_1			100		// Button 1: GPIO to detect previous
+	#define BUTTON_2		101		// Button 2: GPIO to detect pause/play
+	#define BUTTON_3		105		// rotary encoder's button
 	#define BUTTON_4			103		// Button 4: unnamed optional button
 	#define BUTTON_5			104		// Button 5: unnamed optional button
 
