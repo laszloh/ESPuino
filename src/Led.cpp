@@ -18,8 +18,8 @@
 #ifdef NEOPIXEL_ENABLE
 	#include <FastLED.h>
 
-	#define LED_INITIAL_BRIGHTNESS		 16u
-	#define LED_INITIAL_NIGHT_BRIGHTNESS 2u
+	#define LED_INITIAL_BRIGHTNESS		 64u
+	#define LED_INITIAL_NIGHT_BRIGHTNESS 8u
 
 	#define LED_INDICATOR_SET(indicator)	((Led_Indicators) |= (1u << ((uint8_t) indicator)))
 	#define LED_INDICATOR_IS_SET(indicator) (((Led_Indicators) & (1u << ((uint8_t) indicator))) > 0u)
@@ -44,9 +44,9 @@ static uint8_t Led_Brightness = LED_INITIAL_BRIGHTNESS;
 static uint8_t Led_NightBrightness = LED_INITIAL_NIGHT_BRIGHTNESS;
 constexpr uint8_t Led_IdleDotDistance = NUM_INDICATOR_LEDS / NUM_LEDS_IDLE_DOTS;
 
-static CRGBArray<NUM_INDICATOR_LEDS + NUM_CONTROL_LEDS> leds;
-static CRGBSet indicator(leds(0, NUM_INDICATOR_LEDS - 1));
-static CRGBSet controlLeds(leds(NUM_INDICATOR_LEDS, NUM_INDICATOR_LEDS + NUM_CONTROL_LEDS - 1));
+static CRGBArray<NUM_INDICATOR_LEDS + NUM_CONTROL_LEDS> rawLedArray;
+static CRGBSet indicator(rawLedArray(0, NUM_INDICATOR_LEDS - 1));
+static CRGBSet controlLeds(rawLedArray(NUM_INDICATOR_LEDS, rawLedArray.size() - 1));
 
 TaskHandle_t Led_TaskHandle;
 static void Led_Task(void *parameter);
@@ -252,7 +252,7 @@ void Led_DrawIdleDots(CRGBSet &leds, uint8_t offset, CRGB::HTMLColorCode color) 
 #ifdef NEOPIXEL_ENABLE
 static void Led_Task(void *parameter) {
 	static uint8_t lastLedBrightness = Led_Brightness;
-	FastLED.addLeds<CHIPSET, LED_PIN, COLOR_ORDER>(leds, leds.size()).setCorrection(TypicalSMD5050);
+	FastLED.addLeds<CHIPSET, LED_PIN, COLOR_ORDER>(rawLedArray, rawLedArray.size()).setCorrection(TypicalSMD5050);
 	FastLED.setBrightness(Led_Brightness);
 	FastLED.setDither(DISABLE_DITHER);
 
