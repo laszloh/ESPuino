@@ -49,6 +49,7 @@ void Battery_InitInner() {
 	} else {
 		gPrefsSettings.putFloat("wCritVoltage", warningCriticalVoltage);
 	}
+	adcAttachPin(VOLTAGE_READ_PIN);
 }
 
 void Battery_CyclicInner() {
@@ -57,14 +58,15 @@ void Battery_CyclicInner() {
 
 // The average of several analog reads will be taken to reduce the noise (Note: One analog read takes ~10µs)
 float Battery_GetVoltage(void) {
-	float factor = 1 / ((float) rdiv2 / (rdiv2 + rdiv1));
-	float averagedAnalogValue = 0;
-	uint8_t i;
-	for (i = 0; i <= 19; i++) {
-		averagedAnalogValue += (float) analogRead(VOLTAGE_READ_PIN);
+	constexpr float factor = 1 / ((float) rdiv2 / (rdiv2 + rdiv1));
+	constexpr size_t sampels = 32;
+
+	uint32_t averagedAnalogValue = 0;
+	for (size_t i = 0; i < sampels; i++) {
+		averagedAnalogValue += analogRead(VOLTAGE_READ_PIN);
 	}
-	averagedAnalogValue /= 20.0;
-	return (averagedAnalogValue / maxAnalogValue) * referenceVoltage * factor + offsetVoltage;
+	averagedAnalogValue /= sampels;
+	return (float(averagedAnalogValue) / maxAnalogValue) * referenceVoltage * factor + offsetVoltage;
 }
 
 void Battery_PublishMQTT() {
