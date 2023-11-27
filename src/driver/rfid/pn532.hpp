@@ -19,16 +19,17 @@ public:
 	void init() {
 #ifdef RFID_READER_TYPE_PN532_SPI
 		SPI.begin(RFID_SCK, RFID_MISO, RFID_MOSI, RFID_CS);
-		SPI.setFrequency(5000000);
+		SPI.setFrequency(100000);
 #endif
 		pn532.begin();
+		pn532.wakeup();
 
 		const uint32_t version = pn532.getFirmwareVersion();
 		if (!version) {
 			Log_Println("Did not find NFC card reader!", LOGLEVEL_ERROR);
 			return;
 		}
-		Log_Printf(LOGLEVEL_NOTICE, "Found PN5%X FW: %d.%d\n", (version >> 24) & 0xFF, (version >> 16) & 0xFF, (version >> 8) & 0xFF);
+		Log_Printf(LOGLEVEL_NOTICE, "Found PN5%X FW: %d.%d", (version >> 24) & 0xFF, (version >> 16) & 0xFF, (version >> 8) & 0xFF);
 		pn532.setPassiveActivationRetries(0x05);
 		pn532.SAMConfig();
 
@@ -74,6 +75,14 @@ private:
 				vTaskDelay(portTICK_PERIOD_MS * (RFID_SCAN_INTERVAL / 2));
 			} else {
 				vTaskDelay(portTICK_PERIOD_MS * 20);
+			}
+
+
+			const uint32_t version = driver->pn532.getFirmwareVersion();
+			if (!version) {
+				Log_Println("Lost contact to the NFC card reader!", LOGLEVEL_ERROR);
+				driver->pn532.begin();
+				driver->pn532.wakeup();
 			}
 
 			bool cardAppliedCurrentRun = driver->pn532.readPassiveTargetID(PN532_MIFARE_ISO14443A, uid, &uidLen);

@@ -98,7 +98,6 @@ public:
 	}
 
 	bool push_back(const char *path) {
-		log_n("path: %s", path);
 		if (!fileValid(path)) {
 			return false;
 		}
