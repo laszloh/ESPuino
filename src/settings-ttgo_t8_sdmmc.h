@@ -113,8 +113,8 @@
 
 // (optional) For measuring battery-voltage a voltage-divider is necessary. Their values need to be configured here.
 #ifdef MEASURE_BATTERY_VOLTAGE
-    constexpr uint16_t rdiv1 = 100;                              // Rdiv1 of voltage-divider (kOhms) (measure exact value with multimeter!)
-    constexpr uint16_t rdiv2 = 100;                              // Rdiv2 of voltage-divider (kOhms) (measure exact value with multimeter!) => used to measure voltage via ADC!
+    constexpr float rdiv1 = 100;                              // Rdiv1 of voltage-divider (kOhms) (measure exact value with multimeter!)
+    constexpr float rdiv2 = 100;                              // Rdiv2 of voltage-divider (kOhms) (measure exact value with multimeter!) => used to measure voltage via ADC!
 #endif
 
 // (optional) hallsensor. Make sure the GPIO defined doesn't overlap with existing configuration. Please note: only user-support is provided for this feature.

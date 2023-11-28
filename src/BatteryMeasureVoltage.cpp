@@ -58,7 +58,7 @@ void Battery_CyclicInner() {
 
 // The average of several analog reads will be taken to reduce the noise (Note: One analog read takes ~10µs)
 float Battery_GetVoltage(void) {
-	constexpr float factor = 1 / ((float) rdiv2 / (rdiv2 + rdiv1));
+	constexpr float factor = 1 / (rdiv2 / (rdiv2 + rdiv1));
 	constexpr size_t sampels = 32;
 
 	uint32_t averagedAnalogValue = 0;
