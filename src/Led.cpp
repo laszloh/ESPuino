@@ -307,11 +307,11 @@ static void Led_Task(void *parameter) {
 			nextAnimation = LedAnimationType::Pause;
 		} else if (gPlayProperties.isWebstream) { // also animate pause in the webstream animation
 			nextAnimation = LedAnimationType::Webstream;
-		} else if ((gPlayProperties.playMode != BUSY) && (gPlayProperties.playMode != NO_PLAYLIST)) {
+		} else if ((gPlayProperties.playMode != CardActions::BUSY) && (gPlayProperties.playMode != CardActions::NO_PLAYLIST)) {
 			nextAnimation = LedAnimationType::Progress;
-		} else if (gPlayProperties.playMode == NO_PLAYLIST) {
+		} else if (gPlayProperties.playMode == CardActions::NO_PLAYLIST) {
 			nextAnimation = LedAnimationType::Idle;
-		} else if (gPlayProperties.playMode == BUSY) {
+		} else if (gPlayProperties.playMode == CardActions::BUSY) {
 			nextAnimation = LedAnimationType::Busy;
 		} else {
 			nextAnimation = LedAnimationType::NoNewAnimation; // should not happen

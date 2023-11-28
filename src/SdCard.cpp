@@ -253,7 +253,7 @@ char **SdCard_ReturnPlaylist(const char *fileName, const uint32_t _playMode) {
 	Log_Printf(LOGLEVEL_DEBUG, freeMemory, ESP.getFreeHeap());
 
 	// Parse m3u-playlist and create linear-playlist out of it
-	if (_playMode == LOCAL_M3U) {
+	if (_playMode == CardActions::LOCAL_M3U) {
 		if (fileOrDirectory && !fileOrDirectory.isDirectory() && fileOrDirectory.size() > 0) {
 			enablePlaylistFromM3u = true;
 			uint16_t allocCount = 1;

@@ -67,34 +67,34 @@ void Button_Init() {
 
 #ifdef NEOPIXEL_ENABLE // Try to find button that is used for shutdown via longpress-action (only necessary for Neopixel)
 	#if defined(BUTTON_0_ENABLE) || defined(EXPANDER_0_ENABLE)
-		#if (BUTTON_0_LONG == CMD_SLEEPMODE)
-	gShutdownButton = 0;
-		#endif
+	if constexpr (BUTTON_0_LONG == CardActions::CMD_SLEEPMODE) {
+		gShutdownButton = 0;
+	}
 	#endif
 	#if defined(BUTTON_1_ENABLE) || defined(EXPANDER_1_ENABLE)
-		#if (BUTTON_1_LONG == CMD_SLEEPMODE)
-	gShutdownButton = 1;
-		#endif
+	if constexpr (BUTTON_1_LONG == CardActions::CMD_SLEEPMODE) {
+		gShutdownButton = 1;
+	}
 	#endif
 	#if defined(BUTTON_2_ENABLE) || defined(EXPANDER_2_ENABLE)
-		#if (BUTTON_2_LONG == CMD_SLEEPMODE)
-	gShutdownButton = 2;
-		#endif
+	if constexpr (BUTTON_2_LONG == CardActions::CMD_SLEEPMODE) {
+		gShutdownButton = 2;
+	}
 	#endif
 	#if defined(BUTTON_3_ENABLE) || defined(EXPANDER_3_ENABLE)
-		#if (BUTTON_3_LONG == CMD_SLEEPMODE)
-	gShutdownButton = 3;
-		#endif
+	if constexpr (BUTTON_3_LONG == CardActions::CMD_SLEEPMODE) {
+		gShutdownButton = 3;
+	}
 	#endif
 	#if defined(BUTTON_4_ENABLE) || defined(EXPANDER_4_ENABLE)
-		#if (BUTTON_4_LONG == CMD_SLEEPMODE)
-	gShutdownButton = 4;
-		#endif
+	if constexpr (BUTTON_4_LONG == CardActions::CMD_SLEEPMODE) {
+		gShutdownButton = 4;
+	}
 	#endif
 	#if defined(BUTTON_5_ENABLE) || defined(EXPANDER_5_ENABLE)
-		#if (BUTTON_5_LONG == CMD_SLEEPMODE)
-	gShutdownButton = 5;
-		#endif
+	if constexpr (BUTTON_5_LONG == CardActions::CMD_SLEEPMODE) {
+		gShutdownButton = 5;
+	}
 	#endif
 #endif
 
@@ -270,8 +270,8 @@ void Button_DoButtonActions(void) {
 	} else {
 		for (uint8_t i = 0; i <= 5; i++) {
 			if (gButtons[i].isPressed) {
-				uint8_t Cmd_Short = 0;
-				uint8_t Cmd_Long = 0;
+				CardActions Cmd_Short = CardActions::CMD_NOTHING;
+				CardActions Cmd_Long = CardActions::CMD_NOTHING;
 
 				switch (i) { // Long-press-actions
 					case 0:
@@ -310,13 +310,13 @@ void Button_DoButtonActions(void) {
 						Cmd_Action(Cmd_Short);
 					} else {
 						// if not volume buttons than start action after button release
-						if (Cmd_Long != CMD_VOLUMEUP && Cmd_Long != CMD_VOLUMEDOWN) {
+						if (Cmd_Long != CardActions::CMD_VOLUMEUP && Cmd_Long != CardActions::CMD_VOLUMEDOWN) {
 							Cmd_Action(Cmd_Long);
 						}
 					}
 
 					gButtons[i].isPressed = false;
-				} else if (Cmd_Long == CMD_VOLUMEUP || Cmd_Long == CMD_VOLUMEDOWN) {
+				} else if (Cmd_Long == CardActions::CMD_VOLUMEUP || Cmd_Long == CardActions::CMD_VOLUMEDOWN) {
 					unsigned long currentTimestamp = millis();
 
 					// only start action if intervalToLongPress has been reached

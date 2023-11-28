@@ -121,35 +121,35 @@
 		If you don't want to assign an action or you don't use a given button: CMD_NOTHING has to be set
 	*/
 	// *****BUTTON*****        *****ACTION*****
-	#define BUTTON_0_SHORT    CMD_NEXTTRACK
-	#define BUTTON_1_SHORT    CMD_PREVTRACK
-	#define BUTTON_2_SHORT    CMD_PLAYPAUSE
-	#define BUTTON_3_SHORT    CMD_MEASUREBATTERY
-	#define BUTTON_4_SHORT    CMD_SEEK_BACKWARDS
-	#define BUTTON_5_SHORT    CMD_SEEK_FORWARDS
+	#define BUTTON_0_SHORT    CardActions::CMD_NEXTTRACK
+	#define BUTTON_1_SHORT    CardActions::CMD_PREVTRACK
+	#define BUTTON_2_SHORT    CardActions::CMD_PLAYPAUSE
+	#define BUTTON_3_SHORT    CardActions::CMD_MEASUREBATTERY
+	#define BUTTON_4_SHORT    CardActions::CMD_SEEK_BACKWARDS
+	#define BUTTON_5_SHORT    CardActions::CMD_SEEK_FORWARDS
 
-	#define BUTTON_0_LONG     CMD_LASTTRACK
-	#define BUTTON_1_LONG     CMD_FIRSTTRACK
-	#define BUTTON_2_LONG     CMD_PLAYPAUSE
-	#define BUTTON_3_LONG     CMD_SLEEPMODE
-	#define BUTTON_4_LONG     CMD_VOLUMEUP
-	#define BUTTON_5_LONG     CMD_VOLUMEDOWN
+	#define BUTTON_0_LONG     CardActions::CMD_LASTTRACK
+	#define BUTTON_1_LONG     CardActions::CMD_FIRSTTRACK
+	#define BUTTON_2_LONG     CardActions::CMD_PLAYPAUSE
+	#define BUTTON_3_LONG     CardActions::CMD_SLEEPMODE
+	#define BUTTON_4_LONG     CardActions::CMD_VOLUMEUP
+	#define BUTTON_5_LONG     CardActions::CMD_VOLUMEDOWN
 
-	#define BUTTON_MULTI_01   CMD_NOTHING   //CMD_TOGGLE_WIFI_STATUS (disabled now to prevent children from unwanted WiFi-disable)
-	#define BUTTON_MULTI_02   CMD_ENABLE_FTP_SERVER
-	#define BUTTON_MULTI_03   CMD_NOTHING
-	#define BUTTON_MULTI_04   CMD_NOTHING
-	#define BUTTON_MULTI_05   CMD_NOTHING
-	#define BUTTON_MULTI_12   CMD_TELL_IP_ADDRESS
-	#define BUTTON_MULTI_13   CMD_NOTHING
-	#define BUTTON_MULTI_14   CMD_NOTHING
-	#define BUTTON_MULTI_15   CMD_NOTHING
-	#define BUTTON_MULTI_23   CMD_NOTHING
-	#define BUTTON_MULTI_24   CMD_NOTHING
-	#define BUTTON_MULTI_25   CMD_NOTHING
-	#define BUTTON_MULTI_34   CMD_NOTHING
-	#define BUTTON_MULTI_35   CMD_NOTHING
-	#define BUTTON_MULTI_45   CMD_NOTHING
+	#define BUTTON_MULTI_01   CardActions::CMD_NOTHING   //CMD_TOGGLE_WIFI_STATUS (disabled now to prevent children from unwanted WiFi-disable)
+	#define BUTTON_MULTI_02   CardActions::CMD_ENABLE_FTP_SERVER
+	#define BUTTON_MULTI_03   CardActions::CMD_NOTHING
+	#define BUTTON_MULTI_04   CardActions::CMD_NOTHING
+	#define BUTTON_MULTI_05   CardActions::CMD_NOTHING
+	#define BUTTON_MULTI_12   CardActions::CMD_TELL_IP_ADDRESS
+	#define BUTTON_MULTI_13   CardActions::CMD_NOTHING
+	#define BUTTON_MULTI_14   CardActions::CMD_NOTHING
+	#define BUTTON_MULTI_15   CardActions::CMD_NOTHING
+	#define BUTTON_MULTI_23   CardActions::CMD_NOTHING
+	#define BUTTON_MULTI_24   CardActions::CMD_NOTHING
+	#define BUTTON_MULTI_25   CardActions::CMD_NOTHING
+	#define BUTTON_MULTI_34   CardActions::CMD_NOTHING
+	#define BUTTON_MULTI_35   CardActions::CMD_NOTHING
+	#define BUTTON_MULTI_45   CardActions::CMD_NOTHING
 
 	//#################### Various settings ##############################
 

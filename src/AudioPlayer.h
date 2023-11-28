@@ -1,7 +1,7 @@
 #pragma once
 
 typedef struct { // Bit field
-	uint8_t playMode : 4; // playMode
+	CardActions playMode; // playMode
 	char **playlist; // playlist
 	char title[255]; // current title
 	bool repeatCurrentTrack		: 1; // If current track should be looped

@@ -31,7 +31,7 @@ void Rfid_PreferenceLookupHandler(void) {
 	char _file[255];
 	uint32_t _lastPlayPos = 0;
 	uint16_t _trackLastPlayed = 0;
-	uint32_t _playMode = 1;
+	CardActions::type _playMode = 1;
 
 	rfidStatus = xQueueReceive(gRfidCardQueue, &rfidTagId, 0);
 	if (rfidStatus == pdPASS) {

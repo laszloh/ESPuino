@@ -13,9 +13,9 @@
 #include "System.h"
 #include "Wlan.h"
 
-void Cmd_Action(const uint16_t mod) {
+void Cmd_Action(const CardActions &mod) {
 	switch (mod) {
-		case CMD_LOCK_BUTTONS_MOD: { // Locks/unlocks all buttons
+		case CardActions::CMD_LOCK_BUTTONS_MOD: { // Locks/unlocks all buttons
 			System_ToggleLockControls();
 			if (System_AreControlsLocked()) {
 				Log_Println(modificatorAllButtonsLocked, LOGLEVEL_NOTICE);
@@ -32,7 +32,7 @@ void Cmd_Action(const uint16_t mod) {
 			break;
 		}
 
-		case CMD_SLEEP_TIMER_MOD_15: { // Enables/disables sleep after 15 minutes
+		case CardActions::CMD_SLEEP_TIMER_MOD_15: { // Enables/disables sleep after 15 minutes
 			System_SetSleepTimer(15u);
 
 			gPlayProperties.sleepAfterCurrentTrack = false; // deactivate/overwrite if already active
@@ -42,7 +42,7 @@ void Cmd_Action(const uint16_t mod) {
 			break;
 		}
 
-		case CMD_SLEEP_TIMER_MOD_30: { // Enables/disables sleep after 30 minutes
+		case CardActions::CMD_SLEEP_TIMER_MOD_30: { // Enables/disables sleep after 30 minutes
 			System_SetSleepTimer(30u);
 
 			gPlayProperties.sleepAfterCurrentTrack = false; // deactivate/overwrite if already active
@@ -52,7 +52,7 @@ void Cmd_Action(const uint16_t mod) {
 			break;
 		}
 
-		case CMD_SLEEP_TIMER_MOD_60: { // Enables/disables sleep after 60 minutes
+		case CardActions::CMD_SLEEP_TIMER_MOD_60: { // Enables/disables sleep after 60 minutes
 			System_SetSleepTimer(60u);
 
 			gPlayProperties.sleepAfterCurrentTrack = false; // deactivate/overwrite if already active
@@ -62,7 +62,7 @@ void Cmd_Action(const uint16_t mod) {
 			break;
 		}
 
-		case CMD_SLEEP_TIMER_MOD_120: { // Enables/disables sleep after 2 hrs
+		case CardActions::CMD_SLEEP_TIMER_MOD_120: { // Enables/disables sleep after 2 hrs
 			System_SetSleepTimer(120u);
 
 			gPlayProperties.sleepAfterCurrentTrack = false; // deactivate/overwrite if already active
@@ -72,8 +72,8 @@ void Cmd_Action(const uint16_t mod) {
 			break;
 		}
 
-		case CMD_SLEEP_AFTER_END_OF_TRACK: { // Puts uC to sleep after end of current track
-			if (gPlayProperties.playMode == NO_PLAYLIST) {
+		case CardActions::CMD_SLEEP_AFTER_END_OF_TRACK: { // Puts uC to sleep after end of current track
+			if (gPlayProperties.playMode == CardActions::NO_PLAYLIST) {
 				Log_Println(modificatorNotallowedWhenIdle, LOGLEVEL_NOTICE);
 				System_IndicateError();
 				return;
@@ -106,8 +106,8 @@ void Cmd_Action(const uint16_t mod) {
 			break;
 		}
 
-		case CMD_SLEEP_AFTER_END_OF_PLAYLIST: { // Puts uC to sleep after end of whole playlist (can take a while :->)
-			if (gPlayProperties.playMode == NO_PLAYLIST) {
+		case CardActions::CMD_SLEEP_AFTER_END_OF_PLAYLIST: { // Puts uC to sleep after end of whole playlist (can take a while :->)
+			if (gPlayProperties.playMode == CardActions::NO_PLAYLIST) {
 				Log_Println(modificatorNotallowedWhenIdle, LOGLEVEL_NOTICE);
 				System_IndicateError();
 				return;
@@ -138,8 +138,8 @@ void Cmd_Action(const uint16_t mod) {
 			break;
 		}
 
-		case CMD_SLEEP_AFTER_5_TRACKS: {
-			if (gPlayProperties.playMode == NO_PLAYLIST) {
+		case CardActions::CMD_SLEEP_AFTER_5_TRACKS: {
+			if (gPlayProperties.playMode == CardActions::NO_PLAYLIST) {
 				Log_Println(modificatorNotallowedWhenIdle, LOGLEVEL_NOTICE);
 				System_IndicateError();
 				return;
@@ -181,8 +181,8 @@ void Cmd_Action(const uint16_t mod) {
 			break;
 		}
 
-		case CMD_REPEAT_PLAYLIST: {
-			if (gPlayProperties.playMode == NO_PLAYLIST) {
+		case CardActions::CMD_REPEAT_PLAYLIST: {
+			if (gPlayProperties.playMode == CardActions::NO_PLAYLIST) {
 				Log_Println(modificatorNotallowedWhenIdle, LOGLEVEL_NOTICE);
 				System_IndicateError();
 			} else {
@@ -200,8 +200,8 @@ void Cmd_Action(const uint16_t mod) {
 			break;
 		}
 
-		case CMD_REPEAT_TRACK: { // Introduces looping for track-mode
-			if (gPlayProperties.playMode == NO_PLAYLIST) {
+		case CardActions::CMD_REPEAT_TRACK: { // Introduces looping for track-mode
+			if (gPlayProperties.playMode == CardActions::NO_PLAYLIST) {
 				Log_Println(modificatorNotallowedWhenIdle, LOGLEVEL_NOTICE);
 				System_IndicateError();
 			} else {
@@ -219,7 +219,7 @@ void Cmd_Action(const uint16_t mod) {
 			break;
 		}
 
-		case CMD_DIMM_LEDS_NIGHTMODE: {
+		case CardActions::CMD_DIMM_LEDS_NIGHTMODE: {
 #ifdef MQTT_ENABLE
 			publishMqtt(topicLedBrightnessState, Led_GetBrightness(), false);
 #endif
@@ -229,7 +229,7 @@ void Cmd_Action(const uint16_t mod) {
 			break;
 		}
 
-		case CMD_TOGGLE_WIFI_STATUS: {
+		case CardActions::CMD_TOGGLE_WIFI_STATUS: {
 			System_SetOperationMode(OPMODE_NORMAL); // escape from BT-mode, WiFi cannot coexist with BT and can cause a crash
 			Wlan_ToggleEnable();
 			System_IndicateOk();
@@ -237,7 +237,7 @@ void Cmd_Action(const uint16_t mod) {
 		}
 
 #ifdef BLUETOOTH_ENABLE
-		case CMD_TOGGLE_BLUETOOTH_SINK_MODE: {
+		case CardActions::CMD_TOGGLE_BLUETOOTH_SINK_MODE: {
 			if (System_GetOperationModeFromNvs() == OPMODE_NORMAL) {
 				System_IndicateOk();
 				System_SetOperationMode(OPMODE_BLUETOOTH_SINK);
@@ -249,7 +249,7 @@ void Cmd_Action(const uint16_t mod) {
 			}
 			break;
 		}
-		case CMD_TOGGLE_BLUETOOTH_SOURCE_MODE: {
+		case CardActions::CMD_TOGGLE_BLUETOOTH_SOURCE_MODE: {
 			if (System_GetOperationModeFromNvs() == OPMODE_NORMAL) {
 				System_IndicateOk();
 				System_SetOperationMode(OPMODE_BLUETOOTH_SOURCE);
@@ -261,7 +261,7 @@ void Cmd_Action(const uint16_t mod) {
 			}
 			break;
 		}
-		case CMD_TOGGLE_MODE: {
+		case CardActions::CMD_TOGGLE_MODE: {
 			if (System_GetOperationModeFromNvs() == OPMODE_NORMAL) {
 				System_IndicateOk();
 				System_SetOperationMode(OPMODE_BLUETOOTH_SINK);
@@ -279,7 +279,7 @@ void Cmd_Action(const uint16_t mod) {
 #endif
 
 #ifdef FTP_ENABLE
-		case CMD_ENABLE_FTP_SERVER: {
+		case CardActions::CMD_ENABLE_FTP_SERVER: {
 			if (millis() <= 30000) { // Only allow to enable FTP within the first 30s after start (to prevent children it mess it up)
 				Ftp_EnableServer();
 			} else {
@@ -290,7 +290,7 @@ void Cmd_Action(const uint16_t mod) {
 		}
 #endif
 
-		case CMD_TELL_IP_ADDRESS: {
+		case CardActions::CMD_TELL_IP_ADDRESS: {
 			if (Wlan_IsConnected()) {
 				gPlayProperties.tellMode = TTS_IP_ADDRESS;
 				gPlayProperties.currentSpeechActive = true;
@@ -303,7 +303,7 @@ void Cmd_Action(const uint16_t mod) {
 			break;
 		}
 
-		case CMD_TELL_CURRENT_TIME: {
+		case CardActions::CMD_TELL_CURRENT_TIME: {
 			if (Wlan_IsConnected()) {
 				gPlayProperties.tellMode = TTS_CURRENT_TIME;
 				gPlayProperties.currentSpeechActive = true;
@@ -316,7 +316,7 @@ void Cmd_Action(const uint16_t mod) {
 			break;
 		}
 
-		case CMD_PLAYPAUSE: {
+		case CardActions::CMD_PLAYPAUSE: {
 			if ((OPMODE_NORMAL == System_GetOperationMode()) || (OPMODE_BLUETOOTH_SOURCE == System_GetOperationMode())) {
 				AudioPlayer_TrackControlToQueueSender(PAUSEPLAY);
 			} else {
@@ -325,7 +325,7 @@ void Cmd_Action(const uint16_t mod) {
 			break;
 		}
 
-		case CMD_PREVTRACK: {
+		case CardActions::CMD_PREVTRACK: {
 			if ((OPMODE_NORMAL == System_GetOperationMode()) || (OPMODE_BLUETOOTH_SOURCE == System_GetOperationMode())) {
 				AudioPlayer_TrackControlToQueueSender(PREVIOUSTRACK);
 			} else {
@@ -334,7 +334,7 @@ void Cmd_Action(const uint16_t mod) {
 			break;
 		}
 
-		case CMD_NEXTTRACK: {
+		case CardActions::CMD_NEXTTRACK: {
 			if ((OPMODE_NORMAL == System_GetOperationMode()) || (OPMODE_BLUETOOTH_SOURCE == System_GetOperationMode())) {
 				AudioPlayer_TrackControlToQueueSender(NEXTTRACK);
 			} else {
@@ -343,22 +343,22 @@ void Cmd_Action(const uint16_t mod) {
 			break;
 		}
 
-		case CMD_FIRSTTRACK: {
+		case CardActions::CMD_FIRSTTRACK: {
 			AudioPlayer_TrackControlToQueueSender(FIRSTTRACK);
 			break;
 		}
 
-		case CMD_LASTTRACK: {
+		case CardActions::CMD_LASTTRACK: {
 			AudioPlayer_TrackControlToQueueSender(LASTTRACK);
 			break;
 		}
 
-		case CMD_VOLUMEINIT: {
+		case CardActions::CMD_VOLUMEINIT: {
 			AudioPlayer_VolumeToQueueSender(AudioPlayer_GetInitVolume(), true);
 			break;
 		}
 
-		case CMD_VOLUMEUP: {
+		case CardActions::CMD_VOLUMEUP: {
 			if ((OPMODE_NORMAL == System_GetOperationMode()) || (OPMODE_BLUETOOTH_SOURCE == System_GetOperationMode())) {
 				AudioPlayer_VolumeToQueueSender(AudioPlayer_GetCurrentVolume() + 1, true);
 			} else {
@@ -367,7 +367,7 @@ void Cmd_Action(const uint16_t mod) {
 			break;
 		}
 
-		case CMD_VOLUMEDOWN: {
+		case CardActions::CMD_VOLUMEDOWN: {
 			if ((OPMODE_NORMAL == System_GetOperationMode()) || (OPMODE_BLUETOOTH_SOURCE == System_GetOperationMode())) {
 				AudioPlayer_VolumeToQueueSender(AudioPlayer_GetCurrentVolume() - 1, true);
 			} else {
@@ -376,7 +376,7 @@ void Cmd_Action(const uint16_t mod) {
 			break;
 		}
 
-		case CMD_MEASUREBATTERY: {
+		case CardActions::CMD_MEASUREBATTERY: {
 #ifdef BATTERY_MEASURE_ENABLE
 			Battery_LogStatus();
 			Battery_PublishMQTT();
@@ -385,27 +385,27 @@ void Cmd_Action(const uint16_t mod) {
 			break;
 		}
 
-		case CMD_SLEEPMODE: {
+		case CardActions::CMD_SLEEPMODE: {
 			System_RequestSleep();
 			break;
 		}
 
-		case CMD_RESTARTSYSTEM: {
+		case CardActions::CMD_RESTARTSYSTEM: {
 			System_Restart();
 			break;
 		}
 
-		case CMD_SEEK_FORWARDS: {
+		case CardActions::CMD_SEEK_FORWARDS: {
 			gPlayProperties.seekmode = SEEK_FORWARDS;
 			break;
 		}
 
-		case CMD_SEEK_BACKWARDS: {
+		case CardActions::CMD_SEEK_BACKWARDS: {
 			gPlayProperties.seekmode = SEEK_BACKWARDS;
 			break;
 		}
 
-		case CMD_STOP: {
+		case CardActions::CMD_STOP: {
 			AudioPlayer_TrackControlToQueueSender(STOP);
 			break;
 		}
