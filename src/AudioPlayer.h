@@ -13,7 +13,6 @@ typedef struct { // Bit field
 	bool playlistFinished		 : 1; // If whole playlist is finished
 	uint8_t playUntilTrackNumber : 6; // Number of tracks to play after which uC goes to sleep
 	uint8_t seekmode			 : 2; // If seekmode is active and if yes: forward or backwards?
-	bool isWebstream			 : 1; // Indicates if track currenty played is a webstream
 	bool currentSpeechActive	 : 1; // If speech-play is active
 	bool lastSpeechActive		 : 1; // If speech-play was active
 	size_t coverFilePos; // current cover file position
@@ -27,6 +26,9 @@ void AudioPlayer_SetPausePlay(bool pause);
 
 void AudioPlayer_setTitle(const char *format, ...);
 const String AudioPlayer_GetTitle();
+
+bool AudioPlayer_IsWebStream();
+void AudioPlayer_SetWebStream(bool stream);
 
 void AudioPlayer_SetTellMode(TextToSpeechMode mode);
 

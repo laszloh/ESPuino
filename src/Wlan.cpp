@@ -603,7 +603,7 @@ void writeWifiStatusToNVS(bool wifiStatus) {
 		Log_Println(wifiEnabledMsg, LOGLEVEL_NOTICE);
 	} else {
 		Log_Println(wifiDisabledMsg, LOGLEVEL_NOTICE);
-		if (gPlayProperties.isWebstream) {
+		if (AudioPlayer_IsWebStream()) {
 			AudioPlayer_TrackControlToQueueSender(STOP);
 		}
 	}

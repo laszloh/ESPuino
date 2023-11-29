@@ -38,6 +38,7 @@ static std::atomic_uint32_t startAtFilePos; // Offset to start play (in bytes)
 static std::atomic_uchar playMode; // playMode
 static std::atomic_bool playMono; // true if mono; false if stereo
 static std::atomic_bool pausePlay; // If pause is active
+static std::atomic_bool isWebstream; // Indicates if track currenty played is a webstream
 static std::atomic<TextToSpeechMode> tellMode; // Tell mode for text to speech announcments
 static std::atomic_uint16_t currentTrackNumber; // Current tracknumber
 static std::atomic_uint16_t numberOfTracks; // Number of tracks in playlist
@@ -415,7 +416,7 @@ void AudioPlayer_Task(void *parameter) {
 			AudioPlayer_CurrentTime = audio->getAudioCurrentTime();
 			AudioPlayer_FileDuration = audio->getAudioFileDuration();
 			// Calculate relative position in file (for trackprogress neopixel & web-ui)
-			if (!gPlayProperties.playlistFinished && !gPlayProperties.isWebstream) {
+			if (!gPlayProperties.playlistFinished && !isWebstream) {
 				if (!pausePlay && (gPlayProperties.seekmode != SEEK_POS_PERCENT) && (audio->getFileSize() > 0)) { // To progress necessary when paused
 					gPlayProperties.currentRelPos = ((double) (audio->getFilePos() - audio->inBufferFilled()) / (double) audio->getFileSize()) * 100;
 				}
@@ -701,18 +702,18 @@ void AudioPlayer_Task(void *parameter) {
 			}
 
 			if (!strncmp("http", *(gPlayProperties.playlist + currentTrackNumber), 4)) {
-				gPlayProperties.isWebstream = true;
+				isWebstream = true;
 			} else {
-				gPlayProperties.isWebstream = false;
+				isWebstream = false;
 			}
 			gPlayProperties.currentRelPos = 0;
 			audioReturnCode = false;
 
-			if (playMode == WEBSTREAM || (playMode == LOCAL_M3U && gPlayProperties.isWebstream)) { // Webstream
+			if (playMode == WEBSTREAM || (playMode == LOCAL_M3U && isWebstream)) { // Webstream
 				audioReturnCode = audio->connecttohost(*(gPlayProperties.playlist + currentTrackNumber));
 				gPlayProperties.playlistFinished = false;
 				gTriedToConnectToHost = true;
-			} else if (playMode != WEBSTREAM && !gPlayProperties.isWebstream) {
+			} else if (playMode != WEBSTREAM && !isWebstream) {
 				// Files from SD
 				if (!gFSystem.exists(*(gPlayProperties.playlist + currentTrackNumber))) { // Check first if file/folder exists
 					Log_Printf(LOGLEVEL_ERROR, dirOrFileDoesNotExist, *(gPlayProperties.playlist + currentTrackNumber));
@@ -737,7 +738,7 @@ void AudioPlayer_Task(void *parameter) {
 					startAtFilePos = 0;
 					Log_Printf(LOGLEVEL_NOTICE, trackStartatPos, audio->getFilePos());
 				}
-				if (gPlayProperties.isWebstream) {
+				if (isWebstream) {
 					if (numberOfTracks > 1) {
 						AudioPlayer_setTitle("(%u/%u): Webradio", currentTrackNumber + 1, numberOfTracks.load());
 					} else {
@@ -1321,4 +1322,12 @@ uint16_t AudioPlayer_GetCurrentTrackNumber() {
 
 uint16_t AudioPlayer_GetNumberOfTracks() {
 	return numberOfTracks;
+}
+
+bool AudioPlayer_IsWebStream() {
+	return isWebstream;
+}
+
+void AudioPlayer_SetWebStream(bool stream) {
+	isWebstream = stream;
 }

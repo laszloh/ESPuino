@@ -303,9 +303,9 @@ static void Led_Task(void *parameter) {
 			nextAnimation = LedAnimationType::Speech;
 		} else if (gPlayProperties.playlistFinished) {
 			nextAnimation = LedAnimationType::Idle;
-		} else if (AudioPlayer_GetPausePlay() && !gPlayProperties.isWebstream) {
+		} else if (AudioPlayer_GetPausePlay() && !AudioPlayer_IsWebStream()) {
 			nextAnimation = LedAnimationType::Pause;
-		} else if (gPlayProperties.isWebstream) { // also animate pause in the webstream animation
+		} else if (AudioPlayer_IsWebStream()) { // also animate pause in the webstream animation
 			nextAnimation = LedAnimationType::Webstream;
 		} else if ((AudioPlayer_GetPlayMode() != BUSY) && (AudioPlayer_GetPlayMode() != NO_PLAYLIST)) {
 			nextAnimation = LedAnimationType::Progress;
