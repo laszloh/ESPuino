@@ -987,7 +987,7 @@ void Web_SendWebsocketData(uint32_t client, uint8_t code) {
 		entry["currentTrackNumber"] = gPlayProperties.currentTrackNumber + 1;
 		entry["numberOfTracks"] = gPlayProperties.numberOfTracks;
 		entry["volume"] = AudioPlayer_GetCurrentVolume();
-		entry["name"] = gPlayProperties.title;
+		entry["name"] = AudioPlayer_GetTitle();
 		entry["posPercent"] = gPlayProperties.currentRelPos;
 		entry["playMode"] = gPlayProperties.playMode;
 	} else if (code == 40) {

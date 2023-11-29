@@ -3,7 +3,6 @@
 typedef struct { // Bit field
 	uint8_t playMode; // playMode
 	char **playlist; // playlist
-	char title[255]; // current title
 	bool repeatCurrentTrack		: 1; // If current track should be looped
 	bool repeatPlaylist			: 1; // If whole playlist should be looped
 	uint16_t currentTrackNumber : 9; // Current tracknumber
@@ -53,7 +52,9 @@ uint8_t AudioPlayer_GetInitVolume(void);
 void AudioPlayer_SetInitVolume(uint8_t value);
 void AudioPlayer_SetupVolumeAndAmps(void);
 bool Audio_Detect_Mode_HP(bool _state);
-void Audio_setTitle(const char *format, ...);
+void AudioPlayer_setTitle(const char *format, ...);
+const String AudioPlayer_GetTitle();
+
 time_t AudioPlayer_GetPlayTimeSinceStart(void);
 time_t AudioPlayer_GetPlayTimeAllTime(void);
 uint32_t AudioPlayer_GetCurrentTime(void);

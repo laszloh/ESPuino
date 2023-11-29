@@ -21,6 +21,7 @@ void Mqtt_Exit(void);
 bool Mqtt_IsEnabled(void);
 
 bool publishMqtt(const char *topic, const char *payload, bool retained);
+bool publishMqtt(const char *topic, const String &payload, bool retained);
 bool publishMqtt(const char *topic, int32_t payload, bool retained);
 bool publishMqtt(const char *topic, unsigned long payload, bool retained);
 bool publishMqtt(const char *topic, uint32_t payload, bool retained);

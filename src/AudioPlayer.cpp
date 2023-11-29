@@ -37,6 +37,9 @@ TaskHandle_t AudioTaskHandle;
 static atomic_bool playMono;
 static atomic_bool pausePlay;
 
+static char title[255];
+std::mutex titleLock;
+
 // Volume
 static uint8_t AudioPlayer_CurrentVolume = AUDIOPLAYER_VOLUME_INIT;
 static uint8_t AudioPlayer_MaxVolume = AUDIOPLAYER_VOLUME_MAX;
@@ -124,7 +127,7 @@ void AudioPlayer_Init(void) {
 	AudioPlayer_SetupVolumeAndAmps();
 
 	// clear title and cover image
-	gPlayProperties.title[0] = '\0';
+	AudioPlayer_setTitle("");
 	gPlayProperties.coverFilePos = 0;
 
 	// Don't start audio-task in BT-speaker mode!
@@ -234,19 +237,29 @@ uint32_t AudioPlayer_GetFileDuration(void) {
 	return AudioPlayer_FileDuration;
 }
 
-void Audio_setTitle(const char *format, ...) {
+void AudioPlayer_setTitle(const char *format, ...) {
 	char buf[256];
 	va_list args;
 	va_start(args, format);
 	vsnprintf(buf, sizeof(buf) / sizeof(buf[0]), format, args);
 	va_end(args);
-	convertAsciiToUtf8(buf, gPlayProperties.title);
+
+	{
+		// needed so that we do not lock the title for too long
+		std::lock_guard guard(titleLock);
+		convertAsciiToUtf8(buf, title);
+	}
 
 	// notify web ui and mqtt
 	Web_SendWebsocketData(0, 30);
 #ifdef MQTT_ENABLE
-	publishMqtt(topicTrackState, gPlayProperties.title, false);
+	publishMqtt(topicTrackState, AudioPlayer_GetTitle(), false);
 #endif
+}
+
+const String AudioPlayer_GetTitle() {
+	std::lock_guard guard(titleLock);
+	return title;
 }
 
 // Set maxVolume depending on headphone-adjustment is enabled and headphone is/is not connected
@@ -470,7 +483,7 @@ void AudioPlayer_Task(void *parameter) {
 					pausePlay = true;
 					gPlayProperties.playlistFinished = true;
 					gPlayProperties.playMode = NO_PLAYLIST;
-					Audio_setTitle(noPlaylist);
+					AudioPlayer_setTitle(noPlaylist);
 					AudioPlayer_ClearCover();
 					continue;
 
@@ -655,7 +668,7 @@ void AudioPlayer_Task(void *parameter) {
 					}
 					gPlayProperties.playlistFinished = true;
 					gPlayProperties.playMode = NO_PLAYLIST;
-					Audio_setTitle(noPlaylist);
+					AudioPlayer_setTitle(noPlaylist);
 					AudioPlayer_ClearCover();
 #ifdef MQTT_ENABLE
 					publishMqtt(topicPlaymodeState, gPlayProperties.playMode, false);
@@ -720,15 +733,15 @@ void AudioPlayer_Task(void *parameter) {
 				}
 				if (gPlayProperties.isWebstream) {
 					if (gPlayProperties.numberOfTracks > 1) {
-						Audio_setTitle("(%u/%u): Webradio", gPlayProperties.currentTrackNumber + 1, gPlayProperties.numberOfTracks);
+						AudioPlayer_setTitle("(%u/%u): Webradio", gPlayProperties.currentTrackNumber + 1, gPlayProperties.numberOfTracks);
 					} else {
-						Audio_setTitle("Webradio");
+						AudioPlayer_setTitle("Webradio");
 					}
 				} else {
 					if (gPlayProperties.numberOfTracks > 1) {
-						Audio_setTitle("(%u/%u): %s", gPlayProperties.currentTrackNumber + 1, gPlayProperties.numberOfTracks, *(gPlayProperties.playlist + gPlayProperties.currentTrackNumber));
+						AudioPlayer_setTitle("(%u/%u): %s", gPlayProperties.currentTrackNumber + 1, gPlayProperties.numberOfTracks, *(gPlayProperties.playlist + gPlayProperties.currentTrackNumber));
 					} else {
-						Audio_setTitle("%s", *(gPlayProperties.playlist + gPlayProperties.currentTrackNumber));
+						AudioPlayer_setTitle("%s", *(gPlayProperties.playlist + gPlayProperties.currentTrackNumber));
 					}
 				}
 				AudioPlayer_ClearCover();
@@ -1209,9 +1222,9 @@ void audio_id3data(const char *info) { // id3 metadata
 	// get title
 	if (startsWith((char *) info, "Title:")) {
 		if (gPlayProperties.numberOfTracks > 1) {
-			Audio_setTitle("(%u/%u): %s", gPlayProperties.currentTrackNumber + 1, gPlayProperties.numberOfTracks, info + 6);
+			AudioPlayer_setTitle("(%u/%u): %s", gPlayProperties.currentTrackNumber + 1, gPlayProperties.numberOfTracks, info + 6);
 		} else {
-			Audio_setTitle("%s", info + 6);
+			AudioPlayer_setTitle("%s", info + 6);
 		}
 	}
 }
@@ -1225,9 +1238,9 @@ void audio_showstation(const char *info) {
 	Log_Printf(LOGLEVEL_NOTICE, "station     : %s", info);
 	if (strcmp(info, "")) {
 		if (gPlayProperties.numberOfTracks > 1) {
-			Audio_setTitle("(%u/%u): %s", gPlayProperties.currentTrackNumber + 1, gPlayProperties.numberOfTracks, info);
+			AudioPlayer_setTitle("(%u/%u): %s", gPlayProperties.currentTrackNumber + 1, gPlayProperties.numberOfTracks, info);
 		} else {
-			Audio_setTitle("%s", info);
+			AudioPlayer_setTitle("%s", info);
 		}
 	}
 }
@@ -1236,9 +1249,9 @@ void audio_showstreamtitle(const char *info) {
 	Log_Printf(LOGLEVEL_INFO, "streamtitle : %s", info);
 	if (strcmp(info, "")) {
 		if (gPlayProperties.numberOfTracks > 1) {
-			Audio_setTitle("(%u/%u): %s", gPlayProperties.currentTrackNumber + 1, gPlayProperties.numberOfTracks, info);
+			AudioPlayer_setTitle("(%u/%u): %s", gPlayProperties.currentTrackNumber + 1, gPlayProperties.numberOfTracks, info);
 		} else {
-			Audio_setTitle("%s", info);
+			AudioPlayer_setTitle("%s", info);
 		}
 	}
 }

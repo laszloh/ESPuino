@@ -156,6 +156,14 @@ bool publishMqtt(const char *topic, const char *payload, bool retained) {
 	return false;
 }
 
+bool publishMqtt(const char *topic, const String &payload, bool retained) {
+#ifdef MQTT_ENABLE
+	return publishMqtt(topic, payload.c_str(), retained);
+#else
+	return false;
+#endif
+}
+
 bool publishMqtt(const char *topic, int32_t payload, bool retained) {
 #ifdef MQTT_ENABLE
 	char buf[11];
@@ -258,7 +266,7 @@ bool Mqtt_Reconnect() {
 
 			// Publish current state
 			publishMqtt(topicState, "Online", false);
-			publishMqtt(topicTrackState, gPlayProperties.title, false);
+			publishMqtt(topicTrackState, AudioPlayer_GetTitle(), false);
 			publishMqtt(topicCoverChangedState, "", false);
 			publishMqtt(topicLoudnessState, AudioPlayer_GetCurrentVolume(), false);
 			publishMqtt(topicSleepTimerState, System_GetSleepTimerTimeStamp(), false);
