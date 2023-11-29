@@ -262,7 +262,7 @@ public:
 			// pause some tasks to get more free CPU time for the upload
 			vTaskSuspend(AudioTaskHandle);
 			Led_TaskPause();
-			Rfid_TaskPause();
+			rfid::taskPause();
 			if (fwFile) {
 				fwFile.close();
 			}
@@ -287,7 +287,7 @@ public:
 			// resume the paused tasks
 			Led_TaskResume();
 			vTaskResume(AudioTaskHandle);
-			Rfid_TaskResume();
+			rfid::taskResume();
 			Log_Println(fwEnd, LOGLEVEL_NOTICE);
 			Serial.flush();
 			// ESP.restart(); // restart is done via webpage javascript
