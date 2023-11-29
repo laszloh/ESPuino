@@ -13,7 +13,6 @@ typedef struct { // Bit field
 	bool sleepAfterPlaylist		: 1; // If uC should go to sleep after whole playlist
 	bool sleepAfter5Tracks		: 1; // If uC should go to sleep after 5 tracks
 	bool saveLastPlayPosition	: 1; // If playposition/current track should be saved (for AUDIOBOOK)
-	char playRfidTag[13]; // ID of RFID-tag that started playlist
 	bool trackFinished			 : 1; // If current track is finished
 	bool playlistFinished		 : 1; // If whole playlist is finished
 	uint8_t playUntilTrackNumber : 6; // Number of tracks to play after which uC goes to sleep
