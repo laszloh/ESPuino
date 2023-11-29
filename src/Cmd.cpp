@@ -292,7 +292,7 @@ void Cmd_Action(const uint16_t mod) {
 
 		case CMD_TELL_IP_ADDRESS: {
 			if (Wlan_IsConnected()) {
-				gPlayProperties.tellMode = TTS_IP_ADDRESS;
+				AudioPlayer_SetTellMode(TextToSpeechMode::IpAddress);
 				gPlayProperties.currentSpeechActive = true;
 				gPlayProperties.lastSpeechActive = true;
 				System_IndicateOk();
@@ -305,7 +305,7 @@ void Cmd_Action(const uint16_t mod) {
 
 		case CMD_TELL_CURRENT_TIME: {
 			if (Wlan_IsConnected()) {
-				gPlayProperties.tellMode = TTS_CURRENT_TIME;
+				AudioPlayer_SetTellMode(TextToSpeechMode::CurrentTime);
 				gPlayProperties.currentSpeechActive = true;
 				gPlayProperties.lastSpeechActive = true;
 				System_IndicateOk();

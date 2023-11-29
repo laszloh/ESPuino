@@ -18,7 +18,6 @@ typedef struct { // Bit field
 	uint8_t playUntilTrackNumber : 6; // Number of tracks to play after which uC goes to sleep
 	uint8_t seekmode			 : 2; // If seekmode is active and if yes: forward or backwards?
 	bool isWebstream			 : 1; // Indicates if track currenty played is a webstream
-	uint8_t tellMode			 : 2; // Tell mode for text to speech announcments
 	bool currentSpeechActive	 : 1; // If speech-play is active
 	bool lastSpeechActive		 : 1; // If speech-play was active
 	size_t coverFilePos; // current cover file position
@@ -29,6 +28,11 @@ extern playProps gPlayProperties;
 
 bool AudioPlayer_GetPausePlay();
 void AudioPlayer_SetPausePlay(bool pause);
+
+void AudioPlayer_setTitle(const char *format, ...);
+const String AudioPlayer_GetTitle();
+
+void AudioPlayer_SetTellMode(TextToSpeechMode mode);
 
 void AudioPlayer_Init(void);
 void AudioPlayer_Exit(void);
@@ -51,8 +55,6 @@ uint8_t AudioPlayer_GetInitVolume(void);
 void AudioPlayer_SetInitVolume(uint8_t value);
 void AudioPlayer_SetupVolumeAndAmps(void);
 bool Audio_Detect_Mode_HP(bool _state);
-void AudioPlayer_setTitle(const char *format, ...);
-const String AudioPlayer_GetTitle();
 
 time_t AudioPlayer_GetPlayTimeSinceStart(void);
 time_t AudioPlayer_GetPlayTimeAllTime(void);

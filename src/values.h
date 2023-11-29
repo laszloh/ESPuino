@@ -81,9 +81,11 @@
 #define SEEK_POS_PERCENT 3 // Seek to position (0-100)
 
 // TTS
-#define TTS_NONE		 0 // Do nothng (IDLE)
-#define TTS_IP_ADDRESS	 1 // Tell IP-address
-#define TTS_CURRENT_TIME 2 // Tell current time
+enum class TextToSpeechMode {
+	None = 0, // Do nothing (IDLE)
+	IpAddress, // Tell IP-address
+	CurrentTime, // Tell current time
+};
 
 // supported languages
 #define DE 1

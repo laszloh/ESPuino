@@ -34,11 +34,12 @@ playProps gPlayProperties;
 TaskHandle_t AudioTaskHandle;
 // uint32_t cnt123 = 0;
 
-static atomic_bool playMono;
-static atomic_bool pausePlay;
+static std::atomic_bool playMono; // true if mono; false if stereo
+static std::atomic_bool pausePlay; // If pause is active
+static std::atomic<TextToSpeechMode> tellMode; // Tell mode for text to speech announcments
 
-static char title[255];
-std::mutex titleLock;
+static char title[255]; // current title
+std::mutex titleLock; // and the lock to the variable
 
 // Volume
 static uint8_t AudioPlayer_CurrentVolume = AUDIOPLAYER_VOLUME_INIT;
@@ -777,8 +778,8 @@ void AudioPlayer_Task(void *parameter) {
 		}
 
 		// Handle IP-announcement
-		if (gPlayProperties.tellMode == TTS_IP_ADDRESS) {
-			gPlayProperties.tellMode = TTS_NONE;
+		if (tellMode == TextToSpeechMode::IpAddress) {
+			tellMode = TextToSpeechMode::None;
 			String ipText = Wlan_GetIpAddress();
 			bool speechOk;
 #if (LANGUAGE == DE)
@@ -794,8 +795,8 @@ void AudioPlayer_Task(void *parameter) {
 		}
 
 		// Handle time-announcement
-		if (gPlayProperties.tellMode == TTS_CURRENT_TIME) {
-			gPlayProperties.tellMode = TTS_NONE;
+		if (tellMode == TextToSpeechMode::CurrentTime) {
+			tellMode = TextToSpeechMode::None;
 			struct tm timeinfo;
 			getLocalTime(&timeinfo);
 			static char timeStringBuff[64];
@@ -1300,4 +1301,8 @@ bool AudioPlayer_GetPausePlay() {
 
 void AudioPlayer_SetPausePlay(bool pause) {
 	pausePlay = pause;
+}
+
+void AudioPlayer_SetTellMode(TextToSpeechMode mode) {
+	tellMode = mode;
 }
