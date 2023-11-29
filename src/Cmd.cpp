@@ -186,12 +186,10 @@ void Cmd_Action(const uint16_t mod) {
 				Log_Println(modificatorNotallowedWhenIdle, LOGLEVEL_NOTICE);
 				System_IndicateError();
 			} else {
-				if (gPlayProperties.repeatPlaylist) {
-					Log_Println(modificatorPlaylistLoopDeactive, LOGLEVEL_NOTICE);
-				} else {
-					Log_Println(modificatorPlaylistLoopActive, LOGLEVEL_NOTICE);
-				}
-				gPlayProperties.repeatPlaylist = !gPlayProperties.repeatPlaylist;
+				auto repeat = AudioPlayer_GetRepeatMode();
+				const char *msg = (repeat & RepeatMode::Playlist) ? modificatorPlaylistLoopDeactive : modificatorPlaylistLoopActive;
+				Log_Println(msg, LOGLEVEL_NOTICE);
+				AudioPlayer_SetRepeatMode(repeat ^ RepeatMode::Playlist);
 #ifdef MQTT_ENABLE
 				publishMqtt(topicRepeatModeState, AudioPlayer_GetRepeatMode(), false);
 #endif
@@ -205,12 +203,10 @@ void Cmd_Action(const uint16_t mod) {
 				Log_Println(modificatorNotallowedWhenIdle, LOGLEVEL_NOTICE);
 				System_IndicateError();
 			} else {
-				if (gPlayProperties.repeatCurrentTrack) {
-					Log_Println(modificatorTrackDeactive, LOGLEVEL_NOTICE);
-				} else {
-					Log_Println(modificatorTrackActive, LOGLEVEL_NOTICE);
-				}
-				gPlayProperties.repeatCurrentTrack = !gPlayProperties.repeatCurrentTrack;
+				auto repeat = AudioPlayer_GetRepeatMode();
+				const char *msg = (repeat & RepeatMode::Track) ? modificatorTrackDeactive : modificatorTrackActive;
+				Log_Println(msg, LOGLEVEL_NOTICE);
+				AudioPlayer_SetRepeatMode(repeat ^ RepeatMode::Track);
 #ifdef MQTT_ENABLE
 				publishMqtt(topicRepeatModeState, AudioPlayer_GetRepeatMode(), false);
 #endif
@@ -396,12 +392,12 @@ void Cmd_Action(const uint16_t mod) {
 		}
 
 		case CMD_SEEK_FORWARDS: {
-			gPlayProperties.seekmode = SEEK_FORWARDS;
+			AudioPlayer_SeekRelative(AudioSeekMode::Forwards);
 			break;
 		}
 
 		case CMD_SEEK_BACKWARDS: {
-			gPlayProperties.seekmode = SEEK_BACKWARDS;
+			AudioPlayer_SeekRelative(AudioSeekMode::Backwards);
 			break;
 		}
 

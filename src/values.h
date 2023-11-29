@@ -75,10 +75,12 @@
 #define TRACK_N_PLAYLIST 3 // Repeat both (infinite loop)
 
 // Seek-modes
-#define SEEK_NORMAL		 0 // Normal play
-#define SEEK_FORWARDS	 1 // Seek forwards
-#define SEEK_BACKWARDS	 2 // Seek backwards
-#define SEEK_POS_PERCENT 3 // Seek to position (0-100)
+enum class AudioSeekMode {
+	Normal = 0, // Normal play
+	Forwards, // Seek forwards
+	Backwards, // Seek backwards
+	AbsolutePercent // Seek to position (0-100)
+};
 
 // TTS
 enum class TextToSpeechMode {

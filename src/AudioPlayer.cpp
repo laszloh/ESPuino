@@ -34,6 +34,11 @@ playProps gPlayProperties;
 TaskHandle_t AudioTaskHandle;
 // uint32_t cnt123 = 0;
 
+struct SeekAction {
+	AudioSeekMode mode {AudioSeekMode::Normal};
+	float position {0.0f};
+};
+
 static std::atomic_uint32_t startAtFilePos; // Offset to start play (in bytes)
 static std::atomic_uchar playMode; // playMode
 static std::atomic_bool playMono; // true if mono; false if stereo
@@ -42,6 +47,9 @@ static std::atomic_bool isWebstream; // Indicates if track currenty played is a 
 static std::atomic<TextToSpeechMode> tellMode; // Tell mode for text to speech announcments
 static std::atomic_uint16_t currentTrackNumber; // Current tracknumber
 static std::atomic_uint16_t numberOfTracks; // Number of tracks in playlist
+static std::atomic<float> currentRelPos; // Current relative playPosition (in %)
+
+static std::atomic<SeekAction> seekMode; // If seekmode is active and if yes: forward, backwards or absolute?
 
 static char title[255]; // current title
 std::mutex titleLock; // and the lock to the variable
@@ -417,11 +425,11 @@ void AudioPlayer_Task(void *parameter) {
 			AudioPlayer_FileDuration = audio->getAudioFileDuration();
 			// Calculate relative position in file (for trackprogress neopixel & web-ui)
 			if (!gPlayProperties.playlistFinished && !isWebstream) {
-				if (!pausePlay && (gPlayProperties.seekmode != SEEK_POS_PERCENT) && (audio->getFileSize() > 0)) { // To progress necessary when paused
-					gPlayProperties.currentRelPos = ((double) (audio->getFilePos() - audio->inBufferFilled()) / (double) audio->getFileSize()) * 100;
+				if (!pausePlay && (audio->getFileSize() > 0)) { // To progress necessary when paused
+					currentRelPos = ((float) (audio->getFilePos() - audio->inBufferFilled()) / (float) audio->getFileSize()) * 100;
 				}
 			} else {
-				gPlayProperties.currentRelPos = 0;
+				currentRelPos = 0;
 			}
 		}
 
@@ -706,7 +714,7 @@ void AudioPlayer_Task(void *parameter) {
 			} else {
 				isWebstream = false;
 			}
-			gPlayProperties.currentRelPos = 0;
+			currentRelPos = 0;
 			audioReturnCode = false;
 
 			if (playMode == WEBSTREAM || (playMode == LOCAL_M3U && isWebstream)) { // Webstream
@@ -758,28 +766,22 @@ void AudioPlayer_Task(void *parameter) {
 		}
 
 		// Handle seekmodes
-		if (gPlayProperties.seekmode != SEEK_NORMAL) {
-			if (gPlayProperties.seekmode == SEEK_FORWARDS) {
-				if (audio->setTimeOffset(jumpOffset)) {
-					Log_Printf(LOGLEVEL_NOTICE, secondsJumpForward, jumpOffset);
-				} else {
-					System_IndicateError();
-				}
-			} else if (gPlayProperties.seekmode == SEEK_BACKWARDS) {
-				if (audio->setTimeOffset(-(jumpOffset))) {
-					Log_Printf(LOGLEVEL_NOTICE, secondsJumpBackward, jumpOffset);
-				} else {
-					System_IndicateError();
-				}
-			} else if ((gPlayProperties.seekmode == SEEK_POS_PERCENT) && (gPlayProperties.currentRelPos > 0) && (gPlayProperties.currentRelPos < 100)) {
-				uint32_t newFilePos = uint32_t((double) (gPlayProperties.currentRelPos / 100) * audio->getFileSize());
-				if (audio->setFilePos(newFilePos)) {
-					Log_Printf(LOGLEVEL_NOTICE, JumpToPosition, newFilePos, audio->getFileSize());
-				} else {
-					System_IndicateError();
-				}
+		SeekAction seek {};
+		seek = seekMode.exchange(seek); // no seek hold the value of seekMode, and seekMode is empty
+		if (seek.mode == AudioSeekMode::Forwards || seek.mode == AudioSeekMode::Backwards) {
+			const int distance = jumpOffset * (seek.mode == AudioSeekMode::Forwards) ? 1 : -1;
+			if (audio->setTimeOffset(distance)) {
+				Log_Printf(LOGLEVEL_NOTICE, (seek.mode == AudioSeekMode::Forwards) ? secondsJumpForward : secondsJumpBackward, jumpOffset);
+			} else {
+				System_IndicateError();
 			}
-			gPlayProperties.seekmode = SEEK_NORMAL;
+		} else if (seek.mode == AudioSeekMode::AbsolutePercent) {
+			uint32_t newFilePos = uint32_t((currentRelPos * audio->getFileSize()) / 100);
+			if (audio->setFilePos(newFilePos)) {
+				Log_Printf(LOGLEVEL_NOTICE, JumpToPosition, newFilePos, audio->getFileSize());
+			} else {
+				System_IndicateError();
+			}
 		}
 
 		// Handle IP-announcement
@@ -1330,4 +1332,21 @@ bool AudioPlayer_IsWebStream() {
 
 void AudioPlayer_SetWebStream(bool stream) {
 	isWebstream = stream;
+}
+
+float AudioPlayer_GetCurrentRelPos() {
+	return currentRelPos;
+}
+
+void AudioPlayer_SeekRelative(AudioSeekMode mode) {
+	SeekAction action;
+	action.mode = mode;
+	seekMode.store(action);
+}
+
+void AudioPlayer_SeekAbsolue(float percent) {
+	SeekAction action;
+	action.mode = AudioSeekMode::AbsolutePercent;
+	action.position = std::clamp<float>(percent, 0, 100);
+	seekMode.store(action);
 }

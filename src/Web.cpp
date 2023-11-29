@@ -698,8 +698,7 @@ bool JSONToSettings(JsonObject doc) {
 		Web_SendWebsocketData(0, 70);
 	} else if (doc.containsKey("trackProgress")) {
 		if (doc["trackProgress"].containsKey("posPercent")) {
-			gPlayProperties.seekmode = SEEK_POS_PERCENT;
-			gPlayProperties.currentRelPos = doc["trackProgress"]["posPercent"].as<uint8_t>();
+			AudioPlayer_SeekAbsolue(doc["trackProgress"]["posPercent"].as<uint8_t>());
 		}
 		Web_SendWebsocketData(0, 80);
 	}
@@ -988,7 +987,7 @@ void Web_SendWebsocketData(uint32_t client, uint8_t code) {
 		entry["numberOfTracks"] = AudioPlayer_GetNumberOfTracks();
 		entry["volume"] = AudioPlayer_GetCurrentVolume();
 		entry["name"] = AudioPlayer_GetTitle();
-		entry["posPercent"] = gPlayProperties.currentRelPos;
+		entry["posPercent"] = AudioPlayer_GetCurrentRelPos();
 		entry["playMode"] = AudioPlayer_GetPlayMode();
 	} else if (code == 40) {
 		object["coverimg"] = "coverimg";
@@ -1002,7 +1001,7 @@ void Web_SendWebsocketData(uint32_t client, uint8_t code) {
 		settingsToJSON(entry, "ssids");
 	} else if (code == 80) {
 		JsonObject entry = object.createNestedObject("trackProgress");
-		entry["posPercent"] = gPlayProperties.currentRelPos;
+		entry["posPercent"] = AudioPlayer_GetCurrentRelPos();
 		entry["time"] = AudioPlayer_GetCurrentTime();
 		entry["duration"] = AudioPlayer_GetFileDuration();
 	};
