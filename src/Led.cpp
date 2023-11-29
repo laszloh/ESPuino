@@ -940,8 +940,9 @@ AnimationReturnType Animation_PlaylistProgress(const bool startNewAnimation, CRG
 	static uint32_t staticLastTrack = 0; // variable to remember the last track (for connecting animations)
 
 	if constexpr (NUM_INDICATOR_LEDS >= 4) {
-		if (gPlayProperties.numberOfTracks > 1 && gPlayProperties.currentTrackNumber < gPlayProperties.numberOfTracks) {
-			const uint32_t ledValue = std::clamp<uint32_t>(map(gPlayProperties.currentTrackNumber, 0, gPlayProperties.numberOfTracks - 1, 0, leds.size() * DIMMABLE_STATES), 0, leds.size() * DIMMABLE_STATES);
+		const auto currentTracknumber = AudioPlayer_GetCurrentTrackNumber();
+		if (gPlayProperties.numberOfTracks > 1 && currentTracknumber < gPlayProperties.numberOfTracks) {
+			const uint32_t ledValue = std::clamp<uint32_t>(map(currentTracknumber, 0, gPlayProperties.numberOfTracks - 1, 0, leds.size() * DIMMABLE_STATES), 0, leds.size() * DIMMABLE_STATES);
 			const uint8_t fullLeds = ledValue / DIMMABLE_STATES;
 			const uint8_t lastLed = ledValue % DIMMABLE_STATES;
 
@@ -951,13 +952,13 @@ AnimationReturnType Animation_PlaylistProgress(const bool startNewAnimation, CRG
 				// only animate diff, if triggered again
 				if (!startNewAnimation) {
 					// forward progress
-					if (staticLastTrack < gPlayProperties.currentTrackNumber) {
+					if (staticLastTrack < currentTracknumber) {
 						if (animationState > LedPlaylistProgressStates::FillBar) {
 							animationState = LedPlaylistProgressStates::FillBar;
 							animationCounter = staticLastBarLenghtPlaylist;
 						}
 						// backwards progress
-					} else if (staticLastTrack > gPlayProperties.currentTrackNumber) {
+					} else if (staticLastTrack > currentTracknumber) {
 						if (staticLastBarLenghtPlaylist < fullLeds) {
 							animationState = LedPlaylistProgressStates::FillBar;
 							animationCounter = staticLastBarLenghtPlaylist;
@@ -967,7 +968,7 @@ AnimationReturnType Animation_PlaylistProgress(const bool startNewAnimation, CRG
 						}
 					}
 				}
-				staticLastTrack = gPlayProperties.currentTrackNumber;
+				staticLastTrack = currentTracknumber;
 			}
 
 			if (startNewAnimation) {

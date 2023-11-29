@@ -343,8 +343,8 @@ void Mqtt_ClientCallback(const char *topic, const byte *payload, uint32_t length
 			free(receivedString);
 			return;
 		} else if (strcmp(receivedString, "EO5T") == 0) {
-			if ((gPlayProperties.numberOfTracks - 1) >= (gPlayProperties.currentTrackNumber + 5)) {
-				gPlayProperties.playUntilTrackNumber = gPlayProperties.currentTrackNumber + 5;
+			if ((gPlayProperties.numberOfTracks - 1) >= (AudioPlayer_GetCurrentTrackNumber() + 5)) {
+				gPlayProperties.playUntilTrackNumber = AudioPlayer_GetCurrentTrackNumber()+ 5;
 			} else {
 				gPlayProperties.sleepAfterPlaylist = true; // If +5 tracks is > than active playlist, take end of current playlist
 			}
