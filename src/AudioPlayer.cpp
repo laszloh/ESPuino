@@ -34,6 +34,7 @@ playProps gPlayProperties;
 TaskHandle_t AudioTaskHandle;
 // uint32_t cnt123 = 0;
 
+static std::atomic_uint32_t startAtFilePos; // Offset to start play (in bytes)
 static std::atomic_uchar playMode; // playMode
 static std::atomic_bool playMono; // true if mono; false if stereo
 static std::atomic_bool pausePlay; // If pause is active
@@ -731,9 +732,9 @@ void AudioPlayer_Task(void *parameter) {
 				if (currentTrackNumber) {
 					Led_Indicate(LedIndicatorType::PlaylistProgress);
 				}
-				if (gPlayProperties.startAtFilePos > 0) {
-					audio->setFilePos(gPlayProperties.startAtFilePos);
-					gPlayProperties.startAtFilePos = 0;
+				if (startAtFilePos > 0) {
+					audio->setFilePos(startAtFilePos);
+					startAtFilePos = 0;
 					Log_Printf(LOGLEVEL_NOTICE, trackStartatPos, audio->getFilePos());
 				}
 				if (gPlayProperties.isWebstream) {
@@ -959,7 +960,7 @@ void AudioPlayer_TrackQueueDispatcher(const char *_itemToPlay, const uint32_t _l
 	memcpy(filename, _itemToPlay, sizeCpy);
 	filename[sizeCpy] = '\0'; // terminate the string
 
-	gPlayProperties.startAtFilePos = _lastPlayPos;
+	startAtFilePos = _lastPlayPos;
 	currentTrackNumber = _trackLastPlayed;
 	char **musicFiles;
 
