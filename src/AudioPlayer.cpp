@@ -35,6 +35,7 @@ TaskHandle_t AudioTaskHandle;
 // uint32_t cnt123 = 0;
 
 static atomic_bool playMono;
+static atomic_bool pausePlay;
 
 // Volume
 static uint8_t AudioPlayer_CurrentVolume = AUDIOPLAYER_VOLUME_INIT;
@@ -147,9 +148,9 @@ void AudioPlayer_Exit(void) {
 	gPrefsSettings.putULong("playTimeTotal", playTimeSecTotal);
 // Make sure last playposition for audiobook is saved when playback is active while shutdown was initiated
 #ifdef SAVE_PLAYPOS_BEFORE_SHUTDOWN
-	if (!gPlayProperties.pausePlay && (gPlayProperties.playMode == AUDIOBOOK || gPlayProperties.playMode == AUDIOBOOK_LOOP)) {
+	if (!pausePlay && (gPlayProperties.playMode == AUDIOBOOK || gPlayProperties.playMode == AUDIOBOOK_LOOP)) {
 		AudioPlayer_TrackControlToQueueSender(PAUSEPLAY);
-		while (!gPlayProperties.pausePlay) { // Make sure to wait until playback is paused in order to be sure that playposition saved in NVS
+		while (!pausePlay) { // Make sure to wait until playback is paused in order to be sure that playposition saved in NVS
 			vTaskDelay(portTICK_PERIOD_MS * 100u);
 		}
 	}
@@ -160,7 +161,7 @@ static uint32_t lastPlayingTimestamp = 0;
 
 void AudioPlayer_Cyclic(void) {
 	AudioPlayer_HeadphoneVolumeManager();
-	if ((millis() - lastPlayingTimestamp >= 1000) && gPlayProperties.playMode != NO_PLAYLIST && gPlayProperties.playMode != BUSY && !gPlayProperties.pausePlay) {
+	if ((millis() - lastPlayingTimestamp >= 1000) && gPlayProperties.playMode != NO_PLAYLIST && gPlayProperties.playMode != BUSY && !pausePlay) {
 		// audio is playing, update the playtime since start
 		lastPlayingTimestamp = millis();
 		playTimeSecSinceStart += 1;
@@ -396,7 +397,7 @@ void AudioPlayer_Task(void *parameter) {
 			AudioPlayer_FileDuration = audio->getAudioFileDuration();
 			// Calculate relative position in file (for trackprogress neopixel & web-ui)
 			if (!gPlayProperties.playlistFinished && !gPlayProperties.isWebstream) {
-				if (!gPlayProperties.pausePlay && (gPlayProperties.seekmode != SEEK_POS_PERCENT) && (audio->getFileSize() > 0)) { // To progress necessary when paused
+				if (!pausePlay && (gPlayProperties.seekmode != SEEK_POS_PERCENT) && (audio->getFileSize() > 0)) { // To progress necessary when paused
 					gPlayProperties.currentRelPos = ((double) (audio->getFilePos() - audio->inBufferFilled()) / (double) audio->getFileSize()) * 100;
 				}
 			} else {
@@ -407,8 +408,8 @@ void AudioPlayer_Task(void *parameter) {
 		trackQStatus = xQueueReceive(gTrackQueue, &gPlayProperties.playlist, 0);
 		if (trackQStatus == pdPASS || gPlayProperties.trackFinished || trackCommand != NO_ACTION) {
 			if (trackQStatus == pdPASS) {
-				if (gPlayProperties.pausePlay) {
-					gPlayProperties.pausePlay = false;
+				if (pausePlay) {
+					pausePlay = false;
 				}
 				audio->stopSong();
 				Log_Printf(LOGLEVEL_NOTICE, newPlaylistReceived, gPlayProperties.numberOfTracks);
@@ -466,7 +467,7 @@ void AudioPlayer_Task(void *parameter) {
 					audio->stopSong();
 					trackCommand = NO_ACTION;
 					Log_Println(cmndStop, LOGLEVEL_INFO);
-					gPlayProperties.pausePlay = true;
+					pausePlay = true;
 					gPlayProperties.playlistFinished = true;
 					gPlayProperties.playMode = NO_PLAYLIST;
 					Audio_setTitle(noPlaylist);
@@ -476,24 +477,24 @@ void AudioPlayer_Task(void *parameter) {
 				case PAUSEPLAY:
 					trackCommand = NO_ACTION;
 					audio->pauseResume();
-					if (gPlayProperties.pausePlay) {
+					if (pausePlay) {
 						Log_Println(cmndResumeFromPause, LOGLEVEL_INFO);
 					} else {
 						Log_Println(cmndPause, LOGLEVEL_INFO);
 					}
-					if (gPlayProperties.saveLastPlayPosition && !gPlayProperties.pausePlay) {
+					if (gPlayProperties.saveLastPlayPosition && !pausePlay) {
 						Log_Printf(LOGLEVEL_INFO, trackPausedAtPos, audio->getFilePos(), audio->getFilePos() - audio->inBufferFilled());
 						AudioPlayer_NvsRfidWriteWrapper(gPlayProperties.playRfidTag, *(gPlayProperties.playlist + gPlayProperties.currentTrackNumber), audio->getFilePos() - audio->inBufferFilled(), gPlayProperties.playMode, gPlayProperties.currentTrackNumber, gPlayProperties.numberOfTracks);
 					}
-					gPlayProperties.pausePlay = !gPlayProperties.pausePlay;
+					pausePlay = !pausePlay;
 					Web_SendWebsocketData(0, 30);
 					continue;
 
 				case NEXTTRACK:
 					trackCommand = NO_ACTION;
-					if (gPlayProperties.pausePlay) {
+					if (pausePlay) {
 						audio->pauseResume();
-						gPlayProperties.pausePlay = false;
+						pausePlay = false;
 					}
 					if (gPlayProperties.repeatCurrentTrack) { // End loop if button was pressed
 						gPlayProperties.repeatCurrentTrack = false;
@@ -526,9 +527,9 @@ void AudioPlayer_Task(void *parameter) {
 
 				case PREVIOUSTRACK:
 					trackCommand = NO_ACTION;
-					if (gPlayProperties.pausePlay) {
+					if (pausePlay) {
 						audio->pauseResume();
-						gPlayProperties.pausePlay = false;
+						pausePlay = false;
 					}
 					if (gPlayProperties.repeatCurrentTrack) { // End loop if button was pressed
 						gPlayProperties.repeatCurrentTrack = false;
@@ -587,9 +588,9 @@ void AudioPlayer_Task(void *parameter) {
 					break;
 				case FIRSTTRACK:
 					trackCommand = NO_ACTION;
-					if (gPlayProperties.pausePlay) {
+					if (pausePlay) {
 						audio->pauseResume();
-						gPlayProperties.pausePlay = false;
+						pausePlay = false;
 					}
 					gPlayProperties.currentTrackNumber = 0;
 					if (gPlayProperties.saveLastPlayPosition) {
@@ -604,9 +605,9 @@ void AudioPlayer_Task(void *parameter) {
 
 				case LASTTRACK:
 					trackCommand = NO_ACTION;
-					if (gPlayProperties.pausePlay) {
+					if (pausePlay) {
 						audio->pauseResume();
-						gPlayProperties.pausePlay = false;
+						pausePlay = false;
 					}
 					if (gPlayProperties.currentTrackNumber + 1 < gPlayProperties.numberOfTracks) {
 						gPlayProperties.currentTrackNumber = gPlayProperties.numberOfTracks - 1;
@@ -810,8 +811,8 @@ void AudioPlayer_Task(void *parameter) {
 		}
 
 		// Handle if mono/stereo should be changed (e.g. if plugging headphones)
-		if (currentMonoPlay != playMono) {
-			currentMonoPlay = playMono;
+		if (currentPlayMono != playMono) {
+			currentPlayMono = playMono;
 			audio->forceMono(currentPlayMono);
 			if (currentPlayMono) {
 				Log_Println(newPlayModeMono, LOGLEVEL_NOTICE);
@@ -823,7 +824,7 @@ void AudioPlayer_Task(void *parameter) {
 		}
 
 		audio->loop();
-		if (gPlayProperties.playlistFinished || gPlayProperties.pausePlay) {
+		if (gPlayProperties.playlistFinished || pausePlay) {
 			if (!gPlayProperties.currentSpeechActive) {
 				vTaskDelay(portTICK_PERIOD_MS * 10); // Waste some time if playlist is not active
 			}
@@ -836,7 +837,7 @@ void AudioPlayer_Task(void *parameter) {
 		}
 
 		// If error occured: remove playlist from ESPuino
-		if (gPlayProperties.playMode != NO_PLAYLIST && gPlayProperties.playMode != BUSY && !audio->isRunning() && !gPlayProperties.pausePlay) {
+		if (gPlayProperties.playMode != NO_PLAYLIST && gPlayProperties.playMode != BUSY && !audio->isRunning() && !pausePlay) {
 			if (settleCount++ == 50) { // Hack to give audio some time to settle down after playlist was generated
 				gPlayProperties.playlistFinished = true;
 				gPlayProperties.playMode = NO_PLAYLIST;
@@ -909,12 +910,12 @@ void AudioPlayer_PauseOnMinVolume(const uint8_t oldVolume, const uint8_t newVolu
 		return;
 	}
 
-	if (!gPlayProperties.pausePlay) { // Volume changes from 1 to 0
+	if (!pausePlay) { // Volume changes from 1 to 0
 		if (oldVolume == AudioPlayer_GetMinVolume() + 1 && newVolume == AudioPlayer_GetMinVolume()) {
 			Cmd_Action(CMD_PLAYPAUSE);
 		}
 	}
-	if (gPlayProperties.pausePlay) { // Volume changes from 0 to 1
+	if (pausePlay) { // Volume changes from 0 to 1
 		if (oldVolume == AudioPlayer_GetMinVolume() && newVolume > AudioPlayer_GetMinVolume()) {
 			Cmd_Action(CMD_PLAYPAUSE);
 		}
@@ -927,9 +928,9 @@ void AudioPlayer_PauseOnMinVolume(const uint8_t oldVolume, const uint8_t newVolu
 void AudioPlayer_TrackQueueDispatcher(const char *_itemToPlay, const uint32_t _lastPlayPos, const uint32_t _playMode, const uint16_t _trackLastPlayed) {
 // Make sure last playposition for audiobook is saved when new RFID-tag is applied
 #ifdef SAVE_PLAYPOS_WHEN_RFID_CHANGE
-	if (!gPlayProperties.pausePlay && (gPlayProperties.playMode == AUDIOBOOK || gPlayProperties.playMode == AUDIOBOOK_LOOP)) {
+	if (!pausePlay && (gPlayProperties.playMode == AUDIOBOOK || gPlayProperties.playMode == AUDIOBOOK_LOOP)) {
 		AudioPlayer_TrackControlToQueueSender(PAUSEPLAY);
-		while (!gPlayProperties.pausePlay) { // Make sure to wait until playback is paused in order to be sure that playposition saved in NVS
+		while (!pausePlay) { // Make sure to wait until playback is paused in order to be sure that playposition saved in NVS
 			vTaskDelay(portTICK_PERIOD_MS * 100u);
 		}
 	}
@@ -973,9 +974,9 @@ void AudioPlayer_TrackQueueDispatcher(const char *_itemToPlay, const uint32_t _l
 	if (!strcmp(*(musicFiles - 1), "0")) {
 		Log_Println(noMp3FilesInDir, LOGLEVEL_NOTICE);
 		System_IndicateError();
-		if (!gPlayProperties.pausePlay) {
+		if (!pausePlay) {
 			AudioPlayer_TrackControlToQueueSender(STOP);
-			while (!gPlayProperties.pausePlay) {
+			while (!pausePlay) {
 				vTaskDelay(portTICK_PERIOD_MS * 10u);
 			}
 		}
@@ -1277,4 +1278,12 @@ void audio_eof_speech(const char *info) {
 // process audio sample extern (for bluetooth source)
 void audio_process_i2s(uint32_t *sample, bool *continueI2S) {
 	*continueI2S = !Bluetooth_Source_SendAudioData(sample);
+}
+
+bool AudioPlayer_GetPausePlay() {
+	return pausePlay;
+}
+
+void AudioPlayer_SetPausePlay(bool pause) {
+	pausePlay = pause;
 }

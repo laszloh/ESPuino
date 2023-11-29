@@ -131,7 +131,7 @@ void Rfid_Task(void *parameter) {
 				xQueueSend(gRfidCardQueue, cardIdString.c_str(), 0);
 			} else {
 				// If pause-button was pressed while card was not applied, playback could be active. If so: don't pause when card is reapplied again as the desired functionality would be reversed in this case.
-				if (gPlayProperties.pausePlay && System_GetOperationMode() != OPMODE_BLUETOOTH_SINK) {
+				if (AudioPlayer_GetPausePlay() && System_GetOperationMode() != OPMODE_BLUETOOTH_SINK) {
 					AudioPlayer_TrackControlToQueueSender(PAUSEPLAY); // ... play/pause instead (but not for BT)
 				}
 			}
@@ -170,7 +170,7 @@ void Rfid_Task(void *parameter) {
 			}
 
 			Log_Println(rfidTagRemoved, LOGLEVEL_NOTICE);
-			if (!gPlayProperties.pausePlay && System_GetOperationMode() != OPMODE_BLUETOOTH_SINK) {
+			if (!AudioPlayer_GetPausePlay() && System_GetOperationMode() != OPMODE_BLUETOOTH_SINK) {
 				AudioPlayer_TrackControlToQueueSender(PAUSEPLAY);
 				Log_Println(rfidTagReapplied, LOGLEVEL_NOTICE);
 			}

@@ -1,7 +1,7 @@
 #pragma once
 
 typedef struct { // Bit field
-	uint8_t playMode : 4; // playMode
+	uint8_t playMode; // playMode
 	char **playlist; // playlist
 	char title[255]; // current title
 	bool repeatCurrentTrack		: 1; // If current track should be looped
@@ -15,7 +15,6 @@ typedef struct { // Bit field
 	bool sleepAfter5Tracks		: 1; // If uC should go to sleep after 5 tracks
 	bool saveLastPlayPosition	: 1; // If playposition/current track should be saved (for AUDIOBOOK)
 	char playRfidTag[13]; // ID of RFID-tag that started playlist
-	bool pausePlay				 : 1; // If pause is active
 	bool trackFinished			 : 1; // If current track is finished
 	bool playlistFinished		 : 1; // If whole playlist is finished
 	uint8_t playUntilTrackNumber : 6; // Number of tracks to play after which uC goes to sleep
@@ -29,6 +28,9 @@ typedef struct { // Bit field
 } playProps;
 
 extern playProps gPlayProperties;
+
+bool AudioPlayer_GetPausePlay();
+void AudioPlayer_SetPausePlay(bool pause);
 
 void AudioPlayer_Init(void);
 void AudioPlayer_Exit(void);

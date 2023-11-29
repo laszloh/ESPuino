@@ -303,7 +303,7 @@ static void Led_Task(void *parameter) {
 			nextAnimation = LedAnimationType::Speech;
 		} else if (gPlayProperties.playlistFinished) {
 			nextAnimation = LedAnimationType::Idle;
-		} else if (gPlayProperties.pausePlay && !gPlayProperties.isWebstream) {
+		} else if (AudioPlayer_GetPausePlay() && !gPlayProperties.isWebstream) {
 			nextAnimation = LedAnimationType::Pause;
 		} else if (gPlayProperties.isWebstream) { // also animate pause in the webstream animation
 			nextAnimation = LedAnimationType::Webstream;
@@ -642,7 +642,7 @@ AnimationReturnType Animation_Webstream(const bool startNewAnimation, CRGBSet &l
 	static uint16_t timerProgress = 0;
 
 	// pause-animation
-	if (gPlayProperties.pausePlay) {
+	if (AudioPlayer_GetPausePlay()) {
 		leds = CRGB::Black;
 		CRGB::HTMLColorCode generalColor = CRGB::Orange;
 		if (OPMODE_BLUETOOTH_SINK == System_GetOperationMode()) {
@@ -853,7 +853,7 @@ AnimationReturnType Animation_Progress(const bool startNewAnimation, CRGBSet &le
 			for (uint8_t led = 0; led < fullLeds; led++) {
 				if (System_AreControlsLocked()) {
 					leds[Led_Address(led)] = CRGB::Red;
-				} else if (!gPlayProperties.pausePlay) { // Hue-rainbow
+				} else if (!AudioPlayer_GetPausePlay()) { // Hue-rainbow
 					leds[Led_Address(led)].setHue((uint8_t) (((float) PROGRESS_HUE_END - (float) PROGRESS_HUE_START) / (leds.size() - 1) * led + PROGRESS_HUE_START));
 				}
 			}

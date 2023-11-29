@@ -983,7 +983,7 @@ void Web_SendWebsocketData(uint32_t client, uint8_t code) {
 		// object["battery"] = Battery_GetVoltage();
 	} else if (code == 30) {
 		JsonObject entry = object.createNestedObject("trackinfo");
-		entry["pausePlay"] = gPlayProperties.pausePlay;
+		entry["pausePlay"] = AudioPlayer_GetPausePlay();
 		entry["currentTrackNumber"] = gPlayProperties.currentTrackNumber + 1;
 		entry["numberOfTracks"] = gPlayProperties.numberOfTracks;
 		entry["volume"] = AudioPlayer_GetCurrentVolume();

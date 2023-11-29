@@ -43,7 +43,7 @@ void connection_state_changed(esp_a2d_connection_state_t state, void *ptr) {
 	if (System_GetOperationMode() == OPMODE_BLUETOOTH_SINK) {
 		// for Neopixel (indicator LEDs) use the webstream mode
 		gPlayProperties.isWebstream = false;
-		gPlayProperties.pausePlay = false;
+		AudioPlayer_SetPausePlay(false);
 		gPlayProperties.playlistFinished = true;
 	}
 }
@@ -55,7 +55,7 @@ void audio_state_changed(esp_a2d_audio_state_t state, void *ptr) {
 	Log_Printf(LOGLEVEL_INFO, "Bluetooth %s => audio state: %s", getType(), ((BluetoothA2DPCommon *) ptr)->to_str(state));
 	if (System_GetOperationMode() == OPMODE_BLUETOOTH_SINK) {
 		// set play/pause status
-		gPlayProperties.pausePlay = (state != ESP_A2D_AUDIO_STATE_STARTED);
+		AudioPlayer_SetPausePlay(state != ESP_A2D_AUDIO_STATE_STARTED);
 		// for Neopixel (indicator LEDs) use the webstream mode
 		gPlayProperties.playlistFinished = false;
 		gPlayProperties.isWebstream = true;
