@@ -73,7 +73,7 @@ void Cmd_Action(const uint16_t mod) {
 		}
 
 		case CMD_SLEEP_AFTER_END_OF_TRACK: { // Puts uC to sleep after end of current track
-			if (gPlayProperties.playMode == NO_PLAYLIST) {
+			if (AudioPlayer_GetPlayMode() == NO_PLAYLIST) {
 				Log_Println(modificatorNotallowedWhenIdle, LOGLEVEL_NOTICE);
 				System_IndicateError();
 				return;
@@ -107,7 +107,7 @@ void Cmd_Action(const uint16_t mod) {
 		}
 
 		case CMD_SLEEP_AFTER_END_OF_PLAYLIST: { // Puts uC to sleep after end of whole playlist (can take a while :->)
-			if (gPlayProperties.playMode == NO_PLAYLIST) {
+			if (AudioPlayer_GetPlayMode() == NO_PLAYLIST) {
 				Log_Println(modificatorNotallowedWhenIdle, LOGLEVEL_NOTICE);
 				System_IndicateError();
 				return;
@@ -139,7 +139,7 @@ void Cmd_Action(const uint16_t mod) {
 		}
 
 		case CMD_SLEEP_AFTER_5_TRACKS: {
-			if (gPlayProperties.playMode == NO_PLAYLIST) {
+			if (AudioPlayer_GetPlayMode() == NO_PLAYLIST) {
 				Log_Println(modificatorNotallowedWhenIdle, LOGLEVEL_NOTICE);
 				System_IndicateError();
 				return;
@@ -182,7 +182,7 @@ void Cmd_Action(const uint16_t mod) {
 		}
 
 		case CMD_REPEAT_PLAYLIST: {
-			if (gPlayProperties.playMode == NO_PLAYLIST) {
+			if (AudioPlayer_GetPlayMode() == NO_PLAYLIST) {
 				Log_Println(modificatorNotallowedWhenIdle, LOGLEVEL_NOTICE);
 				System_IndicateError();
 			} else {
@@ -201,7 +201,7 @@ void Cmd_Action(const uint16_t mod) {
 		}
 
 		case CMD_REPEAT_TRACK: { // Introduces looping for track-mode
-			if (gPlayProperties.playMode == NO_PLAYLIST) {
+			if (AudioPlayer_GetPlayMode() == NO_PLAYLIST) {
 				Log_Println(modificatorNotallowedWhenIdle, LOGLEVEL_NOTICE);
 				System_IndicateError();
 			} else {

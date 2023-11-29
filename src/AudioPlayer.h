@@ -1,7 +1,6 @@
 #pragma once
 
 typedef struct { // Bit field
-	uint8_t playMode; // playMode
 	char **playlist; // playlist
 	bool repeatCurrentTrack		: 1; // If current track should be looped
 	bool repeatPlaylist			: 1; // If whole playlist should be looped
@@ -33,6 +32,8 @@ void AudioPlayer_setTitle(const char *format, ...);
 const String AudioPlayer_GetTitle();
 
 void AudioPlayer_SetTellMode(TextToSpeechMode mode);
+
+uint8_t AudioPlayer_GetPlayMode();
 
 void AudioPlayer_Init(void);
 void AudioPlayer_Exit(void);

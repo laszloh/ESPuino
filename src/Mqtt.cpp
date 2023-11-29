@@ -271,7 +271,7 @@ bool Mqtt_Reconnect() {
 			publishMqtt(topicLoudnessState, AudioPlayer_GetCurrentVolume(), false);
 			publishMqtt(topicSleepTimerState, System_GetSleepTimerTimeStamp(), false);
 			publishMqtt(topicLockControlsState, System_AreControlsLocked(), false);
-			publishMqtt(topicPlaymodeState, gPlayProperties.playMode, false);
+			publishMqtt(topicPlaymodeState, AudioPlayer_GetPlayMode(), false);
 			publishMqtt(topicLedBrightnessState, Led_GetBrightness(), false);
 			publishMqtt(topicCurrentIPv4IP, Wlan_GetIpAddress().c_str(), false);
 			publishMqtt(topicRepeatModeState, AudioPlayer_GetRepeatMode(), false);
@@ -317,7 +317,7 @@ void Mqtt_ClientCallback(const char *topic, const byte *payload, uint32_t length
 	}
 	// Modify sleep-timer?
 	else if (strcmp_P(topic, topicSleepTimerCmnd) == 0) {
-		if (gPlayProperties.playMode == NO_PLAYLIST) { // Don't allow sleep-modications if no playlist is active
+		if (AudioPlayer_GetPlayMode() == NO_PLAYLIST) { // Don't allow sleep-modications if no playlist is active
 			Log_Println(modificatorNotallowedWhenIdle, LOGLEVEL_INFO);
 			publishMqtt(topicSleepState, 0, false);
 			System_IndicateError();
@@ -404,8 +404,8 @@ void Mqtt_ClientCallback(const char *topic, const byte *payload, uint32_t length
 	else if (strcmp_P(topic, topicRepeatModeCmnd) == 0) {
 		uint8_t repeatMode = strtoul(receivedString, NULL, 10);
 		Log_Printf(LOGLEVEL_NOTICE, "Repeat: %d", repeatMode);
-		if (gPlayProperties.playMode != NO_PLAYLIST) {
-			if (gPlayProperties.playMode == NO_PLAYLIST) {
+		if (AudioPlayer_GetPlayMode() != NO_PLAYLIST) {
+			if (AudioPlayer_GetPlayMode() == NO_PLAYLIST) {
 				publishMqtt(topicRepeatModeState, AudioPlayer_GetRepeatMode(), false);
 				Log_Println(noPlaylistNotAllowedMqtt, LOGLEVEL_ERROR);
 				System_IndicateError();
