@@ -159,7 +159,7 @@ void Cmd_Action(const uint16_t mod) {
 				Log_Println(modificatorSleepd, LOGLEVEL_NOTICE);
 			} else {
 				gPlayProperties.sleepAfter5Tracks = true;
-				if (AudioPlayer_GetCurrentTrackNumber() + 5 > gPlayProperties.numberOfTracks) { // If currentTrack + 5 exceeds number of tracks in playlist, sleep after end of playlist
+				if (AudioPlayer_GetCurrentTrackNumber() + 5 > AudioPlayer_GetNumberOfTracks()) { // If currentTrack + 5 exceeds number of tracks in playlist, sleep after end of playlist
 					gPlayProperties.sleepAfterPlaylist = true;
 #ifdef MQTT_ENABLE
 					publishMqtt(topicSleepTimerState, "EOP", false);

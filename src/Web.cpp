@@ -985,7 +985,7 @@ void Web_SendWebsocketData(uint32_t client, uint8_t code) {
 		JsonObject entry = object.createNestedObject("trackinfo");
 		entry["pausePlay"] = AudioPlayer_GetPausePlay();
 		entry["currentTrackNumber"] = AudioPlayer_GetCurrentTrackNumber() + 1;
-		entry["numberOfTracks"] = gPlayProperties.numberOfTracks;
+		entry["numberOfTracks"] = AudioPlayer_GetNumberOfTracks();
 		entry["volume"] = AudioPlayer_GetCurrentVolume();
 		entry["name"] = AudioPlayer_GetTitle();
 		entry["posPercent"] = gPlayProperties.currentRelPos;

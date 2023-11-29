@@ -941,8 +941,9 @@ AnimationReturnType Animation_PlaylistProgress(const bool startNewAnimation, CRG
 
 	if constexpr (NUM_INDICATOR_LEDS >= 4) {
 		const auto currentTracknumber = AudioPlayer_GetCurrentTrackNumber();
-		if (gPlayProperties.numberOfTracks > 1 && currentTracknumber < gPlayProperties.numberOfTracks) {
-			const uint32_t ledValue = std::clamp<uint32_t>(map(currentTracknumber, 0, gPlayProperties.numberOfTracks - 1, 0, leds.size() * DIMMABLE_STATES), 0, leds.size() * DIMMABLE_STATES);
+		const auto numberOfTracks = AudioPlayer_GetNumberOfTracks();
+		if (numberOfTracks > 1 && currentTracknumber < numberOfTracks) {
+			const uint32_t ledValue = std::clamp<uint32_t>(map(currentTracknumber, 0, numberOfTracks - 1, 0, leds.size() * DIMMABLE_STATES), 0, leds.size() * DIMMABLE_STATES);
 			const uint8_t fullLeds = ledValue / DIMMABLE_STATES;
 			const uint8_t lastLed = ledValue % DIMMABLE_STATES;
 
