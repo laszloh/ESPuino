@@ -21,8 +21,10 @@
 #include "Wlan.h"
 #include "main.h"
 
+#include <atomic>
 #include <esp_task_wdt.h>
 #include <freertos/task.h>
+#include <mutex>
 
 #define AUDIOPLAYER_VOLUME_MAX	21u
 #define AUDIOPLAYER_VOLUME_MIN	0u
@@ -31,6 +33,8 @@
 playProps gPlayProperties;
 TaskHandle_t AudioTaskHandle;
 // uint32_t cnt123 = 0;
+
+static atomic_bool playMono;
 
 // Volume
 static uint8_t AudioPlayer_CurrentVolume = AUDIOPLAYER_VOLUME_INIT;
@@ -248,11 +252,9 @@ void Audio_setTitle(const char *format, ...) {
 // Enable/disable PA/HP-amps initially
 void AudioPlayer_SetupVolumeAndAmps(void) {
 #ifdef PLAY_MONO_SPEAKER
-	gPlayProperties.currentPlayMono = true;
-	gPlayProperties.newPlayMono = true;
+	playMono = true;
 #else
-	gPlayProperties.currentPlayMono = false;
-	gPlayProperties.newPlayMono = false;
+	playMono = false;
 #endif
 
 #ifndef HEADPHONE_ADJUST_ENABLE
@@ -275,7 +277,7 @@ void AudioPlayer_SetupVolumeAndAmps(void) {
 	#endif
 	} else {
 		AudioPlayer_MaxVolume = AudioPlayer_MaxVolumeHeadphone; // 0 if headphone is connected (put to GND)
-		gPlayProperties.newPlayMono = false; // always stereo for headphones!
+		playMono = false; // always stereo for headphones!
 
 	#ifdef GPIO_PA_EN
 		Port_Write(GPIO_PA_EN, false, true);
@@ -297,9 +299,9 @@ void AudioPlayer_HeadphoneVolumeManager(void) {
 		if (currentHeadPhoneDetectionState) {
 			AudioPlayer_MaxVolume = AudioPlayer_MaxVolumeSpeaker;
 	#ifdef PLAY_MONO_SPEAKER
-			gPlayProperties.newPlayMono = true;
+			playMono = true;
 	#else
-			gPlayProperties.newPlayMono = false;
+			playMono = false;
 	#endif
 
 	#ifdef GPIO_PA_EN
@@ -310,7 +312,7 @@ void AudioPlayer_HeadphoneVolumeManager(void) {
 	#endif
 		} else {
 			AudioPlayer_MaxVolume = AudioPlayer_MaxVolumeHeadphone;
-			gPlayProperties.newPlayMono = false; // Always stereo for headphones
+			playMono = false; // Always stereo for headphones
 			if (AudioPlayer_GetCurrentVolume() > AudioPlayer_MaxVolume) {
 				AudioPlayer_VolumeToQueueSender(AudioPlayer_MaxVolume, true); // Lower volume for headphone if headphone's maxvolume is exceeded by volume set in speaker-mode
 			}
@@ -350,21 +352,22 @@ void AudioPlayer_Task(void *parameter) {
 #endif
 
 	uint8_t settleCount = 0;
-	AudioPlayer_CurrentVolume = AudioPlayer_GetInitVolume();
-	audio->setPinout(I2S_BCLK, I2S_LRC, I2S_DOUT);
-	audio->setVolume(AudioPlayer_CurrentVolume, VOLUMECURVE);
-	audio->forceMono(gPlayProperties.currentPlayMono);
-	if (gPlayProperties.currentPlayMono) {
-		audio->setTone(3, 0, 0);
-	}
-
 	uint8_t currentVolume;
-	static BaseType_t trackQStatus;
-	static uint8_t trackCommand = NO_ACTION;
+	BaseType_t trackQStatus;
+	uint8_t trackCommand = NO_ACTION;
 	bool audioReturnCode;
 	AudioPlayer_CurrentTime = 0;
 	AudioPlayer_FileDuration = 0;
-	static uint32_t AudioPlayer_LastPlaytimeStatsTimestamp = 0u;
+	uint32_t AudioPlayer_LastPlaytimeStatsTimestamp = 0u;
+	bool currentPlayMono = playMono;
+
+	AudioPlayer_CurrentVolume = AudioPlayer_GetInitVolume();
+	audio->setPinout(I2S_BCLK, I2S_LRC, I2S_DOUT);
+	audio->setVolume(AudioPlayer_CurrentVolume, VOLUMECURVE);
+	audio->forceMono(currentPlayMono);
+	if (currentPlayMono) {
+		audio->setTone(3, 0, 0);
+	}
 
 	for (;;) {
 		/*
@@ -807,10 +810,10 @@ void AudioPlayer_Task(void *parameter) {
 		}
 
 		// Handle if mono/stereo should be changed (e.g. if plugging headphones)
-		if (gPlayProperties.newPlayMono != gPlayProperties.currentPlayMono) {
-			gPlayProperties.currentPlayMono = gPlayProperties.newPlayMono;
-			audio->forceMono(gPlayProperties.currentPlayMono);
-			if (gPlayProperties.currentPlayMono) {
+		if (currentMonoPlay != playMono) {
+			currentMonoPlay = playMono;
+			audio->forceMono(currentPlayMono);
+			if (currentPlayMono) {
 				Log_Println(newPlayModeMono, LOGLEVEL_NOTICE);
 				audio->setTone(3, 0, 0);
 			} else {

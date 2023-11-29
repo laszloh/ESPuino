@@ -20,8 +20,6 @@ typedef struct { // Bit field
 	bool playlistFinished		 : 1; // If whole playlist is finished
 	uint8_t playUntilTrackNumber : 6; // Number of tracks to play after which uC goes to sleep
 	uint8_t seekmode			 : 2; // If seekmode is active and if yes: forward or backwards?
-	bool newPlayMono			 : 1; // true if mono; false if stereo (helper)
-	bool currentPlayMono		 : 1; // true if mono; false if stereo
 	bool isWebstream			 : 1; // Indicates if track currenty played is a webstream
 	uint8_t tellMode			 : 2; // Tell mode for text to speech announcments
 	bool currentSpeechActive	 : 1; // If speech-play is active
