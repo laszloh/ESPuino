@@ -194,6 +194,16 @@ bool publishMqtt(const char *topic, uint32_t payload, bool retained) {
 #endif
 }
 
+bool publishMqtt(const char *topic, const RepeatFlags &payload, bool retained) {
+#ifdef MQTT_ENABLE
+	char buf[11];
+	snprintf(buf, sizeof(buf) / sizeof(buf[0]), "%u", payload.bits());
+	return publishMqtt(topic, buf, retained);
+#else
+	return false;
+#endif
+}
+
 // Cyclic posting of WiFi-signal-strength
 void Mqtt_PostWiFiRssi(void) {
 #ifdef MQTT_ENABLE
@@ -410,44 +420,10 @@ void Mqtt_ClientCallback(const char *topic, const byte *payload, uint32_t length
 				Log_Println(noPlaylistNotAllowedMqtt, LOGLEVEL_ERROR);
 				System_IndicateError();
 			} else {
-				switch (repeatMode) {
-					case NO_REPEAT:
-						gPlayProperties.repeatCurrentTrack = false;
-						gPlayProperties.repeatPlaylist = false;
-						publishMqtt(topicRepeatModeState, AudioPlayer_GetRepeatMode(), false);
-						Log_Println(modeRepeatNone, LOGLEVEL_INFO);
+				RepeatFlags flags(static_cast<RepeatMode>(repeatMode));
+				AudioPlayer_SetRepeatMode(flags);
+				publishMqtt(topicRepeatModeState, flags, false);
 						System_IndicateOk();
-						break;
-
-					case TRACK:
-						gPlayProperties.repeatCurrentTrack = true;
-						gPlayProperties.repeatPlaylist = false;
-						publishMqtt(topicRepeatModeState, AudioPlayer_GetRepeatMode(), false);
-						Log_Println(modeRepeatTrack, LOGLEVEL_INFO);
-						System_IndicateOk();
-						break;
-
-					case PLAYLIST:
-						gPlayProperties.repeatCurrentTrack = false;
-						gPlayProperties.repeatPlaylist = true;
-						publishMqtt(topicRepeatModeState, AudioPlayer_GetRepeatMode(), false);
-						Log_Println(modeRepeatPlaylist, LOGLEVEL_INFO);
-						System_IndicateOk();
-						break;
-
-					case TRACK_N_PLAYLIST:
-						gPlayProperties.repeatCurrentTrack = true;
-						gPlayProperties.repeatPlaylist = true;
-						publishMqtt(topicRepeatModeState, AudioPlayer_GetRepeatMode(), false);
-						Log_Println(modeRepeatTracknPlaylist, LOGLEVEL_INFO);
-						System_IndicateOk();
-						break;
-
-					default:
-						System_IndicateError();
-						publishMqtt(topicRepeatModeState, AudioPlayer_GetRepeatMode(), false);
-						break;
-				}
 			}
 		}
 	}

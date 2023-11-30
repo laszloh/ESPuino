@@ -48,6 +48,7 @@ static std::atomic<TextToSpeechMode> tellMode; // Tell mode for text to speech a
 static std::atomic_uint16_t currentTrackNumber; // Current tracknumber
 static std::atomic_uint16_t numberOfTracks; // Number of tracks in playlist
 static std::atomic<float> currentRelPos; // Current relative playPosition (in %)
+static std::atomic<RepeatFlags> repeatMode; // If current track or playlist should be looped
 
 static std::atomic<SeekAction> seekMode; // If seekmode is active and if yes: forward, backwards or absolute?
 
@@ -472,7 +473,7 @@ void AudioPlayer_Task(void *parameter) {
 					System_RequestSleep();
 					break;
 				}
-				if (!gPlayProperties.repeatCurrentTrack) { // If endless-loop requested, track-number will not be incremented
+				if (!(repeatMode.load() & RepeatMode::Track)) { // If endless-loop requested, track-number will not be incremented
 					currentTrackNumber++;
 				} else {
 					Log_Println(repeatTrackDueToPlaymode, LOGLEVEL_INFO);
@@ -518,26 +519,37 @@ void AudioPlayer_Task(void *parameter) {
 					Web_SendWebsocketData(0, 30);
 					continue;
 
-				case NEXTTRACK:
+				case NEXTTRACK: {
 					trackCommand = NO_ACTION;
 					if (pausePlay) {
 						audio->pauseResume();
 						pausePlay = false;
 					}
-					if (gPlayProperties.repeatCurrentTrack) { // End loop if button was pressed
-						gPlayProperties.repeatCurrentTrack = false;
+					RepeatFlags repeat = repeatMode.load();
+					if (repeat & RepeatMode::Track) { // End loop if button was pressed
+						repeat &= ~RepeatMode::Track; // delete repeat track flag
+						repeatMode.store(repeat);
 #ifdef MQTT_ENABLE
-						publishMqtt(topicRepeatModeState, AudioPlayer_GetRepeatMode(), false);
+						publishMqtt(topicRepeatModeState, repeat, false);
 #endif
+					}
+					if (playMode == WEBSTREAM) {
+						Log_Println(trackChangeWebstream, LOGLEVEL_INFO);
+						System_IndicateError();
+						continue;
 					}
 					// Allow next track if current track played in playlist isn't the last track.
 					// Exception: loop-playlist is active. In this case playback restarts at the first track of the playlist.
-					if ((currentTrackNumber + 1 < numberOfTracks) || gPlayProperties.repeatPlaylist) {
-						if ((currentTrackNumber + 1 >= numberOfTracks) && gPlayProperties.repeatPlaylist) {
-							currentTrackNumber = 0;
-						} else {
-							currentTrackNumber++;
-						}
+
+					uint16_t nextTrack = currentTrackNumber + 1;
+					// if we are in playlist loop mode, restart at the first track
+					if (repeat & RepeatMode::Playlist) {
+						nextTrack = nextTrack % numberOfTracks;
+					}
+
+					// check if we have reached the end of the playlist
+					if (nextTrack < numberOfTracks) {
+						currentTrackNumber = nextTrack;
 						if (gPlayProperties.saveLastPlayPosition) {
 							AudioPlayer_NvsRfidWriteWrapper(playRfidTag, *(gPlayProperties.playlist + currentTrackNumber), 0, playMode, currentTrackNumber, numberOfTracks);
 							Log_Println(trackStartAudiobook, LOGLEVEL_INFO);
@@ -551,69 +563,70 @@ void AudioPlayer_Task(void *parameter) {
 						System_IndicateError();
 						continue;
 					}
-					break;
+				} break;
 
-				case PREVIOUSTRACK:
+				case PREVIOUSTRACK: {
 					trackCommand = NO_ACTION;
 					if (pausePlay) {
 						audio->pauseResume();
 						pausePlay = false;
 					}
-					if (gPlayProperties.repeatCurrentTrack) { // End loop if button was pressed
-						gPlayProperties.repeatCurrentTrack = false;
+					RepeatFlags repeat = repeatMode.load();
+					if (repeat & RepeatMode::Track) { // End loop if button was pressed
+						repeat &= ~RepeatMode::Track;
+						repeatMode.store(repeat);
 #ifdef MQTT_ENABLE
-						publishMqtt(topicRepeatModeState, AudioPlayer_GetRepeatMode(), false);
+						publishMqtt(topicRepeatModeState, repeat, false);
 #endif
 					}
 					if (playMode == WEBSTREAM) {
 						Log_Println(trackChangeWebstream, LOGLEVEL_INFO);
 						System_IndicateError();
 						continue;
-					} else if (playMode == LOCAL_M3U) {
-						Log_Println(cmndPrevTrack, LOGLEVEL_INFO);
-						if (currentTrackNumber > 0) {
-							currentTrackNumber--;
-						} else {
+					}
+					if (audio->getAudioCurrentTime() > 5) {
+						// start playback of the current track from the beginning
+						if (gPlayProperties.saveLastPlayPosition) {
+							AudioPlayer_NvsRfidWriteWrapper(playRfidTag, *(gPlayProperties.playlist + currentTrackNumber), 0, playMode, currentTrackNumber, numberOfTracks);
+						}
+						audio->stopSong();
+						Led_Indicate(LedIndicatorType::Rewind);
+						audioReturnCode = audio->connecttoFS(gFSystem, *(gPlayProperties.playlist + currentTrackNumber));
+						// consider track as finished, when audio lib call was not successful
+						if (!audioReturnCode) {
 							System_IndicateError();
+							gPlayProperties.trackFinished = true;
 							continue;
+						}
+						Log_Println(trackStart, LOGLEVEL_INFO);
+						continue;
+					}
+
+					// Allow previous track if current track played in playlist isn't the first track.
+					// Exception: loop-playlist is active. In this case playback restarts at the last track of the playlist.
+					uint32_t nextTrack = currentTrackNumber - 1;
+
+					// we utilize from here on, that an unsigned int will undeflow
+					if (nextTrack > numberOfTracks && repeat & RepeatMode::Playlist) {
+						nextTrack = numberOfTracks - 1;
+					}
+
+					if (nextTrack < numberOfTracks) {
+						currentTrackNumber = nextTrack;
+						if (gPlayProperties.saveLastPlayPosition) {
+							AudioPlayer_NvsRfidWriteWrapper(playRfidTag, *(gPlayProperties.playlist + currentTrackNumber), 0, playMode, currentTrackNumber, numberOfTracks);
+							Log_Println(trackStartAudiobook, LOGLEVEL_INFO);
+						}
+						Log_Println(cmndPrevTrack, LOGLEVEL_INFO);
+						if (!gPlayProperties.playlistFinished) {
+							audio->stopSong();
 						}
 					} else {
-						if (currentTrackNumber > 0 || gPlayProperties.repeatPlaylist) {
-							if (audio->getAudioCurrentTime() < 5) { // play previous track when current track time is small, else play current track again
-								if (currentTrackNumber == 0 && gPlayProperties.repeatPlaylist) {
-									currentTrackNumber = numberOfTracks - 1; // Go back to last track in loop-mode when first track is played
-								} else {
-									currentTrackNumber--;
-								}
-							}
-
-							if (gPlayProperties.saveLastPlayPosition) {
-								AudioPlayer_NvsRfidWriteWrapper(playRfidTag, *(gPlayProperties.playlist + currentTrackNumber), 0, playMode, currentTrackNumber, numberOfTracks);
-								Log_Println(trackStartAudiobook, LOGLEVEL_INFO);
-							}
-
-							Log_Println(cmndPrevTrack, LOGLEVEL_INFO);
-							if (!gPlayProperties.playlistFinished) {
-								audio->stopSong();
-							}
-						} else {
-							if (gPlayProperties.saveLastPlayPosition) {
-								AudioPlayer_NvsRfidWriteWrapper(playRfidTag, *(gPlayProperties.playlist + currentTrackNumber), 0, playMode, currentTrackNumber, numberOfTracks);
-							}
-							audio->stopSong();
-							Led_Indicate(LedIndicatorType::Rewind);
-							audioReturnCode = audio->connecttoFS(gFSystem, *(gPlayProperties.playlist + currentTrackNumber));
-							// consider track as finished, when audio lib call was not successful
-							if (!audioReturnCode) {
-								System_IndicateError();
-								gPlayProperties.trackFinished = true;
-								continue;
-							}
-							Log_Println(trackStart, LOGLEVEL_INFO);
-							continue;
-						}
+						System_IndicateError();
+						continue;
 					}
-					break;
+				} break;
+
 				case FIRSTTRACK:
 					trackCommand = NO_ACTION;
 					if (pausePlay) {
@@ -676,7 +689,7 @@ void AudioPlayer_Task(void *parameter) {
 
 			if (currentTrackNumber >= numberOfTracks) { // Check if last element of playlist is already reached
 				Log_Println(endOfPlaylistReached, LOGLEVEL_NOTICE);
-				if (!gPlayProperties.repeatPlaylist) {
+				if (!(repeatMode.load() & RepeatMode::Playlist)) {
 					if (gPlayProperties.saveLastPlayPosition) {
 						// Set back to first track
 						AudioPlayer_NvsRfidWriteWrapper(playRfidTag, *(gPlayProperties.playlist + 0), 0, playMode, 0, numberOfTracks);
@@ -889,16 +902,12 @@ void AudioPlayer_Task(void *parameter) {
 }
 
 // Returns current repeat-mode (mix of repeat current track and current playlist)
-uint8_t AudioPlayer_GetRepeatMode(void) {
-	if (gPlayProperties.repeatPlaylist && gPlayProperties.repeatCurrentTrack) {
-		return TRACK_N_PLAYLIST;
-	} else if (gPlayProperties.repeatPlaylist && !gPlayProperties.repeatCurrentTrack) {
-		return PLAYLIST;
-	} else if (!gPlayProperties.repeatPlaylist && gPlayProperties.repeatCurrentTrack) {
-		return TRACK;
-	} else {
-		return NO_REPEAT;
-	}
+const RepeatFlags &AudioPlayer_GetRepeatMode() {
+	return repeatMode;
+}
+
+void AudioPlayer_SetRepeatMode(RepeatFlags mode) {
+	repeatMode = mode;
 }
 
 // Adds new volume-entry to volume-queue
@@ -1010,8 +1019,7 @@ void AudioPlayer_TrackQueueDispatcher(const char *_itemToPlay, const uint32_t _l
 	playMode = _playMode;
 	numberOfTracks = strtoul(*(musicFiles - 1), NULL, 10);
 	// Set some default-values
-	gPlayProperties.repeatCurrentTrack = false;
-	gPlayProperties.repeatPlaylist = false;
+	repeatMode.store(RepeatFlags {});
 	gPlayProperties.sleepAfterCurrentTrack = false;
 	gPlayProperties.sleepAfterPlaylist = false;
 	gPlayProperties.saveLastPlayPosition = false;
@@ -1030,8 +1038,7 @@ void AudioPlayer_TrackQueueDispatcher(const char *_itemToPlay, const uint32_t _l
 		}
 
 		case SINGLE_TRACK_LOOP: {
-			gPlayProperties.repeatCurrentTrack = true;
-			gPlayProperties.repeatPlaylist = true;
+			repeatMode.store(RepeatMode::Track);
 			Log_Println(modeSingleTrackLoop, LOGLEVEL_NOTICE);
 			xQueueSend(gTrackQueue, &(musicFiles), 0);
 			break;
@@ -1057,7 +1064,7 @@ void AudioPlayer_TrackQueueDispatcher(const char *_itemToPlay, const uint32_t _l
 		}
 
 		case AUDIOBOOK_LOOP: { // Tracks need to be alph. sorted!
-			gPlayProperties.repeatPlaylist = true;
+			repeatMode.store(RepeatMode::Playlist);
 			gPlayProperties.saveLastPlayPosition = true;
 			Log_Println(modeSingleAudiobookLoop, LOGLEVEL_NOTICE);
 			AudioPlayer_SortPlaylist(musicFiles, numberOfTracks);
@@ -1082,7 +1089,7 @@ void AudioPlayer_TrackQueueDispatcher(const char *_itemToPlay, const uint32_t _l
 		}
 
 		case ALL_TRACKS_OF_DIR_SORTED_LOOP: {
-			gPlayProperties.repeatPlaylist = true;
+			repeatMode.store(RepeatMode::Playlist);
 			Log_Println(modeAllTrackAlphSortedLoop, LOGLEVEL_NOTICE);
 			AudioPlayer_SortPlaylist(musicFiles, numberOfTracks);
 			xQueueSend(gTrackQueue, &(musicFiles), 0);
@@ -1090,7 +1097,7 @@ void AudioPlayer_TrackQueueDispatcher(const char *_itemToPlay, const uint32_t _l
 		}
 
 		case ALL_TRACKS_OF_DIR_RANDOM_LOOP: {
-			gPlayProperties.repeatPlaylist = true;
+			repeatMode.store(RepeatMode::Playlist);
 			Log_Println(modeAllTrackRandomLoop, LOGLEVEL_NOTICE);
 			AudioPlayer_RandomizePlaylist(musicFiles, numberOfTracks);
 			xQueueSend(gTrackQueue, &(musicFiles), 0);
@@ -1350,3 +1357,6 @@ void AudioPlayer_SeekAbsolue(float percent) {
 	action.position = std::clamp<float>(percent, 0, 100);
 	seekMode.store(action);
 }
+
+void AudioPlayer_SleepAfterTrack(uint16_t trackNumber);
+void AudioPlayer_DisableSleep();

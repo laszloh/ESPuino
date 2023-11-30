@@ -1,5 +1,7 @@
 #pragma once
 
+#include "bitmask.hpp"
+
 // Operation Mode
 #define OPMODE_NORMAL			0 // Normal mode
 #define OPMODE_BLUETOOTH_SINK	1 // Bluetooth sink mode. Player acts as as bluetooth speaker. WiFi is deactivated. Music from SD and webstreams can't be played.
@@ -69,10 +71,13 @@
 #define CMD_RESTARTSYSTEM  183 // Command: restart System
 
 // Repeat-Modes
-#define NO_REPEAT		 0 // No repeat
-#define TRACK			 1 // Repeat current track (infinite loop)
-#define PLAYLIST		 2 // Repeat whole playlist (infinite loop)
-#define TRACK_N_PLAYLIST 3 // Repeat both (infinite loop)
+enum RepeatMode {
+	Track = (1 << 0), // Repeat current track (infinite loop)
+	Playlist = (1 << 1), // Repeat whole playlist (infinite loop)
+
+	_bitmask_max_element = Playlist
+};
+BITMASK_DEFINE(RepeatMode);
 
 // Seek-modes
 enum class AudioSeekMode {

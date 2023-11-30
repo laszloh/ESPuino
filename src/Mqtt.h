@@ -4,6 +4,9 @@
 	#define MQTT_SOCKET_TIMEOUT 1 // https://github.com/knolleary/pubsubclient/issues/403
 	#include <PubSubClient.h>
 #endif
+
+#include "AudioPlayer.h"
+
 // MQTT-configuration
 // Please note: all lengths will be published n-1 as maxlength to GUI
 constexpr uint8_t mqttClientIdLength = 16u;
@@ -25,3 +28,4 @@ bool publishMqtt(const char *topic, const String &payload, bool retained);
 bool publishMqtt(const char *topic, int32_t payload, bool retained);
 bool publishMqtt(const char *topic, unsigned long payload, bool retained);
 bool publishMqtt(const char *topic, uint32_t payload, bool retained);
+bool publishMqtt(const char *topic, const RepeatFlags &payload, bool retained);

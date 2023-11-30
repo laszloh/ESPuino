@@ -2,10 +2,10 @@
 
 typedef struct { // Bit field
 	char **playlist; // playlist
-	bool sleepAfterCurrentTrack : 1; // If uC should go to sleep after current track
-	bool sleepAfterPlaylist		: 1; // If uC should go to sleep after whole playlist
-	bool sleepAfter5Tracks		: 1; // If uC should go to sleep after 5 tracks
-	bool saveLastPlayPosition	: 1; // If playposition/current track should be saved (for AUDIOBOOK)
+	bool sleepAfterCurrentTrack	 : 1; // If uC should go to sleep after current track
+	bool sleepAfterPlaylist		 : 1; // If uC should go to sleep after whole playlist
+	bool sleepAfter5Tracks		 : 1; // If uC should go to sleep after 5 tracks
+	bool saveLastPlayPosition	 : 1; // If playposition/current track should be saved (for AUDIOBOOK)
 	bool trackFinished			 : 1; // If current track is finished
 	bool playlistFinished		 : 1; // If whole playlist is finished
 	uint8_t playUntilTrackNumber : 6; // Number of tracks to play after which uC goes to sleep
@@ -47,7 +47,7 @@ void AudioPlayer_Exit(void);
 void AudioPlayer_Cyclic(void);
 
 using RepeatFlags = bitmask::bitmask<RepeatMode>;
-RepeatFlags AudioPlayer_GetRepeatMode();
+const RepeatFlags &AudioPlayer_GetRepeatMode();
 void AudioPlayer_SetRepeatMode(RepeatFlags mode);
 
 void AudioPlayer_VolumeToQueueSender(const int32_t _newVolume, bool reAdjustRotary);

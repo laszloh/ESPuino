@@ -191,7 +191,7 @@ void Cmd_Action(const uint16_t mod) {
 				Log_Println(msg, LOGLEVEL_NOTICE);
 				AudioPlayer_SetRepeatMode(repeat ^ RepeatMode::Playlist);
 #ifdef MQTT_ENABLE
-				publishMqtt(topicRepeatModeState, AudioPlayer_GetRepeatMode(), false);
+				publishMqtt(topicRepeatModeState, repeat, false);
 #endif
 				System_IndicateOk();
 			}
@@ -208,7 +208,7 @@ void Cmd_Action(const uint16_t mod) {
 				Log_Println(msg, LOGLEVEL_NOTICE);
 				AudioPlayer_SetRepeatMode(repeat ^ RepeatMode::Track);
 #ifdef MQTT_ENABLE
-				publishMqtt(topicRepeatModeState, AudioPlayer_GetRepeatMode(), false);
+				publishMqtt(topicRepeatModeState, repeat, false);
 #endif
 				System_IndicateOk();
 			}
