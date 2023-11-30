@@ -49,6 +49,7 @@ static std::atomic_uint16_t currentTrackNumber; // Current tracknumber
 static std::atomic_uint16_t numberOfTracks; // Number of tracks in playlist
 static std::atomic<float> currentRelPos; // Current relative playPosition (in %)
 static std::atomic<RepeatFlags> repeatMode; // If current track or playlist should be looped
+static std::atomic_uint16_t sleepAfterTrack; // The track after which we should go to sleep
 
 static std::atomic<SeekAction> seekMode; // If seekmode is active and if yes: forward, backwards or absolute?
 
@@ -467,7 +468,7 @@ void AudioPlayer_Task(void *parameter) {
 						AudioPlayer_NvsRfidWriteWrapper(playRfidTag, *(gPlayProperties.playlist + currentTrackNumber), 0, playMode, currentTrackNumber + 1, numberOfTracks);
 					}
 				}
-				if (gPlayProperties.sleepAfterCurrentTrack) { // Go to sleep if "sleep after track" was requested
+				if (sleepAfterTrack == currentTrackNumber) { // Go to sleep since we reached the selected track
 					gPlayProperties.playlistFinished = true;
 					playMode = NO_PLAYLIST;
 					System_RequestSleep();
@@ -677,7 +678,7 @@ void AudioPlayer_Task(void *parameter) {
 					continue;
 			}
 
-			if (gPlayProperties.playUntilTrackNumber == currentTrackNumber && gPlayProperties.playUntilTrackNumber > 0) {
+			if (sleepAfterTrack == currentTrackNumber) {
 				if (gPlayProperties.saveLastPlayPosition) {
 					AudioPlayer_NvsRfidWriteWrapper(playRfidTag, *(gPlayProperties.playlist + currentTrackNumber), 0, playMode, 0, numberOfTracks);
 				}
@@ -703,17 +704,9 @@ void AudioPlayer_Task(void *parameter) {
 #endif
 					currentTrackNumber = 0;
 					numberOfTracks = 0;
-					if (gPlayProperties.sleepAfterPlaylist) {
-						System_RequestSleep();
-					}
 					continue;
-				} else { // Check if sleep after current track/playlist was requested
-					if (gPlayProperties.sleepAfterPlaylist || gPlayProperties.sleepAfterCurrentTrack) {
-						gPlayProperties.playlistFinished = true;
-						playMode = NO_PLAYLIST;
-						System_RequestSleep();
-						continue;
-					} // Repeat playlist; set current track number back to 0
+				} else {
+					// Repeat playlist; set current track number back to 0
 					Log_Println(repeatPlaylistDueToPlaymode, LOGLEVEL_NOTICE);
 					currentTrackNumber = 0;
 					if (gPlayProperties.saveLastPlayPosition) {
@@ -1020,10 +1013,8 @@ void AudioPlayer_TrackQueueDispatcher(const char *_itemToPlay, const uint32_t _l
 	numberOfTracks = strtoul(*(musicFiles - 1), NULL, 10);
 	// Set some default-values
 	repeatMode.store(RepeatFlags {});
-	gPlayProperties.sleepAfterCurrentTrack = false;
-	gPlayProperties.sleepAfterPlaylist = false;
+	AudioPlayer_DisableSleep();
 	gPlayProperties.saveLastPlayPosition = false;
-	gPlayProperties.playUntilTrackNumber = 0;
 
 #ifdef PLAY_LAST_RFID_AFTER_REBOOT
 	// Store last RFID-tag to NVS
@@ -1045,8 +1036,7 @@ void AudioPlayer_TrackQueueDispatcher(const char *_itemToPlay, const uint32_t _l
 		}
 
 		case SINGLE_TRACK_OF_DIR_RANDOM: {
-			gPlayProperties.sleepAfterCurrentTrack = true;
-			gPlayProperties.playUntilTrackNumber = 0;
+			sleepAfterTrack = 1; // go to sleep after the first track
 			numberOfTracks = 1; // Limit number to 1 even there are more entries in the playlist
 			Led_ResetToNightBrightness();
 			Log_Println(modeSingleTrackRandom, LOGLEVEL_NOTICE);
@@ -1358,5 +1348,17 @@ void AudioPlayer_SeekAbsolue(float percent) {
 	seekMode.store(action);
 }
 
-void AudioPlayer_SleepAfterTrack(uint16_t trackNumber);
-void AudioPlayer_DisableSleep();
+void AudioPlayer_SleepAfterTrack(uint16_t trackNumber) {
+	if (trackNumber < numberOfTracks) {
+		sleepAfterTrack = trackNumber;
+	}
+}
+
+void AudioPlayer_DisableSleep() {
+	// just set the sleepAfterTrack to a really, really big value
+	sleepAfterTrack = UINT16_MAX;
+}
+
+bool AudioPlayer_IsSleepAftertTrack() {
+	return sleepAfterTrack < numberOfTracks;
+}

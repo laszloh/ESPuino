@@ -2,13 +2,9 @@
 
 typedef struct { // Bit field
 	char **playlist; // playlist
-	bool sleepAfterCurrentTrack	 : 1; // If uC should go to sleep after current track
-	bool sleepAfterPlaylist		 : 1; // If uC should go to sleep after whole playlist
-	bool sleepAfter5Tracks		 : 1; // If uC should go to sleep after 5 tracks
-	bool saveLastPlayPosition	 : 1; // If playposition/current track should be saved (for AUDIOBOOK)
+	bool saveLastPlayPosition	: 1; // If playposition/current track should be saved (for AUDIOBOOK)
 	bool trackFinished			 : 1; // If current track is finished
 	bool playlistFinished		 : 1; // If whole playlist is finished
-	uint8_t playUntilTrackNumber : 6; // Number of tracks to play after which uC goes to sleep
 	bool currentSpeechActive	 : 1; // If speech-play is active
 	bool lastSpeechActive		 : 1; // If speech-play was active
 	size_t coverFilePos; // current cover file position
@@ -16,6 +12,10 @@ typedef struct { // Bit field
 } playProps;
 
 extern playProps gPlayProperties;
+
+void AudioPlayer_SleepAfterTrack(uint16_t trackNumber);
+bool AudioPlayer_IsSleepAftertTrack();
+void AudioPlayer_DisableSleep();
 
 bool AudioPlayer_GetPausePlay();
 void AudioPlayer_SetPausePlay(bool pause);
