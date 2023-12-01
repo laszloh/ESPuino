@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Playlist.h"
+
 typedef struct { // Bit field
 	uint8_t playMode : 4; // playMode
 	char **playlist; // playlist
