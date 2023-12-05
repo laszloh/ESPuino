@@ -15,7 +15,7 @@ public:
 	~PsramAllocator() = default;
 
 	template <typename U>
-	constexpr PsramAllocator(const PsramAllocator<U> const &) noexcept { }
+	constexpr PsramAllocator(const PsramAllocator<U> &) noexcept { }
 
 	// memory allocation
 	[[nodiscard]] T *allocate(std::size_t cnt) {
