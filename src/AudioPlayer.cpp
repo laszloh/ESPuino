@@ -47,7 +47,7 @@ uint32_t AudioPlayer_FileDuration;
 
 // playlist
 static std::unique_ptr<Playlist> newPlaylist; // if != nullptr there is a new playlist
-std::mutex newPlaylistSync; // the mutex to secure access to newPlaylist
+std::mutex playlistSync; // the mutex to secure access to newPlaylist
 static std::unique_ptr<Playlist> playlist; // the current playlist
 
 // Playtime stats
@@ -65,7 +65,7 @@ static void AudioPlayer_HeadphoneVolumeManager(void);
 static std::optional<std::unique_ptr<Playlist>> AudioPlayer_ReturnPlaylistFromWebstream(const char *_webUrl);
 static void AudioPlayer_SortPlaylist(Playlist &playlist);
 static void AudioPlayer_RandomizePlaylist(Playlist &playlist);
-static size_t AudioPlayer_NvsRfidWriteWrapper(const char *_rfidCardId, const char *_track, const uint32_t _playPosition, const uint8_t _playMode, const uint16_t _trackLastPlayed, const uint16_t _numberOfTracks);
+static size_t AudioPlayer_NvsRfidWriteWrapper(const char *_rfidCardId, const pstring &_track, const uint32_t _playPosition, const uint8_t _playMode, const uint16_t _trackLastPlayed, const uint16_t _numberOfTracks);
 static void AudioPlayer_ClearCover(void);
 
 void AudioPlayer_Init(void) {
@@ -414,7 +414,7 @@ void AudioPlayer_Task(void *parameter) {
 
 				// get the new playlist and do not block the mutex for longer than necessary
 				{
-					std::lock_guard guard(newPlaylistSync);
+					std::lock_guard guard(playlistSync);
 					playlist = std::move(newPlaylist);
 				}
 				Log_Printf(LOGLEVEL_NOTICE, newPlaylistReceived, playlist->size());
@@ -1076,7 +1076,7 @@ void AudioPlayer_TrackQueueDispatcher(const char *_itemToPlay, const uint32_t _l
 	}
 
 	if (!error) {
-		std::lock_guard guard(newPlaylistSync);
+		std::lock_guard guard(playlistSync);
 		newPlaylist = std::move(musicFiles.value());
 		return;
 	}
@@ -1247,4 +1247,22 @@ void audio_eof_speech(const char *info) {
 // process audio sample extern (for bluetooth source)
 void audio_process_i2s(uint32_t *sample, bool *continueI2S) {
 	*continueI2S = !Bluetooth_Source_SendAudioData(sample);
+}
+
+uint16_t AudioPlayer_GetTrackCount() {
+	std::lock_guard guard(playlistSync);
+	return (playlist) ? playlist->size() : 0;
+}
+
+const pstring AudioPlayer_GetTrack(uint16_t track) {
+	std::lock_guard guard(playlistSync);
+	if (playlist && playlist->size() < track) {
+		return playlist->at(track);
+	}
+	return pstring();
+}
+
+const pstring AudioPlayer_GetCurrentTrack() {
+	std::lock_guard guard(playlistSync);
+	return AudioPlayer_GetTrack(gPlayProperties.currentTrackNumber);
 }

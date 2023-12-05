@@ -58,3 +58,7 @@ time_t AudioPlayer_GetPlayTimeSinceStart(void);
 time_t AudioPlayer_GetPlayTimeAllTime(void);
 uint32_t AudioPlayer_GetCurrentTime(void);
 uint32_t AudioPlayer_GetFileDuration(void);
+
+uint16_t AudioPlayer_GetTrackCount();
+const pstring AudioPlayer_GetTrack(uint16_t track);
+const pstring AudioPlayer_GetCurrentTrack();
