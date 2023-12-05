@@ -247,24 +247,10 @@ const String SdCard_pickRandomSubdirectory(const char *_directory) {
 	return String();
 }
 
-static bool SdCard_allocAndSave(Playlist *playlist, const String &s) {
-	const size_t len = s.length() + 1;
-	char *entry = static_cast<char *>(x_malloc(len));
-	if (!entry) {
-		// OOM, free playlist and return
-		Log_Println(unableToAllocateMemForLinearPlaylist, LOGLEVEL_ERROR);
-		freePlaylist(playlist);
-		return false;
-	}
-	s.toCharArray(entry, len);
-	playlist->push_back(entry);
-	return true;
-};
-
-static std::optional<Playlist *> SdCard_ParseM3UPlaylist(File f, bool forceExtended = false) {
+static std::optional<std::unique_ptr<Playlist>> SdCard_ParseM3UPlaylist(File f, bool forceExtended = false) {
 	const String line = f.readStringUntil('\n');
 	const bool extended = line.startsWith("#EXTM3U") || forceExtended;
-	Playlist *playlist = new Playlist();
+	std::unique_ptr<Playlist> playlist = std::make_unique<Playlist>();
 
 	// reserve a sane amount of memory to reduce heap fragmentation
 	playlist->reserve(64);
@@ -278,9 +264,7 @@ static std::optional<Playlist *> SdCard_ParseM3UPlaylist(File f, bool forceExten
 				// this something we have to save
 				line.trim();
 				// save string
-				if (!SdCard_allocAndSave(playlist, line)) {
-					return std::nullopt;
-				}
+				playlist->push_back(line.c_str());
 			}
 		}
 		// resize std::vector memory to fit our count
@@ -293,9 +277,7 @@ static std::optional<Playlist *> SdCard_ParseM3UPlaylist(File f, bool forceExten
 	while (f.available()) {
 		String line = f.readStringUntil('\n');
 		// save string
-		if (!SdCard_allocAndSave(playlist, line)) {
-			return std::nullopt;
-		}
+		playlist->push_back(line.c_str());
 	}
 	// resize memory to fit our count
 	playlist->shrink_to_fit();
@@ -304,7 +286,7 @@ static std::optional<Playlist *> SdCard_ParseM3UPlaylist(File f, bool forceExten
 
 /* Puts SD-file(s) or directory into a playlist
 	First element of array always contains the number of payload-items. */
-std::optional<Playlist *> SdCard_ReturnPlaylist(const char *fileName, const uint32_t _playMode) {
+std::optional<std::unique_ptr<Playlist>> SdCard_ReturnPlaylist(const char *fileName, const uint32_t _playMode) {
 	// Look if file/folder requested really exists. If not => break.
 	File fileOrDirectory = gFSystem.open(fileName);
 	if (!fileOrDirectory) {
@@ -324,14 +306,11 @@ std::optional<Playlist *> SdCard_ReturnPlaylist(const char *fileName, const uint
 
 	// if we reach here, this was not a m3u
 	Log_Println(playlistGen, LOGLEVEL_NOTICE);
-	Playlist *playlist = new Playlist;
+	auto playlist = std::make_unique<Playlist>();
 
 	// File-mode
 	if (!fileOrDirectory.isDirectory()) {
-		if (!SdCard_allocAndSave(playlist, fileOrDirectory.path())) {
-			// OOM, function already took care of house cleaning
-			return std::nullopt;
-		}
+		playlist->push_back(fileOrDirectory.path());
 		return playlist;
 	}
 
@@ -349,10 +328,7 @@ std::optional<Playlist *> SdCard_ReturnPlaylist(const char *fileName, const uint
 		// Don't support filenames that start with "." and only allow .mp3 and other supported audio file formats
 		if (fileValid(name.c_str())) {
 			// save it to the vector
-			if (!SdCard_allocAndSave(playlist, name)) {
-				// OOM, function already took care of house cleaning
-				return std::nullopt;
-			}
+			playlist->push_back(name.c_str());
 		}
 	}
 	playlist->shrink_to_fit();
