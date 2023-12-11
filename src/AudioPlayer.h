@@ -1,13 +1,14 @@
 #pragma once
 
+#include "Playlist.h"
+#include "Message.h"
+
 typedef struct { // Bit field
 	uint8_t playMode : 4; // playMode
-	char **playlist; // playlist
 	char title[255]; // current title
 	bool repeatCurrentTrack		: 1; // If current track should be looped
 	bool repeatPlaylist			: 1; // If whole playlist should be looped
 	uint16_t currentTrackNumber : 9; // Current tracknumber
-	uint16_t numberOfTracks		: 9; // Number of tracks in playlist
 	unsigned long startAtFilePos; // Offset to start play (in bytes)
 	double currentRelPos; // Current relative playPosition (in %)
 	bool sleepAfterCurrentTrack : 1; // If uC should go to sleep after current track
@@ -58,3 +59,9 @@ time_t AudioPlayer_GetPlayTimeSinceStart(void);
 time_t AudioPlayer_GetPlayTimeAllTime(void);
 uint32_t AudioPlayer_GetCurrentTime(void);
 uint32_t AudioPlayer_GetFileDuration(void);
+
+void AudioPlayer_SignalMessage(Msg &&msg);
+
+uint16_t AudioPlayer_GetTrackCount();
+const pstring AudioPlayer_GetTrack(uint16_t track);
+const pstring AudioPlayer_GetCurrentTrack();

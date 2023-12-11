@@ -1005,7 +1005,7 @@ void Web_SendWebsocketData(uint32_t client, uint8_t code) {
 		JsonObject entry = object.createNestedObject("trackinfo");
 		entry["pausePlay"] = gPlayProperties.pausePlay;
 		entry["currentTrackNumber"] = gPlayProperties.currentTrackNumber + 1;
-		entry["numberOfTracks"] = gPlayProperties.numberOfTracks;
+		entry["numberOfTracks"] = AudioPlayer_GetTrackCount();
 		entry["volume"] = AudioPlayer_GetCurrentVolume();
 		entry["name"] = gPlayProperties.title;
 		entry["posPercent"] = gPlayProperties.currentRelPos;
@@ -1906,7 +1906,7 @@ static void handleCoverImageRequest(AsyncWebServerRequest *request) {
 		}
 		return;
 	}
-	char *coverFileName = *(gPlayProperties.playlist + gPlayProperties.currentTrackNumber);
+	const char *coverFileName = AudioPlayer_GetCurrentTrack().c_str();
 	Log_Println(coverFileName, LOGLEVEL_DEBUG);
 
 	File coverFile = gFSystem.open(coverFileName, FILE_READ);
