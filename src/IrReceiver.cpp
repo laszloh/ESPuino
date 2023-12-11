@@ -6,6 +6,7 @@
 #include "AudioPlayer.h"
 #include "Cmd.h"
 #include "Log.h"
+#include "Message.h"
 #include "Queues.h"
 #include "System.h"
 
@@ -93,7 +94,7 @@ void IrReceiver_Cyclic() {
 					}
 
 					uint8_t currentVolume = AudioPlayer_GetCurrentVolume();
-					xQueueSend(gVolumeQueue, &currentVolume, 0);
+					Message_Send(AudioMsg(AudioMsg::VolumeCommand, currentVolume));
 					Log_Println("RC: Mute", LOGLEVEL_NOTICE);
 				}
 				break;

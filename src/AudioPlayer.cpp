@@ -366,8 +366,6 @@ void AudioPlayer_Task(void *parameter) {
 		audio->setTone(3, 0, 0);
 	}
 
-	uint8_t currentVolume;
-	static BaseType_t trackQStatus;
 	static uint8_t trackCommand = NO_ACTION;
 	bool audioReturnCode;
 	AudioPlayer_CurrentTime = 0;
@@ -415,16 +413,16 @@ void AudioPlayer_Task(void *parameter) {
 					Log_Printf(LOGLEVEL_INFO, newCntrlReceivedQueue, trackCommand);
 					break;
 
-				case AudioMsg::VolumeCommand:
+				case AudioMsg::VolumeCommand: {
 					// the new volume is sitting in the data
-					currentVolume = audioMsg.data();
+					uint8_t currentVolume = audioMsg.data();
 					Log_Printf(LOGLEVEL_INFO, newLoudnessReceivedQueue, currentVolume);
 					audio->setVolume(currentVolume, VOLUMECURVE);
 					Web_SendWebsocketData(0, 50);
 #ifdef MQTT_ENABLE
 					publishMqtt(topicLoudnessState, currentVolume, false);
 #endif
-					break;
+				} break;
 
 				case AudioMsg::PlaylistCommand: {
 					auto &playlistMsg = (AudioDataMsg<std::unique_ptr<Playlist>> &) *msg;
@@ -922,7 +920,7 @@ void AudioPlayer_VolumeToQueueSender(const int32_t _newVolume, bool reAdjustRota
 		if (reAdjustRotary) {
 			RotaryEncoder_Readjust();
 		}
-		xQueueSend(gVolumeQueue, &_volume, 0);
+		Message_Send(AudioMsg(AudioMsg::VolumeCommand, _volume));
 		AudioPlayer_PauseOnMinVolume(_volumeBuf, _newVolume);
 	}
 }
@@ -1165,7 +1163,7 @@ std::optional<std::unique_ptr<Playlist>> AudioPlayer_ReturnPlaylistFromWebstream
 
 // Adds new control-command to control-queue
 void AudioPlayer_TrackControlToQueueSender(const uint8_t trackCommand) {
-	xQueueSend(gTrackControlQueue, &trackCommand, 0);
+	Message_Send(AudioMsg(AudioMsg::TrackCommand, trackCommand));
 }
 
 // Knuth-Fisher-Yates-algorithm to randomize playlist
