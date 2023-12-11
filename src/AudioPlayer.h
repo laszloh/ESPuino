@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Playlist.h"
+#include "Message.h"
 
 typedef struct { // Bit field
 	uint8_t playMode : 4; // playMode
@@ -58,6 +59,8 @@ time_t AudioPlayer_GetPlayTimeSinceStart(void);
 time_t AudioPlayer_GetPlayTimeAllTime(void);
 uint32_t AudioPlayer_GetCurrentTime(void);
 uint32_t AudioPlayer_GetFileDuration(void);
+
+void AudioPlayer_SignalMessage(Msg &&msg);
 
 uint16_t AudioPlayer_GetTrackCount();
 const pstring AudioPlayer_GetTrack(uint16_t track);

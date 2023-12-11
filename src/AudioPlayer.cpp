@@ -10,6 +10,7 @@
 #include "Led.h"
 #include "Log.h"
 #include "MemX.h"
+#include "Message.h"
 #include "Mqtt.h"
 #include "Port.h"
 #include "Queues.h"
@@ -49,6 +50,10 @@ uint32_t AudioPlayer_FileDuration;
 static std::unique_ptr<Playlist> newPlaylist; // if != nullptr there is a new playlist
 std::mutex playlistSync; // the mutex to secure access to newPlaylist
 static std::unique_ptr<Playlist> playlist; // the current playlist
+
+static std::unique_ptr<Msg> newMsg;
+static std::mutex msgGuard;
+static SemaphoreHandle_t msgReceived = xSemaphoreCreateBinary();
 
 // Playtime stats
 time_t playTimeSecTotal = 0;
@@ -1076,8 +1081,7 @@ void AudioPlayer_TrackQueueDispatcher(const char *_itemToPlay, const uint32_t _l
 	}
 
 	if (!error) {
-		std::lock_guard guard(playlistSync);
-		newPlaylist = std::move(musicFiles.value());
+		Message_Send(AudioDataMsg<std::unique_ptr<Playlist>>(AudioMsg::PlaylistCommand, std::move(musicFiles.value())));
 		return;
 	}
 
@@ -1250,12 +1254,10 @@ void audio_process_i2s(uint32_t *sample, bool *continueI2S) {
 }
 
 uint16_t AudioPlayer_GetTrackCount() {
-	std::lock_guard guard(playlistSync);
 	return (playlist) ? playlist->size() : 0;
 }
 
 const pstring AudioPlayer_GetTrack(uint16_t track) {
-	std::lock_guard guard(playlistSync);
 	if (playlist && playlist->size() < track) {
 		return playlist->at(track);
 	}
@@ -1263,6 +1265,13 @@ const pstring AudioPlayer_GetTrack(uint16_t track) {
 }
 
 const pstring AudioPlayer_GetCurrentTrack() {
-	std::lock_guard guard(playlistSync);
 	return AudioPlayer_GetTrack(gPlayProperties.currentTrackNumber);
+}
+
+void AudioPlayer_SignalMessage(Msg &&msg) {
+	{ // Don't remove because of the lifetime of the mutex
+		std::lock_guard<std::mutex> lock(msgGuard);
+		newMsg = msg.move();
+	}
+	xSemaphoreGive(msgReceived);
 }
