@@ -38,7 +38,8 @@ public:
 	enum Event {
 		TrackCommand,
 		VolumeCommand,
-		PlaylistCommand
+		PlaylistCommand,
+		TTSCommand
 	};
 
 	AudioMsg(Event event, uint32_t data = 0)
