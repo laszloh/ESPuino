@@ -397,6 +397,61 @@ void AudioPlayer_Task(void *parameter) {
 			}
 		}
 
+		// check for new messages
+		auto timeout = (gPlayProperties.playMode == NO_PLAYLIST) ? portMAX_DELAY : pdMS_TO_TICKS(1); // if we are idle, we sleep forever
+		auto retValue = xSemaphoreTake(msgReceived, timeout);
+		if (retValue) {
+			// we message received
+			std::unique_ptr<Msg> msg;
+			{ // Don't remove because of the lifetime of the mutex
+				std::lock_guard<std::mutex> lock(msgGuard);
+				msg = newMsg->move();
+			}
+			auto &audioMsg = (AudioMsg &) (*msg);
+			switch (audioMsg.event()) {
+				case AudioMsg::TrackCommand:
+					// the command is sitting in the data
+					trackCommand = audioMsg.data();
+					Log_Printf(LOGLEVEL_INFO, newCntrlReceivedQueue, trackCommand);
+					break;
+
+				case AudioMsg::VolumeCommand:
+					// the new volume is sitting in the data
+					currentVolume = audioMsg.data();
+					Log_Printf(LOGLEVEL_INFO, newLoudnessReceivedQueue, currentVolume);
+					audio->setVolume(currentVolume, VOLUMECURVE);
+					Web_SendWebsocketData(0, 50);
+#ifdef MQTT_ENABLE
+					publishMqtt(topicLoudnessState, currentVolume, false);
+#endif
+					break;
+
+				case AudioMsg::PlaylistCommand: {
+					auto &playlistMsg = (AudioDataMsg<std::unique_ptr<Playlist>> &) *msg;
+					audio->stopSong();
+					gPlayProperties.pausePlay = false;
+					playlist = std::move(playlistMsg.playload());
+					Log_Printf(LOGLEVEL_NOTICE, newPlaylistReceived, playlist->size());
+					Log_Printf(LOGLEVEL_DEBUG, "Free heap: %u", ESP.getFreeHeap());
+#ifdef MQTT_ENABLE
+					publishMqtt(topicPlaymodeState, gPlayProperties.playMode, false);
+					publishMqtt(topicRepeatModeState, AudioPlayer_GetRepeatMode(), false);
+#endif
+					// If we're in audiobook-mode and apply a modification-card, we don't
+					// want to save lastPlayPosition for the mod-card but for the card that holds the playlist
+
+					// TODO: check what this should do, since the "if" is always true since af4bda9
+					// if (gCurrentRfidTagId != NULL) {
+					strncpy(gPlayProperties.playRfidTag, gCurrentRfidTagId, sizeof(gPlayProperties.playRfidTag) / sizeof(gPlayProperties.playRfidTag[0]));
+					// }
+				} break;
+
+				default:
+					Log_Printf(LOGLEVEL_ERROR, "Unknown audio event %d", std::to_underlying(audioMsg.event()));
+					break;
+			}
+		}
+
 		if (trackCommand != NO_ACTION) {
 			/* Check if track-control was called
 			   (stop, start, next track, prev. track, last track, first track...) */
