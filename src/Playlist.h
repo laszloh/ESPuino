@@ -63,9 +63,13 @@ public:
 		}
 	}
 
-
 	bool loopTrack {false};
+	
 	bool loopPlaylist {false};
+
+	size_t size() const { return entries.size(); }
+
+	void push_back(const pstring &path) { entries.push_back(path); }
 
 	// disable copying
 	Playlist(const Playlist &) = delete;
