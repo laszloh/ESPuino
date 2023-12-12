@@ -31,4 +31,75 @@ public:
 };
 
 using pstring = std::basic_string<char, std::char_traits<char>, PsramAllocator<char>>;
-using Playlist = std::vector<pstring>;
+
+class Playlist {
+public:
+	Playlist() = default;
+	Playlist(size_t reserve)
+		: entries(std::vector<pstring>(reserve)) { }
+	virtual ~Playlist() = default;
+
+	// override bool operator so we can write if(playlist)
+	explicit operator bool() const { return isValid(); }
+
+	// return true if the playlist is in a valid state (so we have entries and we want to play them)
+	bool isValid() const { return (entries.size() > 0) && (playMode != NO_PLAYLIST) && (currentTrack < entries.size()); }
+
+	// return a playlist entry. Function throws std::out_of_range if index >= size
+	const pstring &getTrackPath(size_t index) const { return entries.at(index); }
+
+	// return the current playlist entry. Function throws std::out_of_range if currentTrack >= size
+	const pstring &getCurrentTrackPath() const { return entries.at(currentTrack); }
+
+	uint16_t getCurrentTrackNumber() const { return currentTrack; }
+	bool setCurrentTrackNumber(size_t track) { return updateCurrentTrack(track); }
+	bool incrementTrackNumber() { return updateCurrentTrack(currentTrack + 1); }
+	bool decrementTrackNumber() { return updateCurrentTrack(currentTrack - 1); }
+
+	uint8_t getPlayMode() const { return playMode; }
+	void setPlayMode(uint8_t playMode) {
+		if (playMode < PLAYMODE_MAX) {
+			this->playMode = playMode;
+		}
+	}
+
+
+	bool loopTrack {false};
+	bool loopPlaylist {false};
+
+	// disable copying
+	Playlist(const Playlist &) = delete;
+	Playlist &operator=(const Playlist &) = delete;
+
+protected:
+	// Enable move operators
+	Playlist(Playlist &&) = default;
+	Playlist &operator=(Playlist &&) = default;
+
+	bool updateCurrentTrack(int32_t nextTrack) {
+		if (loopTrack) {
+			// we are looping a single track, so nothing to do here
+			return true;
+		}
+		// nexttrack is always
+		if (loopPlaylist) {
+			if (nextTrack > entries.size()) {
+				// we overshoot the entries size --> roll over to zero
+				nextTrack %= entries.size();
+			} else if (nextTrack < 0) {
+				// we underhsoot the playlist --> roll over to size()
+				nextTrack = entries.size() - std::abs(nextTrack);
+			}
+		}
+		if (nextTrack >= 0 && nextTrack < entries.size()) {
+			// next track has a valid value (so we did not reach the end of the playlist)
+			currentTrack = nextTrack;
+			return true;
+		}
+		return false;
+	}
+
+	std::vector<pstring> entries {std::vector<pstring>()};
+	uint8_t playMode {NO_PLAYLIST};
+	uint16_t currentTrack {std::numeric_limits<uint16_t>::max()};
+};

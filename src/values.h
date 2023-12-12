@@ -31,6 +31,7 @@
 #define WEBSTREAM												  8 // Play webradio-stream
 #define LOCAL_M3U												  11 // Plays items (webstream or files) with addresses/paths from a local m3u-file
 #define BUSY													  10 // Used if playlist is created
+#define PLAYMODE_MAX                                              RANDOM_SUBDIRECTORY_OF_DIRECTORY_ALL_TRACKS_OF_DIR_RANDOM + 1 // must always be higher then any other playmode
 
 // RFID-modifcation-types
 #define CMD_NOTHING						 0 // Do Nothing
