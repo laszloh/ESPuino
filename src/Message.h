@@ -24,7 +24,7 @@ public:
 	MsgType type() const { return type_; }
 
 protected:
-	// Enbale move operators
+	// Enable move operators
 	Msg(Msg &&) = default;
 	Msg &operator=(Msg &&) = default;
 
@@ -60,7 +60,7 @@ public:
 	uint32_t data() const { return data_; }
 
 protected:
-	// Enbale move operators
+	// Enable move operators
 	AudioMsg(AudioMsg &&) = default;
 	AudioMsg &operator=(AudioMsg &&) = default;
 
@@ -90,7 +90,7 @@ public:
     PayloadType &playload() { return payload_; }
 
 protected:
-	// Enbale move operators
+	// Enable move operators
 	AudioDataMsg(AudioDataMsg &&) = default;
 	AudioDataMsg &operator=(AudioDataMsg &&) = default;
 
