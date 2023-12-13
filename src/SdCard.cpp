@@ -247,13 +247,12 @@ const String SdCard_pickRandomSubdirectory(const char *_directory) {
 	return String();
 }
 
-static std::optional<std::unique_ptr<Playlist>> SdCard_ParseM3UPlaylist(File f, bool forceExtended = false) {
+static std::optional<Playlist> SdCard_ParseM3UPlaylist(File f, bool forceExtended = false) {
 	const String line = f.readStringUntil('\n');
 	const bool extended = line.startsWith("#EXTM3U") || forceExtended;
-	std::unique_ptr<Playlist> playlist = std::make_unique<Playlist>();
+	Playlist playlist(64);
 
 	// reserve a sane amount of memory to reduce heap fragmentation
-	playlist->reserve(64);
 	if (extended) {
 		// extended m3u file format
 		// ignore all lines starting with '#'
@@ -264,11 +263,11 @@ static std::optional<std::unique_ptr<Playlist>> SdCard_ParseM3UPlaylist(File f, 
 				// this something we have to save
 				line.trim();
 				// save string
-				playlist->push_back(line.c_str());
+				playlist.entries.push_back(line.c_str());
 			}
 		}
 		// resize std::vector memory to fit our count
-		playlist->shrink_to_fit();
+		playlist.entries.shrink_to_fit();
 		return playlist;
 	}
 
@@ -277,16 +276,16 @@ static std::optional<std::unique_ptr<Playlist>> SdCard_ParseM3UPlaylist(File f, 
 	while (f.available()) {
 		String line = f.readStringUntil('\n');
 		// save string
-		playlist->push_back(line.c_str());
+		playlist.entries.push_back(line.c_str());
 	}
 	// resize memory to fit our count
-	playlist->shrink_to_fit();
+	playlist.entries.shrink_to_fit();
 	return playlist;
 }
 
 /* Puts SD-file(s) or directory into a playlist
 	First element of array always contains the number of payload-items. */
-std::optional<std::unique_ptr<Playlist>> SdCard_ReturnPlaylist(const char *fileName, const uint32_t _playMode) {
+std::optional<Playlist> SdCard_ReturnPlaylist(const char *fileName, const uint32_t _playMode) {
 	// Look if file/folder requested really exists. If not => break.
 	File fileOrDirectory = gFSystem.open(fileName);
 	if (!fileOrDirectory) {
@@ -306,16 +305,16 @@ std::optional<std::unique_ptr<Playlist>> SdCard_ReturnPlaylist(const char *fileN
 
 	// if we reach here, this was not a m3u
 	Log_Println(playlistGen, LOGLEVEL_NOTICE);
-	auto playlist = std::make_unique<Playlist>();
+	Playlist playlist;
 
 	// File-mode
 	if (!fileOrDirectory.isDirectory()) {
-		playlist->push_back(fileOrDirectory.path());
+		playlist.entries.push_back(fileOrDirectory.path());
 		return playlist;
 	}
 
 	// Directory-mode (linear-playlist)
-	playlist->reserve(64); // reserve a sane amount of memory to reduce the number of reallocs
+	playlist.entries.reserve(64); // reserve a sane amount of memory to reduce the number of reallocs
 	while (true) {
 		bool isDir;
 		const String name = fileOrDirectory.getNextFileName(&isDir);
@@ -328,11 +327,11 @@ std::optional<std::unique_ptr<Playlist>> SdCard_ReturnPlaylist(const char *fileN
 		// Don't support filenames that start with "." and only allow .mp3 and other supported audio file formats
 		if (fileValid(name.c_str())) {
 			// save it to the vector
-			playlist->push_back(name.c_str());
+			playlist.entries.push_back(name.c_str());
 		}
 	}
-	playlist->shrink_to_fit();
+	playlist.entries.shrink_to_fit();
 
-	Log_Printf(LOGLEVEL_NOTICE, numberOfValidFiles, playlist->size());
+	Log_Printf(LOGLEVEL_NOTICE, numberOfValidFiles, playlist.entries.size());
 	return playlist;
 }

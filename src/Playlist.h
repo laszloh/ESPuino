@@ -67,11 +67,11 @@ public:
 	Playlist(const Playlist &) = delete;
 	Playlist &operator=(const Playlist &) = delete;
 
-protected:
 	// Enable move operators
 	Playlist(Playlist &&) = default;
 	Playlist &operator=(Playlist &&) = default;
 
+protected:
 	bool updateCurrentTrack(int32_t nextTrack) {
 		if (loopTrack) {
 			// we are looping a single track, so nothing to do here
