@@ -8,7 +8,7 @@ typedef struct { // Bit field
 	char title[255]; // current title
 	bool repeatCurrentTrack		: 1; // If current track should be looped
 	bool repeatPlaylist			: 1; // If whole playlist should be looped
-	uint16_t currentTrackNumber : 9; // Current tracknumber
+	// uint16_t currentTrackNumber : 9; // Current tracknumber
 	unsigned long startAtFilePos; // Offset to start play (in bytes)
 	double currentRelPos; // Current relative playPosition (in %)
 	bool sleepAfterCurrentTrack : 1; // If uC should go to sleep after current track
