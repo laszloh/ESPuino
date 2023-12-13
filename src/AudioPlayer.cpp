@@ -436,8 +436,6 @@ void AudioPlayer_Task(void *parameter) {
 					Log_Printf(LOGLEVEL_DEBUG, "Free heap: %u", ESP.getFreeHeap());
 					playbackTimeoutStart = millis();
 					gPlayProperties.pausePlay = false;
-					gPlayProperties.repeatCurrentTrack = false;
-					gPlayProperties.repeatPlaylist = false;
 					gPlayProperties.sleepAfterCurrentTrack = false;
 					gPlayProperties.sleepAfterPlaylist = false;
 					gPlayProperties.saveLastPlayPosition = false;
@@ -541,8 +539,8 @@ void AudioPlayer_Task(void *parameter) {
 						audio->pauseResume();
 						gPlayProperties.pausePlay = false;
 					}
-					if (gPlayProperties.repeatCurrentTrack) { // End loop if button was pressed
-						gPlayProperties.repeatCurrentTrack = false;
+					if (playlist.loopTrack) { // End loop if button was pressed
+						playlist.loopTrack = false;
 #ifdef MQTT_ENABLE
 						publishMqtt(topicRepeatModeState, AudioPlayer_GetRepeatMode(), false);
 #endif
@@ -573,8 +571,8 @@ void AudioPlayer_Task(void *parameter) {
 						audio->pauseResume();
 						gPlayProperties.pausePlay = false;
 					}
-					if (gPlayProperties.repeatCurrentTrack) { // End loop if button was pressed
-						gPlayProperties.repeatCurrentTrack = false;
+					if (playlist.loopTrack) { // End loop if button was pressed
+						playlist.loopTrack = false;
 #ifdef MQTT_ENABLE
 						publishMqtt(topicRepeatModeState, AudioPlayer_GetRepeatMode(), false);
 #endif
@@ -697,7 +695,7 @@ void AudioPlayer_Task(void *parameter) {
 
 			if (playlist.getCurrentTrackNumber() >= playlist.entries.size()) { // Check if last element of playlist is already reached
 				Log_Println(endOfPlaylistReached, LOGLEVEL_NOTICE);
-				if (!gPlayProperties.repeatPlaylist) {
+				if (!playlist.loopPlaylist) {
 					if (gPlayProperties.saveLastPlayPosition) {
 						// Set back to first track
 						AudioPlayer_NvsRfidWriteWrapper(gPlayProperties.playRfidTag, playlist.getTrackPath(0), 0, gPlayProperties.playMode, 0, playlist.entries.size());
@@ -920,15 +918,10 @@ void AudioPlayer_Task(void *parameter) {
 
 // Returns current repeat-mode (mix of repeat current track and current playlist)
 uint8_t AudioPlayer_GetRepeatMode(void) {
-	if (gPlayProperties.repeatPlaylist && gPlayProperties.repeatCurrentTrack) {
-		return TRACK_N_PLAYLIST;
-	} else if (gPlayProperties.repeatPlaylist && !gPlayProperties.repeatCurrentTrack) {
-		return PLAYLIST;
-	} else if (!gPlayProperties.repeatPlaylist && gPlayProperties.repeatCurrentTrack) {
-		return TRACK;
-	} else {
-		return NO_REPEAT;
-	}
+	uint8_t repeatMode = 0;
+	repeatMode |= (playlist.loopTrack) ? TRACK : 0;
+	repeatMode |= (playlist.loopPlaylist) ? PLAYLIST : 0;
+	return repeatMode;
 }
 
 // Adds new volume-entry to volume-queue
@@ -1043,8 +1036,7 @@ void AudioPlayer_TrackQueueDispatcher(const char *_itemToPlay, const uint32_t _l
 		}
 
 		case SINGLE_TRACK_LOOP: {
-			gPlayProperties.repeatCurrentTrack = true;
-			gPlayProperties.repeatPlaylist = true;
+			playlist.loopTrack = true;
 			Log_Println(modeSingleTrackLoop, LOGLEVEL_NOTICE);
 			break;
 		}
@@ -1068,7 +1060,7 @@ void AudioPlayer_TrackQueueDispatcher(const char *_itemToPlay, const uint32_t _l
 		}
 
 		case AUDIOBOOK_LOOP: { // Tracks need to be alph. sorted!
-			gPlayProperties.repeatPlaylist = true;
+			playlist.loopPlaylist = true;
 			gPlayProperties.saveLastPlayPosition = true;
 			Log_Println(modeSingleAudiobookLoop, LOGLEVEL_NOTICE);
 			AudioPlayer_SortPlaylist(list);
@@ -1090,14 +1082,14 @@ void AudioPlayer_TrackQueueDispatcher(const char *_itemToPlay, const uint32_t _l
 		}
 
 		case ALL_TRACKS_OF_DIR_SORTED_LOOP: {
-			gPlayProperties.repeatPlaylist = true;
+			playlist.loopPlaylist = true;
 			Log_Println(modeAllTrackAlphSortedLoop, LOGLEVEL_NOTICE);
 			AudioPlayer_SortPlaylist(list);
 			break;
 		}
 
 		case ALL_TRACKS_OF_DIR_RANDOM_LOOP: {
-			gPlayProperties.repeatPlaylist = true;
+			playlist.loopPlaylist = true;
 			Log_Println(modeAllTrackRandomLoop, LOGLEVEL_NOTICE);
 			AudioPlayer_RandomizePlaylist(list);
 			break;
@@ -1124,7 +1116,7 @@ void AudioPlayer_TrackQueueDispatcher(const char *_itemToPlay, const uint32_t _l
 
 	if (!error) {
 		gPlayProperties.playMode = _playMode;
-		Message_Send(AudioDataMsg<std::unique_ptr<Playlist>>(AudioMsg::PlaylistCommand, std::move(musicFiles.value())));
+		Message_Send(AudioDataMsg<Playlist>(AudioMsg::PlaylistCommand, std::move(musicFiles.value())));
 		return;
 	}
 
