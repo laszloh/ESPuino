@@ -60,9 +60,8 @@ public:
 
 	bool loopPlaylist {false};
 
-	size_t size() const { return entries.size(); }
-
-	void push_back(const pstring &path) { entries.push_back(path); }
+	// for the time being, make the entries list public
+	std::vector<pstring> entries {std::vector<pstring>()};
 
 	// disable copying
 	Playlist(const Playlist &) = delete;
@@ -96,6 +95,5 @@ protected:
 		return false;
 	}
 
-	std::vector<pstring> entries {std::vector<pstring>()};
 	uint16_t currentTrack {std::numeric_limits<uint16_t>::max()};
 };
