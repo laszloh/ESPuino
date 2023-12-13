@@ -344,6 +344,24 @@ public:
 	}
 };
 
+enum class AudioFsm {
+	Idle,
+	Playlist,
+	TTS
+};
+
+enum class PlaylistFsm {
+	Connect,
+	Play,
+	Pause,
+	trackEnd
+};
+
+enum class TtsFsm {
+	Connect,
+	Active
+};
+
 // Function to play music as task
 void AudioPlayer_Task(void *parameter) {
 #ifdef BOARD_HAS_PSRAM
@@ -356,6 +374,11 @@ void AudioPlayer_Task(void *parameter) {
 #ifdef I2S_COMM_FMT_LSB_ENABLE
 	audio->setI2SCommFMT_LSB(true);
 #endif
+
+	AudioFsm audioFsm = AudioFsm::Idle;
+	PlaylistFsm playlistFsm = PlaylistFsm::Connect;
+	TtsFsm ttsFsm = TtsFsm::Connect;
+	BaseType_t semaphoreTimeout = 0;
 
 	constexpr uint32_t playbackTimeout = 2000;
 	uint32_t playbackTimeoutStart = millis();
@@ -400,8 +423,7 @@ void AudioPlayer_Task(void *parameter) {
 
 		// check for new messages
 		bool newPlaylist = false;
-		auto timeout = (gPlayProperties.playMode == NO_PLAYLIST || gPlayProperties.pausePlay) ? portMAX_DELAY : 0; // if we are idle, we sleep forever
-		auto retValue = xSemaphoreTake(msgReceived, timeout);
+		auto retValue = xSemaphoreTake(msgReceived, semaphoreTimeout);
 		if (retValue) {
 			// we message received
 			std::unique_ptr<Msg> msg;
@@ -778,6 +800,22 @@ void AudioPlayer_Task(void *parameter) {
 				Log_Printf(LOGLEVEL_NOTICE, currentlyPlaying, playlist.getCurrentTrackPath().c_str(), playlist.getCurrentTrackNumber() + 1, playlist.entries.size());
 				gPlayProperties.playlistFinished = false;
 			}
+		}
+
+		// the main FSM
+		semaphoreTimeout = 0;
+		switch (audioFsm) {
+			case AudioFsm::Idle:
+				// we are idle, so update the timout to wait forever
+				semaphoreTimeout = portMAX_DELAY;
+				break;
+
+			case AudioFsm::TTS: {
+				
+			} break;
+
+			case AudioFsm::Playlist: {
+			} break;
 		}
 
 		// Handle seekmodes
