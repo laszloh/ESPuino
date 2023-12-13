@@ -43,7 +43,7 @@ public:
 	explicit operator bool() const { return isValid(); }
 
 	// return true if the playlist is in a valid state (so we have entries and we want to play them)
-	bool isValid() const { return (entries.size() > 0) && (playMode != NO_PLAYLIST) && (currentTrack < entries.size()); }
+	bool isValid() const { return (entries.size() > 0) && (currentTrack < entries.size()); }
 
 	// return a playlist entry. Function throws std::out_of_range if index >= size
 	const pstring &getTrackPath(size_t index) const { return entries.at(index); }
@@ -56,15 +56,8 @@ public:
 	bool incrementTrackNumber() { return updateCurrentTrack(currentTrack + 1); }
 	bool decrementTrackNumber() { return updateCurrentTrack(currentTrack - 1); }
 
-	uint8_t getPlayMode() const { return playMode; }
-	void setPlayMode(uint8_t playMode) {
-		if (playMode < PLAYMODE_MAX) {
-			this->playMode = playMode;
-		}
-	}
-
 	bool loopTrack {false};
-	
+
 	bool loopPlaylist {false};
 
 	size_t size() const { return entries.size(); }
@@ -104,6 +97,5 @@ protected:
 	}
 
 	std::vector<pstring> entries {std::vector<pstring>()};
-	uint8_t playMode {NO_PLAYLIST};
 	uint16_t currentTrack {std::numeric_limits<uint16_t>::max()};
 };
