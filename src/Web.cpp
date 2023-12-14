@@ -3,6 +3,7 @@
 
 #include "Web.h"
 
+#include "../safeboot/safeboot.hpp"
 #include "ArduinoJson.h"
 #include "AsyncJson.h"
 #include "AudioPlayer.h"
@@ -152,6 +153,176 @@ public:
 		}
 	}
 };
+
+class NoOtaHandler : public AsyncWebHandler {
+public:
+	NoOtaHandler() = default;
+	~NoOtaHandler() = default;
+
+	virtual bool canHandle(AsyncWebServerRequest *request) override {
+		if (!(request->method() & HTTP_POST)) {
+			return false;
+		}
+
+		if (request->url() != "/update" && !request->url().startsWith("/update/")) {
+			return false;
+		}
+
+		request->addInterestingHeader("ANY");
+		return true;
+	}
+
+	virtual void handleRequest(AsyncWebServerRequest *request) override {
+		request->send(500, "text/html", otaNotSupportedWebsite);
+	}
+
+	virtual void otaRestart() {
+		ESP.restart();
+	}
+};
+
+#if defined(BOARD_HAS_16MB_FLASH_AND_OTA_SUPPORT)
+class ClassicOtaHandler : public NoOtaHandler {
+public:
+	ClassicOtaHandler() = default;
+	~ClassicOtaHandler() = default;
+
+	virtual void handleRequest(AsyncWebServerRequest *request) override {
+		if (Update.hasError()) {
+			request->send(500, "text/plain", Update.errorString());
+		} else {
+			request->send(200, "text/html", restartWebsite);
+			otaRestart();
+		}
+	}
+
+	virtual void handleUpload(AsyncWebServerRequest *request, const String &filename, size_t index, uint8_t *data, size_t len, bool final) override {
+		if (!index) {
+			// pause some tasks to get more free CPU time for the upload
+			vTaskSuspend(AudioTaskHandle);
+			Led_TaskPause();
+			Rfid_TaskPause();
+			Update.begin();
+			Log_Println(fwStart, LOGLEVEL_NOTICE);
+		}
+
+		Update.write(data, len);
+		Log_Print(".", LOGLEVEL_NOTICE, false);
+
+		if (final) {
+			Update.end(true);
+			// resume the paused tasks
+			Led_TaskResume();
+			vTaskResume(AudioTaskHandle);
+			Rfid_TaskResume();
+			Log_Println(fwEnd, LOGLEVEL_NOTICE);
+			if (Update.hasError()) {
+				Log_Println(Update.errorString(), LOGLEVEL_ERROR);
+			}
+			Serial.flush();
+			// ESP.restart(); // restart is done via webpage javascript
+		}
+	}
+
+	virtual bool isRequestHandlerTrivial() override { return false; }
+};
+using OtaHandler = ClassicOtaHandler;
+
+#elif defined(BOARD_HAS_FACTORY_OTA_SUPPORT)
+class FactoryOtaHandler : public NoOtaHandler {
+public:
+	FactoryOtaHandler() = default;
+	~FactoryOtaHandler() = default;
+
+	virtual void handleRequest(AsyncWebServerRequest *request) override {
+		switch (state) {
+			case State::idle:
+			case State::running:
+				break;
+
+			case State::finished:
+				request->send(200, "text/html", restartWebsite);
+				otaRestart();
+				break;
+
+			case State::failed:
+				request->send(500, "text/html", "Uploaf failed");
+				state = State::idle;
+				break;
+		}
+	}
+
+	void sendErrorReply(AsyncWebServerRequest *request) {
+		request->send(500, "text/plain", "Failed to write bytes");
+		state = State::failed;
+		fwFile.close();
+		gFSystem.remove(safeboot::firmwarePath);
+	}
+
+	virtual void handleUpload(AsyncWebServerRequest *request, const String &filename, size_t index, uint8_t *data, size_t len, bool final) override {
+		if (!index) {
+			// pause some tasks to get more free CPU time for the upload
+			vTaskSuspend(AudioTaskHandle);
+			Led_TaskPause();
+			Rfid_TaskPause();
+			if (fwFile) {
+				fwFile.close();
+			}
+			fwFile = gFSystem.open(safeboot::firmwarePath, FILE_WRITE);
+			state = State::running;
+			Log_Println(fwStart, LOGLEVEL_NOTICE);
+		}
+
+		if (fwFile) {
+			const size_t wLen = fwFile.write(data, len);
+			if (wLen != len) {
+				// wrote less bytes than expected --> write failed
+				sendErrorReply(request);
+			}
+			Log_Print(".", LOGLEVEL_NOTICE, false);
+		}
+
+		if (final) {
+			state = State::finished;
+			fwFile.close();
+
+			// resume the paused tasks
+			Led_TaskResume();
+			vTaskResume(AudioTaskHandle);
+			Rfid_TaskResume();
+			Log_Println(fwEnd, LOGLEVEL_NOTICE);
+			Serial.flush();
+			// ESP.restart(); // restart is done via webpage javascript
+		}
+	}
+
+	virtual void otaRestart() override {
+		System_RestartSafeBoot();
+	}
+
+	virtual bool isRequestHandlerTrivial() override { return false; }
+
+protected:
+	enum class State : uint8_t {
+		idle,
+		running,
+		finished,
+		failed
+	};
+
+	State state {State::idle};
+	File fwFile {File()};
+};
+using OtaHandler = FactoryOtaHandler;
+
+#else
+
+// no OTA support, so use base class
+using OtaHandler = NoOtaHandler;
+
+#endif
+
+OtaHandler otaHandler;
 
 // List all key in NVS for a given namespace
 // callback function is called for every key with userdefined data object
@@ -364,50 +535,7 @@ void webserverStart(void) {
 			handleUpload);
 
 		// OTA-upload
-		wServer.on(
-			"/update", HTTP_POST, [](AsyncWebServerRequest *request) {
-#ifdef BOARD_HAS_16MB_FLASH_AND_OTA_SUPPORT
-				if (Update.hasError()) {
-					request->send(500, "text/plain", Update.errorString());
-				} else {
-					request->send(200, "text/html", restartWebsite);
-				}
-#else
-				request->send(500, "text/html", otaNotSupportedWebsite);
-#endif
-			},
-			[](AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
-#ifndef BOARD_HAS_16MB_FLASH_AND_OTA_SUPPORT
-				Log_Println(otaNotSupported, LOGLEVEL_NOTICE);
-				return;
-#endif
-
-				if (!index) {
-					// pause some tasks to get more free CPU time for the upload
-					vTaskSuspend(AudioTaskHandle);
-					Led_TaskPause();
-					Rfid_TaskPause();
-					Update.begin();
-					Log_Println(fwStart, LOGLEVEL_NOTICE);
-				}
-
-				Update.write(data, len);
-				Log_Print(".", LOGLEVEL_NOTICE, false);
-
-				if (final) {
-					Update.end(true);
-					// resume the paused tasks
-					Led_TaskResume();
-					vTaskResume(AudioTaskHandle);
-					Rfid_TaskResume();
-					Log_Println(fwEnd, LOGLEVEL_NOTICE);
-					if (Update.hasError()) {
-						Log_Println(Update.errorString(), LOGLEVEL_ERROR);
-					}
-					Serial.flush();
-					// ESP.restart(); // restart is done via webpage javascript
-				}
-			});
+		wServer.addHandler(&otaHandler);
 
 		// ESP-restart
 		wServer.on("/restart", HTTP_POST, [](AsyncWebServerRequest *request) {
