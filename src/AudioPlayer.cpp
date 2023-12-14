@@ -62,7 +62,7 @@ static void AudioPlayer_HeadphoneVolumeManager(void);
 static std::optional<Playlist *> AudioPlayer_ReturnPlaylistFromWebstream(const char *_webUrl);
 static void AudioPlayer_SortPlaylist(Playlist *playlist);
 static void AudioPlayer_RandomizePlaylist(Playlist *playlist);
-static size_t AudioPlayer_NvsRfidWriteWrapper(const char *_rfidCardId, const char *_track, const uint32_t _playPosition, const uint8_t _playMode, const uint16_t _trackLastPlayed, const uint16_t _numberOfTracks);
+static size_t AudioPlayer_NvsRfidWriteWrapper(const CardIdType &_rfidCardId, const char *_track, const uint32_t _playPosition, const uint8_t _playMode, const uint16_t _trackLastPlayed, const uint16_t _numberOfTracks);
 static void AudioPlayer_ClearCover(void);
 
 void AudioPlayer_Init(void) {
@@ -441,9 +441,11 @@ void AudioPlayer_Task(void *parameter) {
 
 				// If we're in audiobook-mode and apply a modification-card, we don't
 				// want to save lastPlayPosition for the mod-card but for the card that holds the playlist
-				if (gCurrentRfidTagId != NULL) {
-					strncpy(gPlayProperties.playRfidTag, gCurrentRfidTagId, sizeof(gPlayProperties.playRfidTag) / sizeof(gPlayProperties.playRfidTag[0]));
-				}
+
+				// TODO: this check is always true, so this does not work anymore since #af4bda9
+				// if (gCurrentRfidTagId != NULL) {
+				gPlayProperties.playRfidTag = Rfid_GetCurrentTag();
+				// }
 			}
 			if (gPlayProperties.trackFinished) {
 				gPlayProperties.trackFinished = false;
@@ -491,6 +493,28 @@ void AudioPlayer_Task(void *parameter) {
 					gPlayProperties.playMode = NO_PLAYLIST;
 					Audio_setTitle(noPlaylist);
 					AudioPlayer_ClearCover();
+					continue;
+
+				case PLAY:
+					trackCommand = NO_ACTION;
+					if (!audio->isRunning()) {
+						// we are paused, so resume playback
+						audio->pauseResume();
+						Log_Println(cmndResumeFromPause, LOGLEVEL_INFO);
+						gPlayProperties.pausePlay = false;
+						Web_SendWebsocketData(0, 30);
+					}
+					continue;
+
+				case PAUSE:
+					trackCommand = NO_ACTION;
+					if (audio->isRunning()) {
+						// we are playinf, so pause playback
+						audio->pauseResume();
+						Log_Println(cmndPause, LOGLEVEL_INFO);
+						gPlayProperties.pausePlay = true;
+						Web_SendWebsocketData(0, 30);
+					}
 					continue;
 
 				case PAUSEPLAY:
@@ -820,7 +844,11 @@ void AudioPlayer_Task(void *parameter) {
 		if (!gPlayProperties.currentSpeechActive && gPlayProperties.lastSpeechActive) {
 			gPlayProperties.lastSpeechActive = false;
 			if (gPlayProperties.playMode != NO_PLAYLIST) {
-				xQueueSend(gRfidCardQueue, gPlayProperties.playRfidTag, 0); // Re-inject previous RFID-ID in order to continue playback
+				// Re-inject previous RFID-ID in order to continue playback
+				Message msg;
+				msg.event = Message::Event::CardApplied;
+				msg.cardId = gPlayProperties.playRfidTag;
+				Rfid_SignalEvent(msg);
 			}
 		}
 
@@ -873,7 +901,7 @@ void AudioPlayer_Task(void *parameter) {
 		}
 		// esp_task_wdt_reset(); // Don't forget to feed the dog!
 
-#ifdef DONT_ACCEPT_SAME_RFID_TWICE_ENABLE
+#ifdef DONT_ACCEPT_SAME_RFID_TWICE
 		static uint8_t resetOnNextIdle = false;
 		if (gPlayProperties.playlistFinished || gPlayProperties.playMode == NO_PLAYLIST) {
 			if (resetOnNextIdle) {
@@ -1016,7 +1044,7 @@ void AudioPlayer_TrackQueueDispatcher(const char *_itemToPlay, const uint32_t _l
 
 #ifdef PLAY_LAST_RFID_AFTER_REBOOT
 	// Store last RFID-tag to NVS
-	gPrefsSettings.putString("lastRfid", gCurrentRfidTagId);
+	gPrefsSettings.putString("lastRfid", Rfid_GetCurrentTag().toDezimalString().c_str());
 #endif
 
 	bool error = false;
@@ -1125,7 +1153,7 @@ void AudioPlayer_TrackQueueDispatcher(const char *_itemToPlay, const uint32_t _l
 
 /* Wraps putString for writing settings into NVS for RFID-cards.
    Returns number of characters written. */
-size_t AudioPlayer_NvsRfidWriteWrapper(const char *_rfidCardId, const char *_track, const uint32_t _playPosition, const uint8_t _playMode, const uint16_t _trackLastPlayed, const uint16_t _numberOfTracks) {
+size_t AudioPlayer_NvsRfidWriteWrapper(const CardIdType &_rfidCardId, const char *_track, const uint32_t _playPosition, const uint8_t _playMode, const uint16_t _trackLastPlayed, const uint16_t _numberOfTracks) {
 	if (_playMode == NO_PLAYLIST) {
 		// writing back to NVS with NO_PLAYLIST seems to be a bug - Todo: Find the cause here
 		Log_Printf(LOGLEVEL_ERROR, modeInvalid, _playMode);
@@ -1150,10 +1178,10 @@ size_t AudioPlayer_NvsRfidWriteWrapper(const char *_rfidCardId, const char *_tra
 	}
 
 	snprintf(prefBuf, sizeof(prefBuf) / sizeof(prefBuf[0]), "%s%s%s%u%s%d%s%u", stringDelimiter, trackBuf, stringDelimiter, _playPosition, stringDelimiter, _playMode, stringDelimiter, _trackLastPlayed);
-	Log_Printf(LOGLEVEL_INFO, wroteLastTrackToNvs, prefBuf, _rfidCardId, _playMode, _trackLastPlayed);
+	Log_Printf(LOGLEVEL_INFO, wroteLastTrackToNvs, prefBuf, _rfidCardId.toDezimalString().c_str(), _playMode, _trackLastPlayed);
 	Log_Println(prefBuf, LOGLEVEL_INFO);
 	Led_SetPause(false);
-	return gPrefsRfid.putString(_rfidCardId, prefBuf);
+	return gPrefsRfid.putString(_rfidCardId.toDezimalString().c_str(), prefBuf);
 
 	// Examples for serialized RFID-actions that are stored in NVS
 	// #<file/folder>#<startPlayPositionInBytes>#<playmode>#<trackNumberToStartWith>

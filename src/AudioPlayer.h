@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Playlist.h"
+#include "Rfid.h"
 
 typedef struct { // Bit field
 	uint8_t playMode : 4; // playMode
@@ -15,7 +16,7 @@ typedef struct { // Bit field
 	bool sleepAfterPlaylist		: 1; // If uC should go to sleep after whole playlist
 	bool sleepAfter5Tracks		: 1; // If uC should go to sleep after 5 tracks
 	bool saveLastPlayPosition	: 1; // If playposition/current track should be saved (for AUDIOBOOK)
-	char playRfidTag[13]; // ID of RFID-tag that started playlist
+	CardIdType playRfidTag; // ID of RFID-tag that started playlist
 	bool pausePlay				 : 1; // If pause is active
 	bool trackFinished			 : 1; // If current track is finished
 	bool playlistFinished		 : 1; // If whole playlist is finished

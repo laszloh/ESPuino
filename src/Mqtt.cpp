@@ -300,7 +300,10 @@ void Mqtt_ClientCallback(const char *topic, const byte *payload, uint32_t length
 	}
 	// New track to play? Take RFID-ID as input
 	else if (strcmp_P(topic, topicRfidCmnd) == 0) {
-		xQueueSend(gRfidCardQueue, receivedString, 0);
+		Message msg;
+		msg.event = Message::Event::CardApplied;
+		msg.cardId.assign(topicRfidCmnd);
+		Rfid_SignalEvent(msg);
 	}
 	// Loudness to change?
 	else if (strcmp_P(topic, topicLoudnessCmnd) == 0) {

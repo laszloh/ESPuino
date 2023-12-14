@@ -105,16 +105,19 @@ void recoverBootCountFromNvs(void) {
 // Get last RFID-tag applied from NVS
 void recoverLastRfidPlayedFromNvs(bool force) {
 	if (recoverLastRfid || force) {
+		recoverLastRfid = false;
 		if (System_GetOperationMode() == OPMODE_BLUETOOTH_SINK) { // Don't recover if BT-mode is desired
-			recoverLastRfid = false;
 			return;
 		}
-		recoverLastRfid = false;
-		String lastRfidPlayed = gPrefsSettings.getString("lastRfid", "-1");
-		if (!lastRfidPlayed.compareTo("-1")) {
+		String lastRfidPlayed = gPrefsSettings.getString("lastRfid");
+		if (!lastRfidPlayed) {
 			Log_Println(unableToRestoreLastRfidFromNVS, LOGLEVEL_INFO);
 		} else {
-			xQueueSend(gRfidCardQueue, lastRfidPlayed.c_str(), 0);
+			Message msg;
+			msg.event = Message::Event::CardApplied;
+			msg.cardId.assign(lastRfidPlayed.c_str());
+			Rfid_SignalEvent(msg);
+
 			gPlayLastRfIdWhenWiFiConnected = !force;
 			Log_Printf(LOGLEVEL_INFO, restoredLastRfidFromNVS, lastRfidPlayed.c_str());
 		}
@@ -196,7 +199,7 @@ void setup() {
 	Ftp_Init();
 	Mqtt_Init();
 #ifndef PN5180_ENABLE_LPCD
-	#if defined(RFID_READER_TYPE_MFRC522_SPI) || defined(RFID_READER_TYPE_MFRC522_I2C) || defined(RFID_READER_TYPE_PN5180)
+	#if RFID_READER_ENABLED
 	Rfid_Init();
 	#endif
 #endif
@@ -263,7 +266,7 @@ void loop() {
 	Button_Cyclic();
 	vTaskDelay(portTICK_PERIOD_MS * 1u);
 	System_Cyclic();
-	Rfid_PreferenceLookupHandler();
+	Rfid_Cyclic();
 
 #ifdef PLAY_LAST_RFID_AFTER_REBOOT
 	recoverBootCountFromNvs();
