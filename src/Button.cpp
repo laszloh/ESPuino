@@ -182,22 +182,17 @@ void cyclic() {
 
 			// Buttons can be mixed between GPIO and port-expander.
 			// But at the same time only one of them can be for example BUTTON_0
-			e.currentState = Port_Read(e.gpio) ^ e.inverted;
+			bool currentState = Port_Read(e.gpio) ^ e.inverted;
 
-			if (e.currentState != e.lastState && currentTimestamp - e.lastPressedTimestamp > buttonDebounceInterval) {
-				if (!e.currentState) {
+			if (currentState != e.lastState && currentTimestamp - e.lastPressedTimestamp > buttonDebounceInterval) {
+				if (!currentState) {
 					e.isPressed = true;
 					e.lastPressedTimestamp = currentTimestamp;
-					if (!e.firstPressedTimestamp) {
-						e.firstPressedTimestamp = currentTimestamp;
-					}
 				} else {
-					e.isReleased = true;
 					e.lastReleasedTimestamp = currentTimestamp;
-					e.firstPressedTimestamp = 0;
 				}
 			}
-			e.lastState = e.currentState;
+			e.lastState = currentState;
 		}
 	}
 	intiStatus = true;
@@ -242,7 +237,7 @@ void doButtonAction(void) {
 						e.isPressed = false;
 					} else if (e.longTrigger == ButtonLongTrigger::OnRetigger) {
 						// calculate remainder
-						const uint32_t remainder = (currentTimestamp - e.lastPressedTimestamp) / intervalToLongPress;
+						const uint32_t remainder = (currentTimestamp - e.lastPressedTimestamp) % intervalToLongPress;
 						if (remainder < e.longPressRemainder) {
 							Cmd_Action(e.cmdLong);
 						}
