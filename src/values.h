@@ -89,5 +89,12 @@
 #define DE 1
 #define EN 2
 
+// long button press trigger modi
+enum class ButtonLongTrigger : uint8_t {
+    OnRelease,
+    OnTimeout,
+    OnRetigger
+};
+
 // Debug
 #define PRINT_TASK_STATS 900 // Prints task stats for debugging, needs CONFIG_FREERTOS_USE_TRACE_FACILITY=y and CONFIG_FREERTOS_GENERATE_RUN_TIME_STATS=y in sdkconfig.defaults

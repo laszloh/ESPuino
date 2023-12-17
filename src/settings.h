@@ -129,11 +129,17 @@
 	#define BUTTON_5_SHORT    CMD_SEEK_FORWARDS
 
 	#define BUTTON_0_LONG     CMD_LASTTRACK
+	#define BUTTON_0_LONG_TRIGGER	ButtonLongTrigger::OnTimeout
 	#define BUTTON_1_LONG     CMD_FIRSTTRACK
+	#define BUTTON_1_LONG_TRIGGER	ButtonLongTrigger::OnTimeout
 	#define BUTTON_2_LONG     CMD_PLAYPAUSE
+	#define BUTTON_2_LONG_TRIGGER	ButtonLongTrigger::OnRelease
 	#define BUTTON_3_LONG     CMD_SLEEPMODE
+	#define BUTTON_3_LONG_TRIGGER	ButtonLongTrigger::OnRelease
 	#define BUTTON_4_LONG     CMD_VOLUMEUP
+	#define BUTTON_4_LONG_TRIGGER	ButtonLongTrigger::OnRetigger
 	#define BUTTON_5_LONG     CMD_VOLUMEDOWN
+	#define BUTTON_5_LONG_TRIGGER	ButtonLongTrigger::OnRetigger
 
 	#define BUTTON_MULTI_01   CMD_NOTHING   //CMD_TOGGLE_WIFI_STATUS (disabled now to prevent children from unwanted WiFi-disable)
 	#define BUTTON_MULTI_02   CMD_ENABLE_FTP_SERVER
