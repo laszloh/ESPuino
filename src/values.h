@@ -96,5 +96,7 @@ enum class ButtonLongTrigger : uint8_t {
     OnRetigger
 };
 
+#define GPIO_PIN_UNUSED 99
+
 // Debug
 #define PRINT_TASK_STATS 900 // Prints task stats for debugging, needs CONFIG_FREERTOS_USE_TRACE_FACILITY=y and CONFIG_FREERTOS_GENERATE_RUN_TIME_STATS=y in sdkconfig.defaults

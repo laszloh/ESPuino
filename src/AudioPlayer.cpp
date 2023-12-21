@@ -48,6 +48,7 @@ time_t playTimeSecTotal = 0;
 time_t playTimeSecSinceStart = 0;
 
 #ifdef HEADPHONE_ADJUST_ENABLE
+static Gpio &headPhoneDetect;
 static bool AudioPlayer_HeadphoneLastDetectionState;
 static uint32_t AudioPlayer_HeadphoneLastDetectionTimestamp = 0u;
 static uint8_t AudioPlayer_MaxVolumeHeadphone = 11u; // Maximum volume that can be adjusted in headphone-mode (default; can be changed later via GUI)
@@ -100,10 +101,18 @@ void AudioPlayer_Init(void) {
 	}
 
 #ifdef HEADPHONE_ADJUST_ENABLE
-	#if (HP_DETECT >= 0 && HP_DETECT <= MAX_GPIO)
-	pinMode(HP_DETECT, INPUT_PULLUP);
+	headPhoneDetect = GpioDriverFactory::getGpio(HP_DETECT);
+	if (!headPhoneDetect.isValid()) {
+		Log_Println("Headphone GPIO was not found", LOGLEVEL_ERROR);
+	}
+
+	headPhoneDetect.pinMode(gpio::FLAG_INPUT | gpio::FLAG_PULLUP);
+	bool inverted = false;
+	#ifdef DETECT_HP_ON_HIGH
+	inverted = true;
 	#endif
-	AudioPlayer_HeadphoneLastDetectionState = Audio_Detect_Mode_HP(Port_Read(HP_DETECT));
+	headPhoneDetect.setInverted(inverted);
+	AudioPlayer_HeadphoneLastDetectionState = headPhoneDetect.digitalRead();
 
 	// Get maximum volume for headphone from NVS
 	uint32_t nvsAudioPlayer_MaxVolumeHeadphone = gPrefsSettings.getUInt("maxVolumeHp", 0);
@@ -163,15 +172,6 @@ void AudioPlayer_Cyclic(void) {
 	}
 }
 
-// Wrapper-function to reverse detection of connected headphones.
-// Normally headphones are supposed to be plugged in if a given GPIO/channel is LOW/false.
-bool Audio_Detect_Mode_HP(bool _state) {
-#ifndef DETECT_HP_ON_HIGH
-	return _state;
-#else
-	return !_state;
-#endif
-}
 
 uint8_t AudioPlayer_GetCurrentVolume(void) {
 	return AudioPlayer_CurrentVolume;
@@ -263,7 +263,7 @@ void AudioPlayer_SetupVolumeAndAmps(void) {
 	Port_Write(GPIO_HP_EN, true, true);
 	#endif
 #else
-	if (Audio_Detect_Mode_HP(Port_Read(HP_DETECT))) {
+	if (headPhoneDetect.digitalRead()) {
 		AudioPlayer_MaxVolume = AudioPlayer_MaxVolumeSpeaker; // 1 if headphone is not connected
 	#ifdef GPIO_PA_EN
 		Port_Write(GPIO_PA_EN, true, true);
@@ -289,7 +289,7 @@ void AudioPlayer_SetupVolumeAndAmps(void) {
 
 void AudioPlayer_HeadphoneVolumeManager(void) {
 #ifdef HEADPHONE_ADJUST_ENABLE
-	bool currentHeadPhoneDetectionState = Audio_Detect_Mode_HP(Port_Read(HP_DETECT));
+	bool currentHeadPhoneDetectionState = headPhoneDetect.digitalRead();
 
 	if (AudioPlayer_HeadphoneLastDetectionState != currentHeadPhoneDetectionState && (millis() - AudioPlayer_HeadphoneLastDetectionTimestamp >= headphoneLastDetectionDebounce)) {
 		if (currentHeadPhoneDetectionState) {

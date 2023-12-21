@@ -52,7 +52,6 @@ void AudioPlayer_SetMinVolume(uint8_t value);
 uint8_t AudioPlayer_GetInitVolume(void);
 void AudioPlayer_SetInitVolume(uint8_t value);
 void AudioPlayer_SetupVolumeAndAmps(void);
-bool Audio_Detect_Mode_HP(bool _state);
 void Audio_setTitle(const char *format, ...);
 time_t AudioPlayer_GetPlayTimeSinceStart(void);
 time_t AudioPlayer_GetPlayTimeAllTime(void);

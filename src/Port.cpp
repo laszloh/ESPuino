@@ -7,6 +7,32 @@
 
 #include <Wire.h>
 
+void InternalDriver::pinMode(uint8_t pin, gpio::Flags mode) {
+	uint8_t arduMode = INPUT;
+	if (mode & gpio::FLAG_INPUT) {
+		if (mode & gpio::FLAG_PULLUP) {
+			arduMode = INPUT_PULLUP;
+		} else if (mode & gpio::FLAG_PULLDOWN) {
+			arduMode = INPUT_PULLDOWN;
+		}
+	} else if (mode & gpio::FLAG_OUTPUT) {
+		arduMode = (mode & gpio::FLAG_OPEN_DRAIN) ? OUTPUT_OPEN_DRAIN : OUTPUT;
+	}
+	::pinMode(pin, arduMode);
+}
+
+bool InternalDriver::digitalRead(uint8_t pin) {
+	return ::digitalRead(pin);
+}
+
+void InternalDriver::digitalWrite(uint8_t pin, bool level) {
+	return ::digitalWrite(pin, level);
+}
+
+void InternalDriver::attachInterruptArg(uint8_t pin, void (*userFunc)(void *), void *arg, gpio::InterruptType mode) {
+	::attachInterruptArg(pin, userFunc, arg, mode);
+}
+
 // Infos:
 // PCA9555 has 16 channels that are subdivided into 2 ports with 8 channels each.
 // Every channels is represented by a bit.
@@ -15,6 +41,86 @@
 // 107 => port 0 channel/bit 7
 // 108 => port 1 channel/bit 0
 // 115 => port 1 channel/bit 7
+
+void PCA9555Driver::init() {
+	i2cBus.begin();
+
+	findExpander();
+	if (!found) {
+		Log_Println(portExpanderNotFound, LOGLEVEL_ERROR);
+		return;
+	}
+	Log_Println(portExpanderFound, LOGLEVEL_NOTICE);
+	resetExpander();
+
+	if constexpr (intPinEnabled) {
+		Gpio intPin = GpioDriverFactory::getGpio(PE_INTERRUPT_PIN);
+		intPin.pinMode(gpio::FLAG_INPUT | gpio::FLAG_PULLUP);
+		intPin.attachInterruptArg(PCA9555Driver::portExpanderISR, this, gpio::INTERRUPT_FALLING_EDGE);
+
+		Log_Println(portExpanderInterruptEnabled, LOGLEVEL_NOTICE);
+	}
+}
+
+void PCA9555Driver::exit() {
+	// read all input registers to clear pending interrupts
+	uint16_t data;
+	readRegister(InputRegister, data);
+}
+
+void PCA9555Driver::cyclic() {
+}
+
+void PCA9555Driver::pinMode(uint8_t pin, gpio::Flags mode) {
+	uint16_t config;
+	readRegister(ConfigRegister, config);
+	mode = mode & (gpio::FLAG_INPUT | gpio::FLAG_OUTPUT); // we only support INPUT & OUTPUT modi
+	if (mode == gpio::FLAG_OUTPUT) {
+		// clear the corresponding bit
+		config &= ~(1 << pin);
+	} else {
+		// set the corresponding bit
+		config |= (1 << pin);
+	}
+	writeRegister(ConfigRegister, config);
+}
+
+bool PCA9555Driver::digitalRead(uint8_t pin) {
+	return (verifiedInputRegister & (1 << pin));
+}
+
+void PCA9555Driver::digitalWrite(uint8_t pin, bool level) {
+	uint16_t outputValue;
+	readRegister(OutputRegister, outputValue);
+	if (level) {
+		outputValue |= (1 << pin);
+	} else {
+		outputValue &= (1 << pin);
+	}
+	writeRegister(OutputRegister, outputValue);
+}
+
+void PCA9555Driver::attachInterruptArg(uint8_t pin, void (*userFunc)(void *), void *arg, gpio::InterruptType mode) {
+	interruptHandlers[pin].fn = userFunc;
+	interruptHandlers[pin].arg = arg;
+	interruptHandlers[pin].mode = mode;
+}
+
+void IRAM_ATTR PCA9555Driver::portExpanderISR(PCA9555Driver *driver) {
+	driver->allowReadFromPortExpander = true;
+}
+
+void PCA9555Driver::findExpander() {
+	uint8_t data;
+	found = readRegister(InputRegister, data);
+}
+
+void PCA9555Driver::resetExpander() {
+	// reset all registers to their default values
+	for (size_t i = 0; i < 8; i += 2) {
+		writeRegister(i, defaultValue[i / 2]);
+	}
+}
 
 #ifdef PORT_EXPANDER_ENABLE
 extern TwoWire i2cBusTwo;
@@ -46,33 +152,6 @@ void Port_Init(void) {
 	attachInterrupt(PE_INTERRUPT_PIN, PORT_ExpanderISR, FALLING);
 	Log_Println(portExpanderInterruptEnabled, LOGLEVEL_NOTICE);
 #endif
-}
-
-void Port_Cyclic(void) {
-#ifdef PORT_EXPANDER_ENABLE
-	Port_ExpanderHandler();
-#endif
-}
-
-// Wrapper: reads from GPIOs (via digitalRead()) or from port-expander (if enabled)
-// Behaviour like digitalRead(): returns true if not pressed and false if pressed
-bool Port_Read(const uint8_t _channel) {
-	switch (_channel) {
-		case 0 ... MAX_GPIO: // GPIO
-			return digitalRead(_channel);
-
-#ifdef PORT_EXPANDER_ENABLE
-		case 100 ... 107: // Port-expander (port 0)
-			return (Port_ExpanderPortsInputChannelStatus[0] & (1 << (_channel - 100))); // Remove offset 100 (return false if pressed)
-
-		case 108 ... 115: // Port-expander (port 1)
-			return (Port_ExpanderPortsInputChannelStatus[1] & (1 << (_channel - 108))); // Remove offset 100 + 8 (return false if pressed)
-
-#endif
-
-		default: // Everything else (doesn't make sense at all) isn't supposed to be pressed
-			return true;
-	}
 }
 
 // Configures OUTPUT-mode for GPIOs (non port-expander)

@@ -166,9 +166,7 @@ void init() {
 void cyclic() {
 	if (xSemaphoreTake(Button_TimerSemaphore, 0) == pdTRUE) {
 		unsigned long currentTimestamp = millis();
-#ifdef PORT_EXPANDER_ENABLE
-		Port_Cyclic();
-#endif
+		GpioDriverFactory::cyclic();
 
 		if (System_AreControlsLocked()) {
 			return;
@@ -182,7 +180,9 @@ void cyclic() {
 
 			// Buttons can be mixed between GPIO and port-expander.
 			// But at the same time only one of them can be for example BUTTON_0
-			bool currentState = Port_Read(e.gpio) ^ e.inverted;
+			Gpio button = GpioDriverFactory::getGpio(e.gpio);
+			button.setInverted(e.inverted);
+			bool currentState = button.digitalRead();
 
 			if (currentState != e.lastState && currentTimestamp - e.lastPressedTimestamp > buttonDebounceInterval) {
 				if (!currentState) {

@@ -73,8 +73,7 @@ void Rfid_Init(void) {
 		i2cBusTwo.begin(ext_IIC_DATA, ext_IIC_CLK);
 		delay(50);
 		Port_Init();
-		uint8_t irqState = Port_Read(RFID_IRQ);
-		if (irqState == LOW) {
+		if (!GpioDriverFactory::getGpio(RFID_IRQ).digitalRead()) {
 			Log_Println("Wakeup caused by low power card-detection on port-expander", LOGLEVEL_NOTICE);
 			Rfid_WakeupCheck();
 		}
@@ -355,7 +354,7 @@ void Rfid_EnableLpcd(void) {
 	Log_Printf("IRQ_PIN_CONFIG=0x%02X", irqConfig)
 	*/
 	nfc.prepareLPCD();
-	Log_Printf(LOGLEVEL_DEBUG, "PN5180 IRQ PIN (%d) state: %d", RFID_IRQ, Port_Read(RFID_IRQ));
+	Log_Printf(LOGLEVEL_DEBUG, "PN5180 IRQ PIN (%d) state: %d", RFID_IRQ, GpioDriverFactory::getGpio(RFID_IRQ).digitalRead());
 	// turn on LPCD
 	uint16_t wakeupCounterInMs = 0x3FF; //  must be in the range of 0x0 - 0xA82. max wake-up time is 2960 ms.
 	if (nfc.switchToLPCD(wakeupCounterInMs)) {

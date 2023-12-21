@@ -146,7 +146,7 @@ void setup() {
 #endif
 
 	// Needs i2c first if port-expander is used
-	Port_Init();
+	GpioDriverFactory::init();
 
 	// If port-expander is used, port_init has to be called first, as power can be (possibly) done by port-expander
 	Power_Init();

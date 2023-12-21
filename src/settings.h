@@ -3,6 +3,7 @@
 #ifndef __ESPUINO_SETTINGS_H__
     	#define __ESPUINO_SETTINGS_H__
         #include "Arduino.h"
+		#include "Wire.h"
         #include "values.h"
 #if __has_include("settings-override.h")
     	#include "settings-override.h"
@@ -31,7 +32,6 @@
 
 
 	//########################## MODULES #################################
-	//#define PORT_EXPANDER_ENABLE          // When enabled, buttons can be connected via port-expander PCA9555 (https://forum.espuino.de/t/einsatz-des-port-expanders-pca9555/306)
 	//#define I2S_COMM_FMT_LSB_ENABLE       // Enables FMT instead of MSB for I2S-communication-format. Used e.g. by PT2811. Don't enable for MAX98357a, AC101 or PCM5102A)
 	#define MDNS_ENABLE                     // When enabled, you don't have to handle with ESPuino's IP-address. If hostname is set to "ESPuino", you can reach it via ESPuino.local
 	//#define MQTT_ENABLE                   // Make sure to configure mqtt-server and (optionally) username+pwd
@@ -89,8 +89,17 @@
 
 
 	//############# Port-expander-configuration ######################
-	#ifdef PORT_EXPANDER_ENABLE
+	#define PORT_EXPANDER_TYPE_PCA9555
+	// #define PORT_EXPANDER_TYPE_MCP27S17
+
+	#ifdef PORT_EXPANDER_TYPE_PCA9555
+		constexpr size_t expanderBaseAddress = 100;
 		constexpr uint8_t expanderI2cAddress = 0x20;  // I2C-address of PCA9555 (0x20 is true if PCA's pins A0+A1+A2 are pulled to GND)
+		constexpr TwoWire &expanderI2cWire = Wire;
+	#endif
+
+	#if defined(PORT_EXPANDER_TYPE_PCA9555) || defined(PORT_EXPANDER_TYPE_MCP27S17)
+		#define PORT_EXPANDER_ENABLE	// When enabled, buttons can be connected via port-expander PCA9555 (https://forum.espuino.de/t/einsatz-des-port-expanders-pca9555/306)
 	#endif
 
 	//################## BUTTON-Layout ##################################
