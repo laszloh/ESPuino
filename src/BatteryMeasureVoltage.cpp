@@ -9,7 +9,6 @@
 
 // Only enable measurements if valid GPIO is used
 #if defined(MEASURE_BATTERY_VOLTAGE) && (VOLTAGE_READ_PIN >= 0 && VOLTAGE_READ_PIN <= 39)
-constexpr uint16_t maxAnalogValue = 4095u; // Highest value given by analogRead(); don't change!
 
 float warningLowVoltage = s_warningLowVoltage;
 float warningCriticalVoltage = s_warningCriticalVoltage;
@@ -57,14 +56,13 @@ void Battery_CyclicInner() {
 
 // The average of several analog reads will be taken to reduce the noise (Note: One analog read takes ~10µs)
 float Battery_GetVoltage(void) {
-	float factor = 1 / ((float) rdiv2 / (rdiv2 + rdiv1));
-	float averagedAnalogValue = 0;
-	uint8_t i;
-	for (i = 0; i <= 19; i++) {
-		averagedAnalogValue += (float) analogRead(VOLTAGE_READ_PIN);
+	constexpr size_t sampleCount = 16;
+	uint32_t averagedAnalogValue = 0;
+	for (size_t i = 0; i < sampleCount; i++) {
+		averagedAnalogValue += analogReadMilliVolts(VOLTAGE_READ_PIN);
 	}
-	averagedAnalogValue /= 20.0;
-	return (averagedAnalogValue / maxAnalogValue) * referenceVoltage * factor + offsetVoltage;
+	averagedAnalogValue /= sampleCount;
+	return (float(averagedAnalogValue) / 1000 + offsetVoltage) * voltageDividerFactor;
 }
 
 void Battery_PublishMQTT() {

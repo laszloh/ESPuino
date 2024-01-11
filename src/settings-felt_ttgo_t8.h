@@ -106,15 +106,19 @@
 
 // (optional) Monitoring of battery-voltage via ADC
 #ifdef MEASURE_BATTERY_VOLTAGE
-    #define VOLTAGE_READ_PIN            35          // GPIO used to monitor battery-voltage. Change to 35 if you're using Lolin D32 or Lolin D32 pro as it's hard-wired there!
-    constexpr float referenceVoltage = 3.35;                  // Voltage between 3.3V and GND-pin at the develboard in battery-mode (disconnect USB!)
-    constexpr float offsetVoltage = 0.1;                      // If voltage measured by ESP isn't 100% accurate, you can add an correction-value here
-#endif
+    #define VOLTAGE_READ_PIN            35              // GPIO used to monitor battery-voltage. Change to 35 if you're using Lolin D32 or Lolin D32 pro as it's hard-wired there!
 
-// (optional) For measuring battery-voltage a voltage-divider is necessary. Their values need to be configured here.
-#ifdef MEASURE_BATTERY_VOLTAGE
-    constexpr uint16_t rdiv1 = 100;                              // Rdiv1 of voltage-divider (kOhms) (measure exact value with multimeter!)
-    constexpr uint16_t rdiv2 = 100;                              // Rdiv2 of voltage-divider (kOhms) (measure exact value with multimeter!) => used to measure voltage via ADC!
+    /* Calculation of the voltage divider factor by voltage measurement */
+    constexpr float voltageBattery = 4.18f;             // Battery voltage
+    constexpr float voltageADC = 2.08f;                 // voltage on the divider
+    constexpr float voltageDividerFactor = voltageBattery / voltageADC;       
+
+    /* Calculation of the voltage divider factor through resistance measurements */
+    // constexpr float rdiv1 = 100.00f;                     // Rdiv1 of voltage-divider (kOhms) (measure exact value with multimeter!)
+    // constexpr float rdiv2 = 100.00f;                      // Rdiv2 of voltage-divider (kOhms) (measure exact value with multimeter!) => used to measure voltage via ADC!
+    // constexpr float voltageDividerFactor = 1.0f / (rdiv2 / (rdiv2 + rdiv1));       
+
+    constexpr float offsetVoltage = -0.02;                      // If voltage measured by ESP isn't 100% accurate, you can add an correction-value here
 #endif
 
 // (optional) hallsensor. Make sure the GPIO defined doesn't overlap with existing configuration. Please note: only user-support is provided for this feature.
