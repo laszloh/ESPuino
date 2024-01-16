@@ -14,34 +14,29 @@
 
 #include <WiFi.h>
 
-#ifdef MQTT_ENABLE
-	#define MQTT_SOCKET_TIMEOUT 1 // https://github.com/knolleary/pubsubclient/issues/403
-	#include <PubSubClient.h>
-#endif
-
-// MQTT-helper
-#ifdef MQTT_ENABLE
-static WiFiClient Mqtt_WifiClient;
-static PubSubClient Mqtt_PubSubClient(Mqtt_WifiClient);
 // Please note: all of them are defaults that can be changed later via GUI
 String gMqttClientId = DEVICE_HOSTNAME; // ClientId for the MQTT-server, must be server wide unique (if not found in NVS this one will be taken)
 String gMqttServer = "192.168.2.43"; // IP-address of MQTT-server (if not found in NVS this one will be taken)
 String gMqttUser = "mqtt-user"; // MQTT-user
 String gMqttPassword = "mqtt-password"; // MQTT-password
 uint16_t gMqttPort = 1883; // MQTT-Port
-#endif
+
+#ifdef MQTT_ENABLE
+	#define MQTT_SOCKET_TIMEOUT 1 // https://github.com/knolleary/pubsubclient/issues/403
+	#include <PubSubClient.h>
+
+// MQTT-helper
+static WiFiClient Mqtt_WifiClient;
+static PubSubClient Mqtt_PubSubClient(Mqtt_WifiClient);
 
 // MQTT
 static bool Mqtt_Enabled = true;
 
-#ifdef MQTT_ENABLE
 static void Mqtt_ClientCallback(const char *topic, const byte *payload, uint32_t length);
 static bool Mqtt_Reconnect(void);
 static void Mqtt_PostWiFiRssi(void);
-#endif
 
 void Mqtt_Init() {
-#ifdef MQTT_ENABLE
 	// Get MQTT-enable from NVS
 	uint8_t nvsEnableMqtt = gPrefsSettings.getUChar("enableMQTT", 99);
 	switch (nvsEnableMqtt) {
@@ -113,28 +108,21 @@ void Mqtt_Init() {
 		Mqtt_PubSubClient.setServer(gMqttServer.c_str(), gMqttPort);
 		Mqtt_PubSubClient.setCallback(Mqtt_ClientCallback);
 	}
-#else
-	Mqtt_Enabled = false;
-#endif
 }
 
 void Mqtt_Cyclic(void) {
-#ifdef MQTT_ENABLE
 	if (Mqtt_Enabled && Wlan_IsConnected()) {
 		Mqtt_Reconnect();
 		Mqtt_PubSubClient.loop();
 		Mqtt_PostWiFiRssi();
 	}
-#endif
 }
 
 void Mqtt_Exit(void) {
-#ifdef MQTT_ENABLE
 	Log_Println("shutdown MQTT..", LOGLEVEL_NOTICE);
 	publishMqtt(topicState, "Offline", false);
 	publishMqtt(topicTrackState, "---", false);
 	Mqtt_PubSubClient.disconnect();
-#endif
 }
 
 bool Mqtt_IsEnabled(void) {
@@ -143,7 +131,6 @@ bool Mqtt_IsEnabled(void) {
 
 /* Wrapper-functions for MQTT-publish */
 bool publishMqtt(const char *topic, const char *payload, bool retained) {
-#ifdef MQTT_ENABLE
 	if (strcmp(topic, "") != 0) {
 		if (Mqtt_PubSubClient.connected()) {
 			Mqtt_PubSubClient.publish(topic, payload, retained);
@@ -151,58 +138,41 @@ bool publishMqtt(const char *topic, const char *payload, bool retained) {
 			return true;
 		}
 	}
-#endif
-
 	return false;
 }
 
 bool publishMqtt(const char *topic, int32_t payload, bool retained) {
-#ifdef MQTT_ENABLE
 	char buf[11];
 	snprintf(buf, sizeof(buf) / sizeof(buf[0]), "%d", payload);
 	return publishMqtt(topic, buf, retained);
-#else
-	return false;
-#endif
 }
 
 bool publishMqtt(const char *topic, unsigned long payload, bool retained) {
-#ifdef MQTT_ENABLE
 	char buf[11];
 	snprintf(buf, sizeof(buf) / sizeof(buf[0]), "%lu", payload);
 	return publishMqtt(topic, buf, retained);
-#else
-	return false;
-#endif
 }
 
 bool publishMqtt(const char *topic, uint32_t payload, bool retained) {
-#ifdef MQTT_ENABLE
 	char buf[11];
 	snprintf(buf, sizeof(buf) / sizeof(buf[0]), "%u", payload);
 	return publishMqtt(topic, buf, retained);
-#else
-	return false;
-#endif
 }
 
 // Cyclic posting of WiFi-signal-strength
 void Mqtt_PostWiFiRssi(void) {
-#ifdef MQTT_ENABLE
 	static uint32_t lastMqttRssiTimestamp = 0;
 
 	if (!lastMqttRssiTimestamp || (millis() - lastMqttRssiTimestamp >= 60000)) {
 		lastMqttRssiTimestamp = millis();
 		publishMqtt(topicWiFiRssiState, Wlan_GetRssi(), false);
 	}
-#endif
 }
 
 /* Connects/reconnects to MQTT-Broker unless connection is not already available.
 	Manages MQTT-subscriptions.
 */
 bool Mqtt_Reconnect() {
-#ifdef MQTT_ENABLE
 	static uint32_t mqttLastRetryTimestamp = 0u;
 	uint8_t connect = false;
 	uint8_t i = 0;
@@ -279,14 +249,10 @@ bool Mqtt_Reconnect() {
 		}
 	}
 	return false;
-#else
-	return false;
-#endif
 }
 
 // Is called if there's a new MQTT-message for us
 void Mqtt_ClientCallback(const char *topic, const byte *payload, uint32_t length) {
-#ifdef MQTT_ENABLE
 	char *receivedString = (char *) x_calloc(length + 1u, sizeof(char));
 	memcpy(receivedString, (char *) payload, length);
 
@@ -453,5 +419,37 @@ void Mqtt_ClientCallback(const char *topic, const byte *payload, uint32_t length
 	}
 
 	free(receivedString);
-#endif
 }
+
+#else // MQTT_ENABLE
+
+void Mqtt_Init() {
+}
+
+void Mqtt_Cyclic() {
+}
+
+void Mqtt_Exit() {
+}
+
+bool Mqtt_IsEnabled() {
+	return false;
+}
+
+bool publishMqtt([[maybe_unused]] const char *, [[maybe_unused]] const char *, [[maybe_unused]] bool) {
+	return false;
+}
+
+bool publishMqtt([[maybe_unused]] const char *, [[maybe_unused]] int32_t, [[maybe_unused]] bool) {
+	return false;
+}
+
+bool publishMqtt([[maybe_unused]] const char *, [[maybe_unused]] unsigned long, [[maybe_unused]] bool) {
+	return false;
+}
+
+bool publishMqtt([[maybe_unused]] const char *, [[maybe_unused]] uint32_t, [[maybe_unused]] bool) {
+	return false;
+}
+
+#endif

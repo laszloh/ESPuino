@@ -12,6 +12,7 @@
 #include "Port.h"
 #include "System.h"
 #include "Wlan.h"
+#include "Mqtt.h"
 
 #include <WiFi.h>
 #include <esp_task_wdt.h>
@@ -175,9 +176,7 @@ void Led_SetBrightness(uint8_t value) {
 	Port_Write(BUTTONS_LED, value <= Led_NightBrightness ? LOW : HIGH, false);
 	#endif
 
-	#ifdef MQTT_ENABLE
 	publishMqtt(topicLedBrightnessState, Led_Brightness, false);
-	#endif
 #endif
 }
 

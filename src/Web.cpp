@@ -820,7 +820,6 @@ static void settingsToJSON(JsonObject obj, const String section) {
 	}
 #endif
 // MQTT
-#ifdef MQTT_ENABLE
 	if ((section == "") || (section == "mqtt")) {
 		JsonObject mqttObj = obj.createNestedObject("mqtt");
 		mqttObj["enable"].set(Mqtt_IsEnabled());
@@ -834,7 +833,6 @@ static void settingsToJSON(JsonObject obj, const String section) {
 		mqttObj["maxClientIdLength"].set(mqttClientIdLength - 1);
 		mqttObj["maxServerLength"].set(mqttServerLength - 1);
 	}
-#endif
 // Bluetooth
 #ifdef BLUETOOTH_ENABLE
 	if ((section == "") || (section == "bluetooth")) {

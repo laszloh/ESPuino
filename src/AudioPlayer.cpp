@@ -245,9 +245,7 @@ void Audio_setTitle(const char *format, ...) {
 
 	// notify web ui and mqtt
 	Web_SendWebsocketData(0, 30);
-#ifdef MQTT_ENABLE
 	publishMqtt(topicTrackState, gPlayProperties.title, false);
-#endif
 }
 
 // Set maxVolume depending on headphone-adjustment is enabled and headphone is/is not connected
@@ -384,9 +382,7 @@ void AudioPlayer_Task(void *parameter) {
 			Log_Printf(LOGLEVEL_INFO, newLoudnessReceivedQueue, currentVolume);
 			audio->setVolume(currentVolume, VOLUMECURVE);
 			Web_SendWebsocketData(0, 50);
-#ifdef MQTT_ENABLE
 			publishMqtt(topicLoudnessState, currentVolume, false);
-#endif
 		}
 
 		if (xQueueReceive(gTrackControlQueue, &trackCommand, 0) == pdPASS) {
@@ -425,11 +421,8 @@ void AudioPlayer_Task(void *parameter) {
 				gPlayProperties.trackFinished = false;
 				gPlayProperties.playlistFinished = false;
 
-#ifdef MQTT_ENABLE
 				publishMqtt(topicPlaymodeState, gPlayProperties.playMode, false);
 				publishMqtt(topicRepeatModeState, AudioPlayer_GetRepeatMode(), false);
-#endif
-
 				// If we're in audiobook-mode and apply a modification-card, we don't
 				// want to save lastPlayPosition for the mod-card but for the card that holds the playlist
 				if (gCurrentRfidTagId != NULL) {
@@ -508,9 +501,7 @@ void AudioPlayer_Task(void *parameter) {
 					}
 					if (gPlayProperties.repeatCurrentTrack) { // End loop if button was pressed
 						gPlayProperties.repeatCurrentTrack = false;
-#ifdef MQTT_ENABLE
 						publishMqtt(topicRepeatModeState, AudioPlayer_GetRepeatMode(), false);
-#endif
 					}
 					// Allow next track if current track played in playlist isn't the last track.
 					// Exception: loop-playlist is active. In this case playback restarts at the first track of the playlist.
@@ -543,9 +534,7 @@ void AudioPlayer_Task(void *parameter) {
 					}
 					if (gPlayProperties.repeatCurrentTrack) { // End loop if button was pressed
 						gPlayProperties.repeatCurrentTrack = false;
-#ifdef MQTT_ENABLE
 						publishMqtt(topicRepeatModeState, AudioPlayer_GetRepeatMode(), false);
-#endif
 					}
 					if (gPlayProperties.playMode == WEBSTREAM) {
 						Log_Println(trackChangeWebstream, LOGLEVEL_INFO);
@@ -667,9 +656,7 @@ void AudioPlayer_Task(void *parameter) {
 					gPlayProperties.playMode = NO_PLAYLIST;
 					Audio_setTitle(noPlaylist);
 					AudioPlayer_ClearCover();
-#ifdef MQTT_ENABLE
 					publishMqtt(topicPlaymodeState, gPlayProperties.playMode, false);
-#endif
 					gPlayProperties.currentTrackNumber = 0;
 					gPlayProperties.numberOfTracks = 0;
 					if (gPlayProperties.sleepAfterPlaylist) {
@@ -1213,9 +1200,7 @@ void AudioPlayer_ClearCover(void) {
 	AudioPlayer_StationLogoUrl = "";
 	// websocket and mqtt notify cover image has changed
 	Web_SendWebsocketData(0, 40);
-#ifdef MQTT_ENABLE
 	publishMqtt(topicCoverChangedState, "", false);
-#endif
 }
 
 // Some mp3-lib-stuff (slightly changed from default)
@@ -1304,9 +1289,7 @@ void audio_id3image(File &file, const size_t pos, const size_t size) {
 	gPlayProperties.coverFileSize = size;
 	// websocket and mqtt notify cover image has changed
 	Web_SendWebsocketData(0, 40);
-#ifdef MQTT_ENABLE
 	publishMqtt(topicCoverChangedState, "", false);
-#endif
 }
 
 void audio_eof_speech(const char *info) {

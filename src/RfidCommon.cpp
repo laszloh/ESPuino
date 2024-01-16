@@ -86,9 +86,7 @@ void Rfid_PreferenceLookupHandler(void) {
 					strncpy(gOldRfidTagId, gCurrentRfidTagId, 12);
 				}
 	#endif
-	#ifdef MQTT_ENABLE
 				publishMqtt(topicRfidState, gCurrentRfidTagId, false);
-	#endif
 
 	#ifdef BLUETOOTH_ENABLE
 				// if music rfid was read, go back to normal mode
