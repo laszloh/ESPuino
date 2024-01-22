@@ -50,7 +50,7 @@ volatile bool buffer_full[nr_of_buffers];
 uint32_t index_buffer_write = 0;
 uint32_t index_buffer_read = 0;
 
-static QueueHandle_t explorerFileUploadStatusQueue;
+static SemaphoreHandle_t explorerFileUploadFinished;
 static TaskHandle_t fileStorageTaskHandle;
 
 void Web_DumpSdToNvs(const char *_filename);
@@ -1207,8 +1207,8 @@ void explorerHandleFileUpload(AsyncWebServerRequest *request, String filename, s
 		explorerCreateParentDirectories(filePath);
 
 		// Create Queue for receiving a signal from the store task as synchronisation
-		if (explorerFileUploadStatusQueue == NULL) {
-			explorerFileUploadStatusQueue = xQueueCreate(1, sizeof(uint8_t));
+		if (explorerFileUploadFinished == NULL) {
+			explorerFileUploadFinished = xSemaphoreCreateBinary();
 		}
 
 		// reset buffers
@@ -1273,8 +1273,7 @@ void explorerHandleFileUpload(AsyncWebServerRequest *request, String filename, s
 		// notify storage task that last data was stored on the ring buffer
 		xTaskNotify(fileStorageTaskHandle, 1u, eNoAction);
 		// watit until the storage task is sending the signal to finish
-		uint8_t signal;
-		xQueueReceive(explorerFileUploadStatusQueue, &signal, portMAX_DELAY);
+		xSemaphoreTake(explorerFileUploadFinished, portMAX_DELAY);
 	}
 }
 
@@ -1301,7 +1300,6 @@ void explorerHandleFileStorageTask(void *parameter) {
 	size_t bytesNok = 0;
 	uint32_t chunkCount = 0;
 	uint32_t transferStartTimestamp = millis();
-	uint8_t value = 0;
 	uint32_t lastUpdateTimestamp = millis();
 	uint32_t maxUploadDelay = 20; // After this delay (in seconds) task will be deleted as transfer is considered to be finally broken
 
@@ -1364,7 +1362,7 @@ void explorerHandleFileStorageTask(void *parameter) {
 	vTaskResume(AudioTaskHandle);
 	Rfid_TaskResume();
 	// send signal to upload function to terminate
-	xQueueSend(explorerFileUploadStatusQueue, &value, 0);
+	xSemaphoreGive(explorerFileUploadFinished);
 	vTaskDelete(NULL);
 }
 
