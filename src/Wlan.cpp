@@ -443,7 +443,7 @@ void Wlan_Cyclic(void) {
 	}
 }
 
-bool Wlan_ValidateHostname(String newHostname) {
+bool Wlan_ValidateHostname(const String newHostname) {
 	size_t len = newHostname.length();
 	const char *hostname = newHostname.c_str();
 
@@ -468,7 +468,7 @@ bool Wlan_ValidateHostname(String newHostname) {
 	return validated;
 }
 
-bool Wlan_SetHostname(String newHostname) {
+bool Wlan_SetHostname(const String newHostname) {
 	// hostname should just be applied after reboot
 	gPrefsSettings.putString("Hostname", newHostname);
 	// check if hostname is written
@@ -521,7 +521,7 @@ const String Wlan_GetHostname() {
 	return gPrefsSettings.getString("Hostname", "ESPuino");
 }
 
-bool Wlan_DeleteNetwork(String ssid) {
+bool Wlan_DeleteNetwork(const String ssid) {
 	Log_Printf(LOGLEVEL_NOTICE, wifiDeleteNetwork, ssid.c_str());
 
 	for (uint8_t i = 0; i < numKnownNetworks; i++) {
