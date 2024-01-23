@@ -785,7 +785,7 @@ static void settingsToJSON(JsonObject obj, const String section) {
 		JsonObject ssidsObj = obj.createNestedObject("ssids");
 		JsonArray ssidArr = ssidsObj.createNestedArray("savedSSIDs");
 		Wlan_GetSavedNetworks([ssidArr](const WiFiSettings &network) {
-			ssidArr.add(network.ssid);
+			ssidArr.add(String(network.ssid)); // force a copy of ssid
 		});
 
 		// active SSID
@@ -1669,7 +1669,7 @@ void handleGetSavedSSIDs(AsyncWebServerRequest *request) {
 	AsyncJsonResponse *response = new AsyncJsonResponse(true);
 	JsonArray json_ssids = response->getRoot();
 	Wlan_GetSavedNetworks([json_ssids](const WiFiSettings &network) {
-		json_ssids.add(network.ssid);
+		json_ssids.add(String(network.ssid)); // force a copy of ssid
 	});
 
 	response->setLength();

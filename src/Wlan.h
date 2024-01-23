@@ -16,8 +16,7 @@ struct WiFiSettings {
 
 void Wlan_Init(void);
 void Wlan_Cyclic(void);
-bool Wlan_AddNetworkSettings(WiFiSettings);
-uint8_t Wlan_NumSavedNetworks();
+bool Wlan_AddNetworkSettings(WiFiSettings &);
 void Wlan_GetSavedNetworks(std::function<void(const WiFiSettings &)>);
 const String Wlan_GetCurrentSSID();
 const String Wlan_GetHostname();
