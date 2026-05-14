@@ -2171,7 +2171,7 @@ static void handleCoverImageRequest(AsyncWebServerRequest *request) {
 			}
 		return;
 	}
-	char *coverFileName = gPlayProperties.playlist->at(gPlayProperties.currentTrackNumber);
+	const char *coverFileName = gPlayProperties.playlist->at(gPlayProperties.currentTrackNumber).c_str();
 	Log_Println(coverFileName, LOGLEVEL_DEBUG);
 
 	File coverFile = gFSystem.open(coverFileName, FILE_READ);

@@ -9,6 +9,7 @@
 extern fs::FS gFSystem;
 
 #include "Playlist.h"
+#include <memory>
 
 void SdCard_Init(void);
 void SdCard_Exit(void);
@@ -16,5 +17,5 @@ sdcard_type_t SdCard_GetType(void);
 uint64_t SdCard_GetSize();
 uint64_t SdCard_GetFreeSize();
 void SdCard_PrintInfo();
-std::optional<Playlist *> SdCard_ReturnPlaylist(const char *fileName, const uint32_t _playMode);
+std::optional<std::unique_ptr<Playlist>> SdCard_ReturnPlaylist(const char *fileName, const uint32_t _playMode);
 const String SdCard_pickRandomSubdirectory(const char *_directory);
