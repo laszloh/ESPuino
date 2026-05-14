@@ -108,10 +108,11 @@
 		constexpr inline size_t cardDetectTimeout = 100;
 		constexpr inline size_t RFID_SCAN_INTERVAL = 100;   // Interval-time in ms (how often is RFID read?)
 
-		#define INTERFACE_SPI
-		// #define INTERFACE_I2C
+		//#define INTERFACE_SPI
+		#define INTERFACE_I2C
 
 		#ifdef INTERFACE_I2C
+			constexpr inline TwoWire &rfidI2C = Wire;
 			constexpr inline uint8_t PN532_ADDR = 0x42;
 		#endif
 	#endif
@@ -157,16 +158,16 @@
 	#define BUTTON_0_SHORT    CMD_VOLUMEUP
 	#define BUTTON_1_SHORT    CMD_VOLUMEDOWN
 	#define BUTTON_2_SHORT    CMD_PLAYPAUSE
-	#define BUTTON_3_SHORT    CMD_MEASUREBATTERY
-	#define BUTTON_4_SHORT    CMD_SEEK_BACKWARDS
-	#define BUTTON_5_SHORT    CMD_SEEK_FORWARDS
+	#define BUTTON_3_SHORT    CMD_NOTHING
+	#define BUTTON_4_SHORT    CMD_NOTHING
+	#define BUTTON_5_SHORT    CMD_NOTHING
 
 	#define BUTTON_0_LONG     CMD_NEXTTRACK
 	#define BUTTON_1_LONG     CMD_PREVTRACK
 	#define BUTTON_2_LONG     CMD_SLEEPMODE
-	#define BUTTON_3_LONG     CMD_SLEEPMODE
-	#define BUTTON_4_LONG     CMD_VOLUMEUP
-	#define BUTTON_5_LONG     CMD_VOLUMEDOWN
+	#define BUTTON_3_LONG     CMD_NOTHING
+	#define BUTTON_4_LONG     CMD_NOTHING
+	#define BUTTON_5_LONG     CMD_NOTHING
 
 	#define BUTTON_MULTI_01   CMD_TELL_CURRENT_TIME		//CMD_TOGGLE_WIFI_STATUS (disabled now to prevent children from unwanted WiFi-disable)
 	#define BUTTON_MULTI_02   CMD_TELL_IP_ADDRESS
@@ -252,7 +253,7 @@
 		#define PROGRESS_HUE_START		85          	// Start and end hue of mulitple-LED progress indicator. Hue ranges from basically 0 - 255, but you can also set numbers outside this range to get the desired effect (e.g. 85-215 will go from green to purple via blue, 341-215 start and end at exactly the same color but go from green to purple via yellow and red)
 		#define PROGRESS_HUE_END		-1
 		#define DIMMABLE_STATES			50				// Number of dimmed values between two full LEDs (https://forum.espuino.de/t/led-verbesserungen-rework/1739)
-		#define LED_OFFSET              5           	// shifts the starting LED in the original direction of the neopixel ring
+		#define LED_OFFSET              2	         	// shifts the starting LED in the original direction of the neopixel ring
 	#endif
 
 	#if defined(MEASURE_BATTERY_VOLTAGE) || defined(MEASURE_BATTERY_MAX17055)
@@ -345,6 +346,8 @@
 		#include "settings-azdelivery_sdmmc.h"              // Pre-configured settings for AZ Delivery ESP32 NodeMCU / Devkit C (https://forum.espuino.de/t/az-delivery-esp32-nodemcu-devkit-c-mit-sd-mmc-und-pn5180-als-rfid-leser/634)
 	#elif (HAL == 9)
 		#include "settings-lolin_d32_sdmmc_pe.h"            // Pre-configured settings for Lolin D32 (non-pro) with SDMMC + port-expander (https://forum.espuino.de/t/espuino-minid32-pro-lolin-d32-pro-mit-sd-mmc-und-port-expander-smd/866)
+	#elif (HAL == 98)
+		#include "settings-felt_ttgo_orig.h"
 	#elif (HAL == 97)
 		#include "settings-felt_ttgo_t8.h"            		// Pre-configured settings for Lolin D32 (non-pro) with SDMMC + port-expander (https://forum.espuino.de/t/espuino-minid32-pro-lolin-d32-pro-mit-sd-mmc-und-port-expander-smd/866)
 	#elif (HAL == 99)

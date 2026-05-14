@@ -20,6 +20,7 @@
 #include "Web.h"
 #include "Wlan.h"
 #include "main.h"
+#include "strnatcmp.h"
 
 #include <esp_task_wdt.h>
 #include <freertos/task.h>
@@ -1230,7 +1231,19 @@ void AudioPlayer_RandomizePlaylist(Playlist *playlist) {
 
 // Sort playlist alphabetically
 void AudioPlayer_SortPlaylist(Playlist *playlist) {
-	std::sort(playlist->begin(), playlist->end());
+	const auto strcmpSort = [](const char *a, const char *b) -> bool {
+		return strcmp(a, b) < 0;
+	};
+	const auto strnatSort = [](const char *a, const char *b) -> bool {
+		return strnatcmp(a, b) < 0;
+	};
+	const auto strnatCaseSort = [](const char *a, const char *b) -> bool {
+		return strnatcasecmp(a, b) < 0;
+	};
+	std::sort(playlist->begin(), playlist->end(), strnatSort);
+	for (uint32_t i = 0; i < playlist->size(); i++) {
+		log_n("%d: %s", i, playlist->at(i));
+	}
 }
 
 // Clear cover send notification

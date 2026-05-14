@@ -5,31 +5,119 @@
 #include "HallEffectSensor.h"
 #include "Log.h"
 #include "MemX.h"
+#include "Power.h"
 #include "Queues.h"
 #include "Rfid.h"
 #include "System.h"
 #include "Wire.h"
 
-#include <Adafruit_PN532.h>
-
 #if defined(RFID_READER_TYPE_PN532)
 
 TaskHandle_t rfidTaskHandle;
 static void Rfid_Task(void *parameter);
-
 	#if defined(INTERFACE_I2C)
-Adafruit_PN532 pn532 {Adafruit_PN532(RFID_IRQ, 99, i2cBusTwo)}; // Create PN532 instance.
+		#include <PN532_I2C.h>
+		#include <Wire.h>
+
+PN532_I2C pn532interface(rfidI2C);
 	#elif defined(INTERFACE_SPI)
-Adafruit_PN532 pn532 {Adafruit_PN532(RFID_CS, &SPI)};
+		#include <PN532_SPI.h>
+		#include <SPI.h>
+
+PN532_SPI pn532interface(SPI, RFID_CS);
 	#endif
+
+	#include <PN532.h>
+PN532 pn532(pn532interface);
+
+static int I2C_ClearBus(uint8_t sda, uint8_t scl) {
+	pinMode(sda, INPUT_PULLUP); // Make SDA (data) and SCL (clock) pins Inputs with pullup.
+	pinMode(scl, INPUT_PULLUP);
+
+	delay(2500); // Wait 2.5 secs. This is strictly only necessary on the first power
+	// up of the DS3231 module to allow it to initialize properly,
+	// but is also assists in reliable programming of FioV3 boards as it gives the
+	// IDE a chance to start uploaded the program
+	// before existing sketch confuses the IDE by sending Serial data.
+
+	boolean SCL_LOW = (digitalRead(scl) == LOW); // Check is SCL is Low.
+	if (SCL_LOW) { // If it is held low Arduno cannot become the I2C master.
+		return 1; // I2C bus error. Could not clear SCL clock line held low
+	}
+
+	boolean SDA_LOW = (digitalRead(sda) == LOW); // vi. Check SDA input.
+	int clockCount = 20; // > 2x9 clock
+
+	while (SDA_LOW && (clockCount > 0)) { //  vii. If SDA is Low,
+		clockCount--;
+		// Note: I2C bus is open collector so do NOT drive SCL or SDA high.
+		pinMode(scl, INPUT); // release SCL pullup so that when made output it will be LOW
+		pinMode(scl, OUTPUT); // then clock SCL Low
+		delayMicroseconds(10); //  for >5us
+		pinMode(scl, INPUT); // release SCL LOW
+		pinMode(scl, INPUT_PULLUP); // turn on pullup resistors again
+		// do not force high as slave may be holding it low for clock stretching.
+		delayMicroseconds(10); //  for >5us
+		// The >5us is so that even the slowest I2C devices are handled.
+		SCL_LOW = (digitalRead(scl) == LOW); // Check if SCL is Low.
+		int counter = 20;
+		while (SCL_LOW && (counter > 0)) { //  loop waiting for SCL to become High only wait 2sec.
+			counter--;
+			delay(100);
+			SCL_LOW = (digitalRead(scl) == LOW);
+		}
+		if (SCL_LOW) { // still low after 2 sec error
+			return 2; // I2C bus error. Could not clear. SCL clock line held low by slave clock stretch for >2sec
+		}
+		SDA_LOW = (digitalRead(sda) == LOW); //   and check SDA input again and loop
+	}
+	if (SDA_LOW) { // still low
+		return 3; // I2C bus error. Could not clear. SDA data line held low
+	}
+
+	// else pull SDA line low for Start or Repeated Start
+	pinMode(sda, INPUT); // remove pullup.
+	pinMode(sda, OUTPUT); // and then make it LOW i.e. send an I2C Start or Repeated start control.
+	// When there is only one I2C master a Start or Repeat Start has the same function as a Stop and clears the bus.
+	/// A Repeat Start is a Start occurring after a Start with no intervening Stop.
+	delayMicroseconds(10); // wait >5us
+	pinMode(sda, INPUT); // remove output low
+	pinMode(sda, INPUT_PULLUP); // and make SDA high i.e. send I2C STOP control.
+	delayMicroseconds(10); // x. wait >5us
+	pinMode(sda, INPUT); // and reset pins as tri-state inputs which is the default state on reset
+	pinMode(scl, INPUT);
+	return 0; // all ok
+}
+
+void resetAndInit() {
+	#if defined(INTERFACE_I2C)
+	rfidI2C.end();
+	Power_PeripheralOff();
+	delay(100);
+	Power_PeripheralOn();
+	delay(100);
+	I2C_ClearBus(I2C1_SDA, I2C1_SCL);
+	rfidI2C.begin(I2C1_SDA, I2C1_SCL, 10'000);
+	#endif
+
+	pn532.begin();
+	pn532.setPassiveActivationRetries(0x02);
+	pn532.SAMConfig();
+}
 
 void Rfid_Driver_Init(void) {
 	#ifdef INTERFACE_SPI
 	SPI.begin(RFID_SCK, RFID_MISO, RFID_MOSI, RFID_CS);
 	SPI.setFrequency(100000);
+	#elif defined(INTERFACE_I2C)
+	Power_PeripheralOff();
+	delay(20);
+	Power_PeripheralOn();
+	delay(10);
+	I2C_ClearBus(I2C1_SDA, I2C1_SCL);
+	rfidI2C.begin(I2C1_SDA, I2C1_SCL, 10'000);
 	#endif
-	pn532.begin();
-	pn532.wakeup();
+	resetAndInit();
 
 	const uint32_t version = pn532.getFirmwareVersion();
 	if (!version) {
@@ -37,8 +125,6 @@ void Rfid_Driver_Init(void) {
 		return;
 	}
 	Log_Printf(LOGLEVEL_NOTICE, "Found PN5%X FW: %d.%d", (version >> 24) & 0xFF, (version >> 16) & 0xFF, (version >> 8) & 0xFF);
-	pn532.setPassiveActivationRetries(0x05);
-	pn532.SAMConfig();
 
 	Log_Println(rfidScannerReady, LOGLEVEL_DEBUG);
 
@@ -70,8 +156,7 @@ void Rfid_Task(void *parameter) {
 		const uint32_t version = pn532.getFirmwareVersion();
 		if (!version) {
 			Log_Println("Lost contact to the NFC card reader!", LOGLEVEL_ERROR);
-			pn532.begin();
-			pn532.wakeup();
+			resetAndInit();
 		}
 
 		bool cardAppliedCurrentRun = pn532.readPassiveTargetID(PN532_MIFARE_ISO14443A, uid, &uidLen);
@@ -114,12 +199,6 @@ void Rfid_Task(void *parameter) {
 }
 
 void Rfid_Exit(void) {
-	uint8_t buffer[3];
-	buffer[0] = PN532_COMMAND_POWERDOWN;
-	buffer[1] = 0x20; //(0x20, for SPI) (0x28 for SPI and RF detectionThe wakeup source(s) you want too use
-	buffer[2] = 0x01; // To eneable the IRQ, 0x00 if you dont want too use the IRQ
-
-	pn532.sendCommandCheckAck(buffer, 3);
 }
 
 void Rfid_WakeupCheck(void) {
