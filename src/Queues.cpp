@@ -6,7 +6,6 @@
 #include "Rfid.h"
 
 QueueHandle_t gVolumeQueue;
-QueueHandle_t gTrackQueue;
 QueueHandle_t gTrackControlQueue;
 
 void Queues_Init(void) {
@@ -19,10 +18,5 @@ void Queues_Init(void) {
 	gTrackControlQueue = xQueueCreate(1, sizeof(uint8_t));
 	if (gTrackControlQueue == NULL) {
 		Log_Println(unableToCreateMgmtQ, LOGLEVEL_ERROR);
-	}
-
-	gTrackQueue = xQueueCreate(1, sizeof(Playlist *));
-	if (gTrackQueue == NULL) {
-		Log_Println(unableToCreatePlayQ, LOGLEVEL_ERROR);
 	}
 }

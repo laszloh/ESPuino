@@ -24,6 +24,7 @@
 
 #include <esp_task_wdt.h>
 #include <freertos/task.h>
+#include <atomic>
 #include <random>
 
 #define AUDIOPLAYER_VOLUME_MAX	21u
@@ -51,6 +52,9 @@ time_t playTimeSecSinceStart = 0;
 
 // current station logo url
 static String AudioPlayer_StationLogoUrl;
+
+static std::unique_ptr<Playlist> gPendingPlaylist;
+static std::atomic<bool> gNewPlaylistAvailable{false};
 
 #ifdef HEADPHONE_ADJUST_ENABLE
 static bool AudioPlayer_HeadphoneLastDetectionState;
@@ -374,7 +378,6 @@ void AudioPlayer_Task(void *parameter) {
 	}
 
 	uint8_t currentVolume;
-	BaseType_t trackQStatus = pdFAIL;
 	uint8_t trackCommand = NO_ACTION;
 	bool audioReturnCode;
 	AudioPlayer_CurrentTime = 0;
@@ -421,14 +424,13 @@ void AudioPlayer_Task(void *parameter) {
 			}
 		}
 
-		Playlist *newPlaylist;
-		trackQStatus = xQueueReceive(gTrackQueue, &newPlaylist, 0);
-		if (trackQStatus == pdPASS || gPlayProperties.trackFinished || trackCommand != NO_ACTION) {
-			if (trackQStatus == pdPASS) {
+		const bool newPlaylistAvailable = gNewPlaylistAvailable.exchange(false);
+		if (newPlaylistAvailable || gPlayProperties.trackFinished || trackCommand != NO_ACTION) {
+			if (newPlaylistAvailable) {
 				audio->stopSong();
 
 				// destroy the old playlist and assign the new
-				gPlayProperties.playlist.reset(newPlaylist);
+				gPlayProperties.playlist = std::move(gPendingPlaylist);
 				Log_Printf(LOGLEVEL_NOTICE, newPlaylistReceived, gPlayProperties.playlist->size());
 				Log_Printf(LOGLEVEL_DEBUG, "Free heap: %u", ESP.getFreeHeap());
 				playbackTimeoutStart = millis();
@@ -1019,7 +1021,7 @@ void AudioPlayer_TrackQueueDispatcher(const char *_itemToPlay, const uint32_t _l
 	}
 
 	gPlayProperties.playMode = BUSY; // Show @Neopixel, if uC is busy with creating playlist
-	Playlist *list = musicFiles.value().release();
+	auto list = std::move(musicFiles.value());
 	if (!list->size()) {
 		Log_Println(noMp3FilesInDir, LOGLEVEL_NOTICE);
 		System_IndicateError();
@@ -1138,7 +1140,8 @@ void AudioPlayer_TrackQueueDispatcher(const char *_itemToPlay, const uint32_t _l
 
 	if (!error) {
 		gPlayProperties.playMode = _playMode;
-		xQueueSend(gTrackQueue, &list, 0);
+		gPendingPlaylist = std::move(list);
+		gNewPlaylistAvailable.store(true);
 		return;
 	}
 
