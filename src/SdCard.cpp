@@ -380,16 +380,12 @@ std::optional<std::unique_ptr<Playlist>> SdCard_ReturnPlaylist(const char *fileN
 }
 
 // Extracts basepath out of a given filepath
-std::string_view SdCard_Basepath(const char *filepath) {
-	if (!filepath) {
+std::string_view SdCard_Basepath(std::string_view filepath) {
+	auto pos = filepath.find_last_of('/');
+	if (pos == std::string_view::npos) {
 		return std::string_view();
 	}
-	std::string_view str(filepath);
-	auto pos = str.find_last_of('/');
-	if (pos == std::string::npos) {
-		return std::string_view();
-	}
-	return str.substr(0, pos + 1);
+	return filepath.substr(0, pos + 1);
 }
 
 // Used for recursive playmodes. Allows to jump forwards and backwards between folders using

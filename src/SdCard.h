@@ -28,5 +28,5 @@ const String SdCard_pickRandomSubdirectory(const char *_directory);
 uint8_t SdCard_GetMaxRecursionDepth(void);
 size_t SdCard_SetMaxRecursionDepth(uint8_t _maxRecursionDepth);
 int16_t SdCard_findNextOrPrevDirectoryTrack(const Playlist &_playlist, size_t currentTrackIndexInPlaylist, SearchDirection direction);
-std::string_view SdCard_Basepath(const char *filepath);
+std::string_view SdCard_Basepath(std::string_view filepath);
 const String SdCard_GetVolumeLabel();
