@@ -24,6 +24,7 @@
 #include "main.h"
 #include "strnatcmp.h"
 
+#include <FastLED.h>
 #include <esp_task_wdt.h>
 #include <freertos/task.h>
 #include <random>
@@ -79,7 +80,6 @@ uint8_t currentVolume;
 BaseType_t trackQStatus = pdFAIL;
 uint8_t trackCommand = NO_ACTION;
 bool audioReturnCode;
-uint32_t AudioPlayer_LastPlaytimeStatsTimestamp = 0u;
 std::unique_ptr<Playlist> newPlayList;
 bool newPlayListAvailable = false;
 bool audio_active = false;
@@ -376,17 +376,16 @@ void AudioPlayer_Exit(void) {
 	}
 }
 
-static uint32_t lastPlayingTimestamp = 0;
-
 void AudioPlayer_Cyclic(void) {
 	if (!audio_active) {
 		return;
 	}
 
 	AudioPlayer_HeadphoneVolumeManager();
-	if ((millis() - lastPlayingTimestamp >= 1000) && gPlayProperties.playMode != NO_PLAYLIST && gPlayProperties.playMode != BUSY && !gPlayProperties.pausePlay) {
-		// audio is playing, update the playtime since start
-		lastPlayingTimestamp = millis();
+	
+	// update playtime stats every minute
+	static CEveryNSeconds playtimeCounter{1};
+	if(playtimeCounter && gPlayProperties.playMode != NO_PLAYLIST && gPlayProperties.playMode != BUSY && !gPlayProperties.pausePlay) {
 		playTimeSecSinceStart += 1;
 	}
 
@@ -486,9 +485,7 @@ void Audio_setTitle(const char *format, ...) {
 
 	// notify web ui and mqtt
 	Web_SendWebsocketData(0, WebsocketCodeType::TrackInfo);
-#ifdef MQTT_ENABLE
 	publishMqtt(topicTrack, gPlayProperties.title, false);
-#endif
 }
 
 // Set maxVolume depending on headphone-adjustment is enabled and headphone is/is not connected
@@ -570,8 +567,8 @@ void AudioPlayer_HeadphoneVolumeManager(void) {
 // Function to play music as task
 void AudioPlayer_Loop() {
 	// Update playtime stats every 250 ms
-	if ((millis() - AudioPlayer_LastPlaytimeStatsTimestamp) > 250) {
-		AudioPlayer_LastPlaytimeStatsTimestamp = millis();
+	static CEveryNMillis playtimeStatsCounter{250};
+	if (playtimeStatsCounter) {
 		// Update current playtime and duration
 		AudioPlayer_CurrentTime = audio->getAudioCurrentTime();
 		AudioPlayer_FileDuration = audio->getAudioFileDuration();
@@ -605,11 +602,9 @@ void AudioPlayer_Loop() {
 			gPlayProperties.pausePlay = false;
 			gPlayProperties.trackFinished = false;
 			gPlayProperties.playlistFinished = false;
-#ifdef MQTT_ENABLE
 			publishMqtt(topicPausePlay, "play", false);
 			publishMqtt(topicPlaymode, static_cast<uint32_t>(gPlayProperties.playMode), false);
 			publishMqtt(topicRepeatMode, static_cast<uint32_t>(AudioPlayer_GetRepeatMode()), false);
-#endif
 
 			// If we're in audiobook-mode and apply a modification-card, we don't
 			// want to save lastPlayPosition for the mod-card but for the card that holds the playlist
@@ -663,9 +658,7 @@ void AudioPlayer_Loop() {
 				gPlayProperties.playMode = NO_PLAYLIST;
 				Audio_setTitle(noPlaylist);
 				AudioPlayer_ClearCover();
-#ifdef MQTT_ENABLE
 				publishMqtt(topicPausePlay, "idle", false);
-#endif
 				return;
 
 			case PAUSEPLAY:
@@ -673,14 +666,10 @@ void AudioPlayer_Loop() {
 				audio->pauseResume();
 				if (gPlayProperties.pausePlay) {
 					Log_Println(cmndResumeFromPause, LOGLEVEL_INFO);
-#ifdef MQTT_ENABLE
 					publishMqtt(topicPausePlay, "play", false);
-#endif
 				} else {
 					Log_Println(cmndPause, LOGLEVEL_INFO);
-#ifdef MQTT_ENABLE
 					publishMqtt(topicPausePlay, "pause", false);
-#endif
 				}
 				if (gPlayProperties.saveLastPlayPosition && !gPlayProperties.pausePlay) {
 					Log_Printf(LOGLEVEL_INFO, trackPausedAtPos, audio->getAudioCurrentTime(), audio->getAudioFileDuration());
@@ -696,15 +685,11 @@ void AudioPlayer_Loop() {
 				if (gPlayProperties.pausePlay) {
 					audio->pauseResume();
 					gPlayProperties.pausePlay = false;
-#ifdef MQTT_ENABLE
 					publishMqtt(topicPausePlay, "play", false);
-#endif
 				}
 				if (gPlayProperties.repeatCurrentTrack) { // End loop if button was pressed
 					gPlayProperties.repeatCurrentTrack = false;
-#ifdef MQTT_ENABLE
 					publishMqtt(topicRepeatMode, static_cast<uint32_t>(AudioPlayer_GetRepeatMode()), false);
-#endif
 				}
 				// Allow next track if current track played in playlist isn't the last track.
 				// Exception: loop-playlist is active. In this case playback restarts at the first track of the playlist.
@@ -734,15 +719,11 @@ void AudioPlayer_Loop() {
 				if (gPlayProperties.pausePlay) {
 					audio->pauseResume();
 					gPlayProperties.pausePlay = false;
-#ifdef MQTT_ENABLE
 					publishMqtt(topicPausePlay, "play", false);
-#endif
 				}
 				if (gPlayProperties.repeatCurrentTrack) { // End loop if button was pressed
 					gPlayProperties.repeatCurrentTrack = false;
-#ifdef MQTT_ENABLE
 					publishMqtt(topicRepeatMode, static_cast<uint32_t>(AudioPlayer_GetRepeatMode()), false);
-#endif
 				}
 				if (gPlayProperties.playMode == WEBSTREAM) {
 					Log_Println(trackChangeWebstream, LOGLEVEL_INFO);
@@ -798,9 +779,7 @@ void AudioPlayer_Loop() {
 				if (gPlayProperties.pausePlay) {
 					audio->pauseResume();
 					gPlayProperties.pausePlay = false;
-#ifdef MQTT_ENABLE
 					publishMqtt(topicPausePlay, "play", false);
-#endif
 				}
 				gPlayProperties.currentTrackNumber = 0;
 				if (gPlayProperties.saveLastPlayPosition) {
@@ -818,9 +797,7 @@ void AudioPlayer_Loop() {
 				if (gPlayProperties.pausePlay) {
 					audio->pauseResume();
 					gPlayProperties.pausePlay = false;
-#ifdef MQTT_ENABLE
 					publishMqtt(topicPausePlay, "play", false);
-#endif
 				}
 				if (gPlayProperties.currentTrackNumber + 1 < gPlayProperties.playlist->size()) {
 					gPlayProperties.currentTrackNumber = gPlayProperties.playlist->size() - 1;
@@ -910,9 +887,7 @@ void AudioPlayer_Loop() {
 				gPlayProperties.playMode = NO_PLAYLIST;
 				Audio_setTitle(noPlaylist);
 				AudioPlayer_ClearCover();
-#ifdef MQTT_ENABLE
 				publishMqtt(topicPlaymode, static_cast<uint32_t>(gPlayProperties.playMode), false);
-#endif
 				gPlayProperties.currentTrackNumber = 0;
 				if (gPlayProperties.sleepAfterPlaylist) {
 					System_RequestSleep();
@@ -1156,9 +1131,7 @@ void AudioPlayer_SetVolume(const int32_t _newVolume, bool reAdjustRotary) {
 		Log_Printf(LOGLEVEL_INFO, newLoudnessReceived, _volume);
 		audio->setVolume(_volume);
 		Web_SendWebsocketData(0, WebsocketCodeType::Volume);
-#ifdef MQTT_ENABLE
 		publishMqtt(topicLoudness, static_cast<uint32_t>(_volume), false);
-#endif
 		AudioPlayer_PauseOnMinVolume(_volumeBuf, _newVolume);
 	}
 }
@@ -1495,9 +1468,7 @@ void AudioPlayer_ClearCover(void) {
 	AudioPlayer_StationLogoUrl = "";
 	// websocket and mqtt notify cover image has changed
 	Web_SendWebsocketData(0, WebsocketCodeType::CoverImg);
-#ifdef MQTT_ENABLE
 	publishMqtt(topicCoverChanged, "", false);
-#endif
 }
 
 // id3 tag: save cover image
@@ -1507,9 +1478,7 @@ void audio_id3image(File &file, const size_t pos, const size_t size) {
 	gPlayProperties.coverFileSize = size;
 	// websocket and mqtt notify cover image has changed
 	Web_SendWebsocketData(0, WebsocketCodeType::CoverImg);
-#ifdef MQTT_ENABLE
 	publishMqtt(topicCoverChanged, "", false);
-#endif
 }
 
 // encoded blockpicture cover image segments (all ogg, vorbis, opus files, some flac files)
@@ -1570,9 +1539,7 @@ void audio_oggimage(File &file, std::vector<uint32_t> v) {
 	gPlayProperties.coverFilePos = 4; // flacMarker gives 4 Bytes before METADATA_BLOCK_PICTURE (audioI2S points to METADATA_BLOCK_PICTURE since 6241daa)
 	// websocket and mqtt notify cover image has changed
 	Web_SendWebsocketData(0, WebsocketCodeType::CoverImg);
-#ifdef MQTT_ENABLE
 	publishMqtt(topicCoverChanged, "", false);
-#endif
 }
 
 // record audiodata or send via BT

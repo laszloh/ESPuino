@@ -68,7 +68,6 @@ float Battery_GetVoltage(void) {
 }
 
 void Battery_PublishMQTT() {
-	#ifdef MQTT_ENABLE
 	float voltage = Battery_GetVoltage();
 	char vstr[6];
 	snprintf(vstr, 6, "%.2f", voltage);
@@ -77,7 +76,6 @@ void Battery_PublishMQTT() {
 	float soc = Battery_EstimateLevel() * 100;
 	snprintf(vstr, 6, "%.2f", soc);
 	publishMqtt(topicBatterySOC, vstr, false);
-	#endif
 }
 
 void Battery_LogStatus(void) {

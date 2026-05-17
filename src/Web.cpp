@@ -1221,9 +1221,8 @@ static void settingsToJSON(JsonObject obj, const String section) {
 		ftpObj["maxPwdLength"].set(ftpUserLength - 1);
 	}
 #endif
-// MQTT
-#ifdef MQTT_ENABLE
-	if ((section == "") || (section == "mqtt")) {
+	// MQTT
+	if (isMqttCompiled() && ((section == "") || (section == "mqtt"))) {
 		JsonObject mqttObj = obj["mqtt"].to<JsonObject>();
 		mqttObj["enable"].set(Mqtt_IsEnabled());
 		String macPlain = Wlan_GetMacAddress(); // returns AA:BB:CC:DD:EE:FF or empty
@@ -1244,7 +1243,6 @@ static void settingsToJSON(JsonObject obj, const String section) {
 		mqttObj["maxBaseTopicLength"].set(mqttBaseTopicLength - 1);
 		mqttObj["maxDeviceIdLength"].set(mqttDeviceIdLength - 1);
 	}
-#endif
 // Bluetooth
 #ifdef BLUETOOTH_ENABLE
 	if ((section == "") || (section == "bluetooth")) {

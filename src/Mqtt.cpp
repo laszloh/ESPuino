@@ -21,6 +21,7 @@
 
 // MQTT-helper
 #ifdef MQTT_ENABLE
+
 static WiFiClient Mqtt_WifiClient;
 static esp_mqtt_client_handle_t mqtt_client = NULL;
 // Please note: all of them are defaults that can be changed later via GUI
@@ -32,9 +33,7 @@ String gMqttUser = ""; // MQTT-user
 String gMqttPassword = ""; // MQTT-password
 uint16_t gMqttPort = 1883; // MQTT-Port
 constexpr uint8_t MQTT_TOPIC_MAX_LENGTH = 128u; // Maximal length of MQTT-topic
-#endif
 
-#ifdef MQTT_ENABLE
 // helper to replace <MAC> or <mac> with actual MAC-address (no colons, uppercase). Uses Wlan_GetMacAddress() which is available earlier than WiFi
 static String ReplaceMacToken(const String &in) {
 	if (in.indexOf("<MAC>") == -1 && in.indexOf("<mac>") == -1) {
@@ -52,18 +51,14 @@ static String ReplaceMacToken(const String &in) {
 	out.replace("<mac>", mac);
 	return out;
 }
-#endif
 
 // MQTT
 static bool Mqtt_Enabled = false;
 
-#ifdef MQTT_ENABLE
 static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data);
 static void Mqtt_ClientCallback(const char *topic_buf, uint32_t topic_length, const char *payload_buf, uint32_t payload_length);
-#endif
 
 void Mqtt_Init() {
-#ifdef MQTT_ENABLE
 	// Get MQTT-enable from NVS
 	uint8_t nvsEnableMqtt = gPrefsSettings.getUChar("enableMQTT", 99);
 	switch (nvsEnableMqtt) {
@@ -180,13 +175,9 @@ void Mqtt_Init() {
 
 		// don't start the task yet, wait for WiFi to be connected
 	}
-#else
-	Mqtt_Enabled = false;
-#endif
 }
 
 void Mqtt_OnWifiConnected(void) {
-#ifdef MQTT_ENABLE
 	if (mqtt_client == NULL) {
 		return;
 	}
@@ -197,10 +188,8 @@ void Mqtt_OnWifiConnected(void) {
 	} else {
 		esp_mqtt_client_reconnect(mqtt_client);
 	}
-#endif
 }
 
-#ifdef MQTT_ENABLE
 const char *Mqtt_GetTopic(const char *topic, bool isStateTopic) {
 	static char out_string[MQTT_TOPIC_MAX_LENGTH]; // Static buffer to hold the result
 
@@ -228,17 +217,14 @@ const char *Mqtt_GetStateTopic(const char *topic) {
 const char *Mqtt_GetCommandTopic(const char *topic) {
 	return Mqtt_GetTopic(topic, false);
 }
-#endif
 
 void Mqtt_Exit(void) {
-#ifdef MQTT_ENABLE
 	Log_Println("shutdown MQTT..", LOGLEVEL_NOTICE);
 	publishMqtt(topicState, "Offline", false);
 	publishMqtt(topicTrack, "---", false);
 	esp_mqtt_client_disconnect(mqtt_client);
 	esp_mqtt_client_stop(mqtt_client);
 	esp_mqtt_client_destroy(mqtt_client);
-#endif
 }
 
 bool Mqtt_IsEnabled(void) {
@@ -246,46 +232,33 @@ bool Mqtt_IsEnabled(void) {
 }
 
 /* Wrapper-functions for MQTT-publish */
-bool publishMqtt(const char *topic, const char *payload, bool retained) {
-#ifdef MQTT_ENABLE
+void publishMqtt(const char *topic, const char *payload, bool retained) {
 	if (mqtt_client == NULL) {
-		return false;
+		return;
 	}
 	if (strcmp(topic, "") != 0) {
 		int qos = 0;
-		int ret = esp_mqtt_client_publish(mqtt_client, Mqtt_GetStateTopic(topic), payload, 0, qos, retained);
-		// int ret = esp_mqtt_client_enqueue(mqtt_client, topic, payload, 0, qos, retained, true);
-		return ret == 0;
+		esp_mqtt_client_publish(mqtt_client, Mqtt_GetStateTopic(topic), payload, 0, qos, retained);
+		// esp_mqtt_client_enqueue(mqtt_client, topic, payload, 0, qos, retained, true);
 	}
-#endif
-
-	return false;
 }
 
-bool publishMqtt(const char *topic, int32_t payload, bool retained) {
-#ifdef MQTT_ENABLE
+void publishMqtt(const char *topic, int32_t payload, bool retained) {
 	if (mqtt_client == NULL) {
-		return false;
+		return;
 	}
 	char buf[11];
 	snprintf(buf, sizeof(buf) / sizeof(buf[0]), "%ld", payload);
-	return publishMqtt(topic, buf, retained);
-#else
-	return false;
-#endif
+	publishMqtt(topic, buf, retained);
 }
 
-bool publishMqtt(const char *topic, uint32_t payload, bool retained) {
-#ifdef MQTT_ENABLE
+void publishMqtt(const char *topic, uint32_t payload, bool retained) {
 	if (mqtt_client == NULL) {
-		return false;
+		return;
 	}
 	char buf[11];
 	snprintf(buf, sizeof(buf) / sizeof(buf[0]), "%lu", payload);
-	return publishMqtt(topic, buf, retained);
-#else
-	return false;
-#endif
+	publishMqtt(topic, buf, retained);
 }
 
 template <typename NumberType>
@@ -305,7 +278,6 @@ static NumberType toNumber(const std::string str) {
 }
 
 // Is called if there's a new MQTT-message for us
-#ifdef MQTT_ENABLE
 void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data) {
 	// Log_Printf(LOGLEVEL_DEBUG, "Event dispatched from event loop base=%s, event_id=%" PRIi32 "", base, event_id);
 	esp_mqtt_event_handle_t event = reinterpret_cast<esp_mqtt_event_handle_t>(event_data);
@@ -399,10 +371,8 @@ void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event
 		}
 	}
 }
-#endif
 
 void Mqtt_ClientCallback(const char *topic_buf, uint32_t topic_length, const char *payload_buf, uint32_t payload_length) {
-#ifdef MQTT_ENABLE
 	// If message's size is zero => discard (https://forum.espuino.de/t/mqtt-broker-verbindung-von-iobroker-schaltet-espuino-aus/3167)
 	if (!payload_length || !topic_length) {
 		return;
@@ -615,5 +585,6 @@ void Mqtt_ClientCallback(const char *topic_buf, uint32_t topic_length, const cha
 		Log_Printf(LOGLEVEL_ERROR, noValidTopic, topic_str.c_str());
 		System_IndicateError();
 	}
-#endif
 }
+
+#endif // MQTT_ENABLE

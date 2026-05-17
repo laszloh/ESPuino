@@ -16,14 +16,33 @@ extern String gMqttUser;
 extern String gMqttPassword;
 extern uint16_t gMqttPort;
 
+#ifdef MQTT_ENABLE
+consteval bool isMqttCompiled() { return true; }
+
 void Mqtt_Init(void);
 void Mqtt_Exit(void);
 void Mqtt_OnWifiConnected(void);
 bool Mqtt_IsEnabled(void);
 
-bool publishMqtt(const char *topic, const char *payload, bool retained);
-bool publishMqtt(const char *topic, int32_t payload, bool retained);
-#if (defined(ESP_ARDUINO_VERSION_MAJOR) && (ESP_ARDUINO_VERSION_MAJOR < 3))
-bool publishMqtt(const char *topic, unsigned long payload, bool retained);
-#endif
-bool publishMqtt(const char *topic, uint32_t payload, bool retained);
+void publishMqtt(const char *topic, const char *payload, bool retained);
+void publishMqtt(const char *topic, int32_t payload, bool retained);
+	#if (defined(ESP_ARDUINO_VERSION_MAJOR) && (ESP_ARDUINO_VERSION_MAJOR < 3))
+void publishMqtt(const char *topic, unsigned long payload, bool retained);
+	#endif
+void publishMqtt(const char *topic, uint32_t payload, bool retained);
+
+#else // if MQTT_ENABLE not defined, define dummy functions to avoid #ifdefs in code
+consteval bool isMqttCompiled() { return false; }
+
+inline void Mqtt_Init(void) {}
+inline void Mqtt_Exit(void) {}
+inline void Mqtt_OnWifiConnected(void) {}
+inline bool Mqtt_IsEnabled(void) { return false; }
+inline void publishMqtt(const char *topic, const char *payload, bool retained) {}
+inline void publishMqtt(const char *topic, int32_t payload, bool retained) {}
+	#if (defined(ESP_ARDUINO_VERSION_MAJOR) && (ESP_ARDUINO_VERSION_MAJOR < 3))
+inline void publishMqtt(const char *topic, unsigned long payload, bool retained) {}
+	#endif
+inline void publishMqtt(const char *topic, uint32_t payload, bool retained) {}
+
+#endif // MQTT_ENABLE

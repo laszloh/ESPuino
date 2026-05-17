@@ -536,9 +536,7 @@ void handleWifiStateConnected() {
 			Log_Printf(LOGLEVEL_DEBUG, "RSSI: %d dBm", Wlan_GetRssi());
 			lastRssiValue = Wlan_GetRssi();
 		}
-#ifdef MQTT_ENABLE
 		publishMqtt(topicWiFiRssi, static_cast<int32_t>(Wlan_GetRssi()), false);
-#endif
 	}
 }
 

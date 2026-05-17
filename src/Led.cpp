@@ -239,9 +239,7 @@ void Led_SetBrightness(uint8_t value) {
 	Port_Write(BUTTONS_LED, value <= gLedSettings.Led_NightBrightness ? LOW : HIGH, false);
 	#endif
 
-	#ifdef MQTT_ENABLE
 	publishMqtt(topicLedBrightness, static_cast<uint32_t>(gLedSettings.Led_Brightness), false);
-	#endif
 #endif
 }
 
