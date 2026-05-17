@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <esp_random.h>
 #include <esp_vfs_fat.h>
+#include <limits>
 #include <string_view>
 
 #ifdef SD_MMC_1BIT_MODE
@@ -21,34 +22,38 @@ SPIClass spiSD(HSPI);
 fs::FS gFSystem = (fs::FS) SD;
 #endif
 
-uint8_t maxRecursionDepth;
+static uint8_t maxRecursionDepth;
+
+static void sd_pre_mount() {
+#ifdef SD_MMC_1BIT_MODE
+	pinMode(2, INPUT_PULLUP);
+#elif !defined(SINGLE_SPI_ENABLE)
+	pinMode(SPISD_CS, OUTPUT);
+	digitalWrite(SPISD_CS, HIGH);
+	spiSD.begin(SPISD_SCK, SPISD_MISO, SPISD_MOSI, SPISD_CS);
+	spiSD.setFrequency(1000000);
+#endif
+}
+
+static bool sd_mount() {
+#ifdef SD_MMC_1BIT_MODE
+	return SD_MMC.begin("/sdcard", true);
+#elif !defined(SINGLE_SPI_ENABLE)
+	return SD.begin(SPISD_CS, spiSD);
+#else
+	return SD.begin(SPISD_CS);
+#endif
+}
 
 void SdCard_Init(void) {
 #ifdef NO_SDCARD
 	// Initialize without any SD card, e.g. for webplayer only
 	Log_Println("Init without SD card ", LOGLEVEL_NOTICE);
-	return
+	return;
 #endif
 
-#ifndef SINGLE_SPI_ENABLE
-	#ifdef SD_MMC_1BIT_MODE
-		pinMode(2, INPUT_PULLUP);
-	while (!SD_MMC.begin("/sdcard", true)) {
-	#else
-		pinMode(SPISD_CS, OUTPUT);
-	digitalWrite(SPISD_CS, HIGH);
-	spiSD.begin(SPISD_SCK, SPISD_MISO, SPISD_MOSI, SPISD_CS);
-	spiSD.setFrequency(1000000);
-	while (!SD.begin(SPISD_CS, spiSD)) {
-	#endif
-#else
-	#ifdef SD_MMC_1BIT_MODE
-	pinMode(2, INPUT_PULLUP);
-	while (!SD_MMC.begin("/sdcard", true)) {
-	#else
-	while (!SD.begin(SPISD_CS)) {
-	#endif
-#endif
+	sd_pre_mount();
+	while (!sd_mount()) {
 		Log_Println(unableToMountSd, LOGLEVEL_ERROR);
 		delay(500);
 #ifdef SHUTDOWN_IF_SD_BOOT_FAILS
@@ -60,10 +65,12 @@ void SdCard_Init(void) {
 	}
 
 	// Used when building recursive playlists
-	maxRecursionDepth = gPrefsSettings.getUInt("nvsRecDepth", 255);
-	if (maxRecursionDepth == 255) {
-		gPrefsSettings.putUInt("nvsRecDepth", 2);
+	uint32_t nvsRecDepth = gPrefsSettings.getUInt("nvsRecDepth", std::numeric_limits<uint32_t>::max());
+	if (nvsRecDepth == std::numeric_limits<uint32_t>::max()) {
 		maxRecursionDepth = 2;
+		gPrefsSettings.putUInt("nvsRecDepth", maxRecursionDepth);
+	} else {
+		maxRecursionDepth = static_cast<uint8_t>(nvsRecDepth);
 	}
 }
 
@@ -107,14 +114,15 @@ uint64_t SdCard_GetFreeSize() {
 #endif
 }
 
+// Returns recursion depth that's used then playlists are generated for recursive playmodes
 uint8_t SdCard_GetMaxRecursionDepth(void) {
 	return maxRecursionDepth;
 }
 
-// Returns recursion depth that's used then playlists are generated for recursive playmodes
-size_t SdCard_SetMaxRecursionDepth(uint8_t _maxRecursionDepth) {
+// Sets the recursion depth that's used then playlists are generated for recursive playmodes
+uint8_t SdCard_SetMaxRecursionDepth(uint8_t _maxRecursionDepth) {
 	maxRecursionDepth = _maxRecursionDepth;
-	return gPrefsSettings.putUInt("nvsRecDepth", SdCard_GetMaxRecursionDepth());
+	return static_cast<uint8_t>(gPrefsSettings.putUInt("nvsRecDepth", maxRecursionDepth));
 }
 
 void SdCard_PrintInfo() {
@@ -141,7 +149,6 @@ void SdCard_PrintInfo() {
 	// show SD card size / free space
 	uint64_t cardSize = SdCard_GetSize() / (1024 * 1024);
 	uint64_t freeSize = SdCard_GetFreeSize() / (1024 * 1024);
-	;
 	Log_Printf(LOGLEVEL_NOTICE, sdInfo, cardSize, freeSize);
 }
 
@@ -223,51 +230,33 @@ bool fileValid(std::string_view _fileItem) {
 }
 
 // Takes a directory as input and returns a random subdirectory from it
-const String SdCard_pickRandomSubdirectory(const char *_directory) {
+String SdCard_pickRandomSubdirectory(const char *_directory) {
 	// Look if folder requested really exists and is a folder. If not => break.
 	File directory = gFSystem.open(_directory);
 	if (!directory || !directory.isDirectory()) {
 		Log_Printf(LOGLEVEL_ERROR, dirOrFileDoesNotExist, _directory);
-		return String();
+		return String {};
 	}
 	Log_Printf(LOGLEVEL_NOTICE, tryToPickRandomDir, _directory);
 
-	// iterate through and count all dirs
+	// use reservoir alorithm to pick a random directory from the given one.
+	String chosen;
 	size_t dirCount = 0;
-	while (1) {
+	while (true) {
 		bool isDir;
 		const String name = directory.getNextFileName(&isDir);
 		if (name.isEmpty()) {
 			break;
 		}
-		if (isDir) {
-			dirCount++;
+		if (!isDir) {
+			continue;
+		}
+		dirCount++;
+		if (esp_random() % dirCount == 0) {
+			chosen = std::move(name);
 		}
 	}
-	if (!dirCount) {
-		// no paths in folder
-		return String();
-	}
-
-	const uint32_t randomNumber = esp_random() % dirCount;
-	directory.rewindDirectory();
-	dirCount = 0;
-	while (1) {
-		bool isDir;
-		const String name = directory.getNextFileName(&isDir);
-		if (name.isEmpty()) {
-			break;
-		}
-		if (isDir) {
-			if (dirCount == randomNumber) {
-				return name;
-			}
-			dirCount++;
-		}
-	}
-
-	// if we reached here, something went wrong
-	return String();
+	return chosen;
 }
 
 static std::optional<std::unique_ptr<Playlist>> SdCard_ParseM3UPlaylist(File file) {
@@ -445,7 +434,7 @@ int16_t SdCard_findNextOrPrevDirectoryTrack(const Playlist &playlist, size_t cur
 	return -1;
 }
 
-const String SdCard_GetVolumeLabel() {
+String SdCard_GetVolumeLabel() {
 #if FF_USE_LABEL
 	char label[24];
 	memset(label, 0, sizeof(label));
