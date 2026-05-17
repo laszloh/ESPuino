@@ -80,17 +80,14 @@ BaseType_t trackQStatus = pdFAIL;
 uint8_t trackCommand = NO_ACTION;
 bool audioReturnCode;
 uint32_t AudioPlayer_LastPlaytimeStatsTimestamp = 0u;
-Playlist *newPlayList = nullptr;
+std::unique_ptr<Playlist> newPlayList;
 bool newPlayListAvailable = false;
 bool audio_active = false;
 
 static void AudioPlayer_HeadphoneVolumeManager(void);
-static std::optional<Playlist *> AudioPlayer_ReturnPlaylistFromWebstream(const char *_webUrl);
-static bool AudioPlayer_ArrSortHelper_strcmp(const char *a, const char *b);
-static bool AudioPlayer_ArrSortHelper_strnatcmp(const char *a, const char *b);
-static bool AudioPlayer_ArrSortHelper_strnatcasecmp(const char *a, const char *b);
-static void AudioPlayer_SortPlaylist(Playlist *playlist);
-static void AudioPlayer_RandomizePlaylist(Playlist *playlist);
+static std::optional<std::unique_ptr<Playlist>> AudioPlayer_ReturnPlaylistFromWebstream(const char *_webUrl);
+static void AudioPlayer_SortPlaylist(Playlist &playlist);
+static void AudioPlayer_RandomizePlaylist(Playlist &playlist);
 static size_t AudioPlayer_NvsRfidWriteWrapper(const char *_rfidCardId, const uint32_t _playPosition, const uint8_t _playMode, const uint16_t _trackLastPlayed);
 static void AudioPlayer_ClearCover(void);
 static void audio_id3image(File &file, const size_t pos, const size_t size);
@@ -326,7 +323,7 @@ void AudioPlayer_Init(void) {
 	gPlayProperties.title[0] = '\0';
 	gPlayProperties.coverFilePos = 0;
 	AudioPlayer_StationLogoUrl = "";
-	gPlayProperties.playlist = allocatePlaylist();
+	gPlayProperties.playlist = std::make_unique<Playlist>();
 	gPlayProperties.SavePlayPosRfidChange = gPrefsSettings.getBool("savePosRfidChge", false); // SAVE_PLAYPOS_WHEN_RFID_CHANGE
 	gPlayProperties.pauseOnMinVolume = gPrefsSettings.getBool("pauseOnMinVol", false); // PAUSE_ON_MIN_VOLUME
 #ifdef PAUSE_WHEN_RFID_REMOVED
@@ -601,8 +598,7 @@ void AudioPlayer_Loop() {
 			audio->stopSong();
 
 			// destroy the old playlist and assign the new one
-			freePlaylist(gPlayProperties.playlist);
-			gPlayProperties.playlist = newPlayList;
+			gPlayProperties.playlist = std::move(newPlayList);
 			Log_Printf(LOGLEVEL_NOTICE, newPlaylistReceived, gPlayProperties.playlist->size());
 			Log_Printf(LOGLEVEL_DEBUG, "Free heap: %u", ESP.getFreeHeap());
 			playbackTimeoutStart = millis();
@@ -1206,7 +1202,7 @@ void AudioPlayer_SetPlaylist(const char *_itemToPlay, const uint32_t _lastPlayPo
 
 	gPlayProperties.startAtFilePos = _lastPlayPos;
 	gPlayProperties.currentTrackNumber = _trackLastPlayed;
-	std::optional<Playlist *> musicFiles;
+	std::optional<std::unique_ptr<Playlist>> musicFiles;
 	String folderPath = _itemToPlay;
 
 	if (_playMode != WEBSTREAM) {
@@ -1241,7 +1237,7 @@ void AudioPlayer_SetPlaylist(const char *_itemToPlay, const uint32_t _lastPlayPo
 	}
 
 	gPlayProperties.playMode = BUSY; // Show @Neopixel, if uC is busy with creating playlist
-	Playlist *list = musicFiles.value();
+	std::unique_ptr<Playlist> list = std::move(musicFiles.value());
 	if (!list->size()) {
 		Log_Println(noMp3FilesInDir, LOGLEVEL_NOTICE);
 		System_IndicateError();
@@ -1254,7 +1250,6 @@ void AudioPlayer_SetPlaylist(const char *_itemToPlay, const uint32_t _lastPlayPo
 		}
 
 		gPlayProperties.playMode = NO_PLAYLIST;
-		freePlaylist(list);
 		return;
 	}
 
@@ -1289,20 +1284,17 @@ void AudioPlayer_SetPlaylist(const char *_itemToPlay, const uint32_t _lastPlayPo
 			gPlayProperties.playUntilTrackNumber = 0;
 			Led_SetNightmode(true);
 			Log_Println(modeSingleTrackRandom, LOGLEVEL_NOTICE);
-			AudioPlayer_RandomizePlaylist(list);
+			AudioPlayer_RandomizePlaylist(*list);
 			// we have a random order, so pick the first entry and scrap the rest
-			auto first = list->at(0);
-			list->at(0) = nullptr; // prevent our entry from being destroyed
-			freePlaylist(list); // this also scrapped our vector --> recreate it
-			list = allocatePlaylist();
-			list->push_back(first);
+			list->erase(list->begin() + 1, list->end());
+			list->shrink_to_fit();
 			break;
 		}
 
 		case AUDIOBOOK: { // Tracks need to be sorted!
 			gPlayProperties.saveLastPlayPosition = true;
 			Log_Println(modeSingleAudiobook, LOGLEVEL_NOTICE);
-			AudioPlayer_SortPlaylist(list);
+			AudioPlayer_SortPlaylist(*list);
 			break;
 		}
 
@@ -1310,54 +1302,54 @@ void AudioPlayer_SetPlaylist(const char *_itemToPlay, const uint32_t _lastPlayPo
 			gPlayProperties.repeatPlaylist = true;
 			gPlayProperties.saveLastPlayPosition = true;
 			Log_Println(modeSingleAudiobookLoop, LOGLEVEL_NOTICE);
-			AudioPlayer_SortPlaylist(list);
+			AudioPlayer_SortPlaylist(*list);
 			break;
 		}
 
 		case AUDIOBOOK_RECURSIVE: { // Tracks need to be sorted!
 			gPlayProperties.saveLastPlayPosition = true;
 			Log_Println(modeAudiobookRecursive, LOGLEVEL_NOTICE);
-			AudioPlayer_SortPlaylist(list);
+			AudioPlayer_SortPlaylist(*list);
 			break;
 		}
 
 		case ALL_TRACKS_OF_DIR_SORTED_RECURSIVE: {
 			Log_Printf(LOGLEVEL_NOTICE, modeAllTrackAlphSortedRecursive, folderPath.c_str());
-			AudioPlayer_SortPlaylist(list);
+			AudioPlayer_SortPlaylist(*list);
 			break;
 		}
 
 		case ALL_TRACKS_OF_DIR_SORTED:
 		case RANDOM_SUBDIRECTORY_OF_DIRECTORY: {
 			Log_Printf(LOGLEVEL_NOTICE, modeAllTrackAlphSorted, folderPath.c_str());
-			AudioPlayer_SortPlaylist(list);
+			AudioPlayer_SortPlaylist(*list);
 			break;
 		}
 
 		case ALL_TRACKS_OF_DIR_RANDOM_RECURSIVE: {
 			Log_Printf(LOGLEVEL_NOTICE, modeAllTrackRandomRecursive, folderPath.c_str());
-			AudioPlayer_RandomizePlaylist(list);
+			AudioPlayer_RandomizePlaylist(*list);
 			break;
 		}
 
 		case ALL_TRACKS_OF_DIR_RANDOM:
 		case RANDOM_SUBDIRECTORY_OF_DIRECTORY_ALL_TRACKS_OF_DIR_RANDOM: {
 			Log_Printf(LOGLEVEL_NOTICE, modeAllTrackRandom, folderPath.c_str());
-			AudioPlayer_RandomizePlaylist(list);
+			AudioPlayer_RandomizePlaylist(*list);
 			break;
 		}
 
 		case ALL_TRACKS_OF_DIR_SORTED_LOOP: {
 			gPlayProperties.repeatPlaylist = true;
 			Log_Println(modeAllTrackAlphSortedLoop, LOGLEVEL_NOTICE);
-			AudioPlayer_SortPlaylist(list);
+			AudioPlayer_SortPlaylist(*list);
 			break;
 		}
 
 		case ALL_TRACKS_OF_DIR_RANDOM_LOOP: {
 			gPlayProperties.repeatPlaylist = true;
 			Log_Println(modeAllTrackRandomLoop, LOGLEVEL_NOTICE);
-			AudioPlayer_RandomizePlaylist(list);
+			AudioPlayer_RandomizePlaylist(*list);
 			break;
 		}
 
@@ -1383,14 +1375,13 @@ void AudioPlayer_SetPlaylist(const char *_itemToPlay, const uint32_t _lastPlayPo
 	if (!error) {
 		gPlayProperties.playMode = _playMode;
 		newPlayListAvailable = true;
-		newPlayList = list;
+		newPlayList = std::move(list);
 		return;
 	}
 
 	// we had an error, blink and destroy playlist
 	gPlayProperties.playMode = NO_PLAYLIST;
 	System_IndicateError();
-	freePlaylist(list);
 }
 
 /* Wraps putString for writing settings into NVS for RFID-cards.
@@ -1432,10 +1423,15 @@ size_t AudioPlayer_NvsRfidWriteWrapper(const char *_rfidCardId, const uint32_t _
 }
 
 // Adds webstream to playlist; same like SdCard_ReturnPlaylist() but always only one entry
-std::optional<Playlist *> AudioPlayer_ReturnPlaylistFromWebstream(const char *_webUrl) {
-	Playlist *playlist = allocatePlaylist();
-	playlist->emplace_back(_webUrl);
-	return playlist;
+std::optional<std::unique_ptr<Playlist>> AudioPlayer_ReturnPlaylistFromWebstream(const char *_webUrl) {
+	try {
+		std::unique_ptr<Playlist> playlist = std::make_unique<Playlist>();
+		playlist->emplace_back(_webUrl);
+		return playlist;
+	} catch (const std::bad_alloc &e) {
+		Log_Printf(LOGLEVEL_ERROR, "Out of memory building Webstream playlist for %s: %s", _webUrl, e.what());
+		return std::nullopt;
+	}
 }
 
 // Adds new control-command to control-queue
@@ -1444,56 +1440,52 @@ void AudioPlayer_SetTrackControl(const uint8_t new_trackCommand) {
 }
 
 // Knuth-Fisher-Yates-algorithm to randomize playlist
-void AudioPlayer_RandomizePlaylist(Playlist *playlist) {
-	if (playlist->size() < 2) {
+void AudioPlayer_RandomizePlaylist(Playlist &playlist) {
+	if (playlist.size() < 2) {
 		// we can not randomize less than 2 entries
 		return;
 	}
 
 	// randomize using the "normal" random engine and shuffle
 	std::default_random_engine rnd(millis());
-	std::shuffle(playlist->begin(), playlist->end(), rnd);
-}
-
-// Helper to sort playlist - standard string comparison
-static bool AudioPlayer_ArrSortHelper_strcmp(const char *a, const char *b) {
-	return strcmp(a, b) < 0;
-}
-
-// Helper to sort playlist - natural case-sensitive
-static bool AudioPlayer_ArrSortHelper_strnatcmp(const char *a, const char *b) {
-	return strnatcmp(a, b) < 0;
-}
-
-// Helper to sort playlist - natural case-insensitive
-static bool AudioPlayer_ArrSortHelper_strnatcasecmp(const char *a, const char *b) {
-	return strnatcasecmp(a, b) < 0;
+	std::shuffle(playlist.begin(), playlist.end(), rnd);
 }
 
 // Sort playlist
-void AudioPlayer_SortPlaylist(Playlist *playlist) {
-	std::function<bool(const char *, const char *)> cmpFunc;
+void AudioPlayer_SortPlaylist(Playlist &playlist) {
+	using CmpFn = bool (*)(const Playlist::value_type &, const Playlist::value_type &);
+	const auto strcmpSort = [](const Playlist::value_type &a, const Playlist::value_type &b) -> bool {
+		return strcmp(a.c_str(), b.c_str()) < 0;
+	};
+	const auto strnatSort = [](const Playlist::value_type &a, const Playlist::value_type &b) -> bool {
+		return strnatcmp(a.c_str(), b.c_str()) < 0;
+	};
+	const auto strnatCaseSort = [](const Playlist::value_type &a, const Playlist::value_type &b) -> bool {
+		return strnatcasecmp(a.c_str(), b.c_str()) < 0;
+	};
+
+	CmpFn cmpFunc;
 	const char *mode;
 	switch (AudioPlayer_PlaylistSortMode) {
 		case playlistSortMode::STRCMP:
-			cmpFunc = AudioPlayer_ArrSortHelper_strcmp; // standard string comparison
+			cmpFunc = strcmpSort; // standard string comparison
 			mode = "standard string compare";
 			break;
 		case playlistSortMode::STRNATCMP:
-			cmpFunc = AudioPlayer_ArrSortHelper_strnatcmp; // natural case-sensitive
+			cmpFunc = strnatSort; // natural case-sensitive
 			mode = "case-sensitive natural sorting";
 			break;
 		case playlistSortMode::STRNATCASECMP:
 		default:
-			cmpFunc = AudioPlayer_ArrSortHelper_strnatcasecmp; // natural case-insensitive
+			cmpFunc = strnatCaseSort; // natural case-insensitive
 			mode = "case-insensitive natural sorting";
 			break;
 	}
 
 	Log_Printf(LOGLEVEL_INFO, "Sorting files using %s", mode, "\n");
-	std::sort(playlist->begin(), playlist->end(), cmpFunc);
-	/*for (const char *str : *playlist) {
-		Serial.println(str);
+	std::sort(playlist.begin(), playlist.end(), cmpFunc);
+	/*for (const auto &str : playlist) {
+		Serial.println(str.c_str());
 	}*/
 }
 

@@ -270,13 +270,8 @@ const String SdCard_pickRandomSubdirectory(const char *_directory) {
 	return String();
 }
 
-static bool SdCard_allocAndSave(Playlist *playlist, const String &s) {
-	playlist->emplace_back(s.c_str());
-	return true;
-}
-
-static std::optional<Playlist *> SdCard_ParseM3UPlaylist(File file) {
-	Playlist *playlist = allocatePlaylist();
+static std::optional<std::unique_ptr<Playlist>> SdCard_ParseM3UPlaylist(File file) {
+	std::unique_ptr<Playlist> playlist = std::make_unique<Playlist>();
 
 	// reserve a sane amount of memory to reduce heap fragmentation
 	playlist->reserve(64);
@@ -290,9 +285,7 @@ static std::optional<Playlist *> SdCard_ParseM3UPlaylist(File file) {
 			// this something we have to save
 			line.trim();
 			// save string
-			if (!SdCard_allocAndSave(playlist, line)) {
-				return std::nullopt;
-			}
+			playlist->emplace_back(line.c_str());
 		}
 	}
 
@@ -301,84 +294,89 @@ static std::optional<Playlist *> SdCard_ParseM3UPlaylist(File file) {
 	return playlist;
 }
 
-/* Puts SD-file(s) or directory into a playlist
-	First element of array always contains the number of payload-items. */
-std::optional<Playlist *> SdCard_ReturnPlaylist(const char *fileName, const uint32_t _playMode, const uint8_t _maxRecursionDepth, bool _recursionMode) {
-	// Look if file/folder requested really exists. If not => break.
-	File fileOrDirectory = gFSystem.open(fileName);
-	if (!fileOrDirectory) {
-		Log_Printf(LOGLEVEL_ERROR, dirOrFileDoesNotExist, fileName);
-		return std::nullopt;
+static void SdCard_PopulatePlaylistWithDir(Playlist &list, const char *path, bool _recursionMode, const uint8_t _maxRecursionDepth, uint8_t &currentRecDepth, size_t &hiddenFiles) {
+	File dir = gFSystem.open(path);
+	if (!dir || !dir.isDirectory()) {
+		Log_Printf(LOGLEVEL_ERROR, dirOrFileDoesNotExist, path);
+		return;
 	}
 
-	// Parse m3u-playlist and create linear-playlist out of it
-	if (_playMode == LOCAL_M3U) {
-		if (!fileOrDirectory.isDirectory() && fileOrDirectory.size() > 0) {
-			// function takes care of everything
-			return SdCard_ParseM3UPlaylist(fileOrDirectory);
-		}
-	}
-
-	// if we reach this code, it was not a m3u
-
-	static Playlist *playlist = nullptr; // static because of possible recursion
-	if (_recursionMode == false) {
-		Log_Printf(LOGLEVEL_DEBUG, freeMemory, ESP.getFreeHeap());
-		playlist = allocatePlaylist();
-		Log_Printf(LOGLEVEL_NOTICE, playlistRecDepth, _maxRecursionDepth);
-	}
-
-	static uint8_t currentRecDepth = 0;
-
-	// File-mode
-	if (!fileOrDirectory.isDirectory()) {
-		if (!SdCard_allocAndSave(playlist, fileOrDirectory.path())) {
-			// OOM, function already took care of house cleaning
-			return std::nullopt;
-		}
-		return playlist;
-	}
-
-	// Directory-mode (linear-playlist)
-	playlist->reserve(64); // reserve a sane amount of memory to reduce the number of reallocs
-	size_t hiddenFiles = 0;
-	while (true) {
+	do {
 		bool isDir;
-		const String name = fileOrDirectory.getNextFileName(&isDir);
+		const String name = dir.getNextFileName(&isDir);
 		if (name.isEmpty()) {
 			break;
 		}
 		if (isDir) {
 			//  Jump into directory if recursion is allowed
-			if (currentRecDepth < _maxRecursionDepth) {
+			if (_recursionMode && currentRecDepth < _maxRecursionDepth) {
 				currentRecDepth++;
-				// Log_Printf(LOGLEVEL_DEBUG, "Added folder: %s, depth of recursion: %d\n", name.c_str(), currentRecDepth);
-				SdCard_ReturnPlaylist(name.c_str(), _playMode, _maxRecursionDepth, true);
+				Log_Printf(LOGLEVEL_DEBUG, "Added folder: %s, depth of recursion: %d\n", name.c_str(), currentRecDepth);
+				SdCard_PopulatePlaylistWithDir(list, name.c_str(), _recursionMode, _maxRecursionDepth, currentRecDepth, hiddenFiles);
 				currentRecDepth--;
-			} else {
-				continue;
 			}
+			continue;
 		}
 		// Don't support filenames that start with "." and only allow .mp3 and other supported audio file formats
 		if (fileValid(name.c_str())) {
 			// save it to the vector
-			if (!SdCard_allocAndSave(playlist, name)) {
-				// OOM, function already took care of house cleaning
-				return std::nullopt;
-			}
+			list.emplace_back(name.c_str());
 		} else {
 			hiddenFiles++;
+			Log_Printf(LOGLEVEL_DEBUG, "File is hidden or not supported: %s", name.c_str());
 		}
-	}
-	playlist->shrink_to_fit();
+	} while (true);
+}
 
-	// Only show sum up at last run (when no recursion is active)
-	if (!_recursionMode) {
+/* Puts SD-file(s) or directory into a playlist
+	First element of array always contains the number of payload-items. */
+std::optional<std::unique_ptr<Playlist>> SdCard_ReturnPlaylist(const char *fileName, const uint32_t _playMode, const uint8_t _maxRecursionDepth, bool _recursionMode) {
+	try {
+		// Look if file/folder requested really exists. If not => break.
+		File fileOrDirectory = gFSystem.open(fileName);
+		if (!fileOrDirectory) {
+			Log_Printf(LOGLEVEL_ERROR, dirOrFileDoesNotExist, fileName);
+			return std::nullopt;
+		}
+
+		// Parse m3u-playlist and create linear-playlist out of it
+		if (_playMode == LOCAL_M3U) {
+			if (!fileOrDirectory.isDirectory() && fileOrDirectory.size() > 0) {
+				// function takes care of everything
+				return SdCard_ParseM3UPlaylist(fileOrDirectory);
+			}
+			return std::nullopt;
+		}
+
+		// if we reach this code, it was not a m3u
+
+		std::unique_ptr<Playlist> playlist = std::make_unique<Playlist>();
+
+		// File-mode
+		if (!fileOrDirectory.isDirectory()) {
+			playlist->emplace_back(fileOrDirectory.path());
+			return playlist;
+		}
+
+		// Directory-mode (linear-playlist)
+		playlist->reserve(64); // reserve a sane amount of memory to reduce the number of reallocs
+		size_t hiddenFiles = 0;
+		uint8_t currentRecDepth = 0;
+
+		Log_Printf(LOGLEVEL_DEBUG, freeMemory, ESP.getFreeHeap());
+		Log_Printf(LOGLEVEL_NOTICE, playlistRecDepth, _maxRecursionDepth);
+		SdCard_PopulatePlaylistWithDir(*playlist, fileOrDirectory.path(), _recursionMode, _maxRecursionDepth, currentRecDepth, hiddenFiles);
+
+		playlist->shrink_to_fit();
+
 		Log_Printf(LOGLEVEL_NOTICE, numberOfValidFiles, playlist->size());
 		Log_Printf(LOGLEVEL_DEBUG, "Hidden files: %u", hiddenFiles);
-	}
 
-	return playlist;
+		return playlist;
+	} catch (const std::bad_alloc &e) {
+		Log_Printf(LOGLEVEL_ERROR, "Out of memory building playlist for %s: %s", fileName, e.what());
+		return std::nullopt;
+	}
 }
 
 // Extracts basepath out of a given filepath
@@ -398,54 +396,56 @@ std::string_view SdCard_Basepath(const char *filepath) {
 // CMD_PREVFOLDER (backwards) and CMD_NEXTFOLDER (forwards) to previous / next folder in playlist.
 // Returns -1 if no prev or next folder was found or no playlist is available
 // Returns >=0 if folderjump is possible. Number represents the index of the current playlist's track to jump to.
+
+// TODO: rewrite
 int16_t SdCard_findNextOrPrevDirectoryTrack(const Playlist &_playlist, size_t currentTrackIndexInPlaylist, SearchDirection direction) {
 	// Look if index requested is out of bounds
 	if (currentTrackIndexInPlaylist >= _playlist.size()) {
 		return -1;
 	}
 
-	std::string_view basepathOfCurrentTrack = SdCard_Basepath(_playlist[currentTrackIndexInPlaylist]); // Get basepath of current track
+	// std::string_view basepathOfCurrentTrack = SdCard_Basepath(_playlist[currentTrackIndexInPlaylist]); // Get basepath of current track
 
-	// Look forwards
-	if (direction == SearchDirection::Forward) {
-		if (_playlist[currentTrackIndexInPlaylist] != nullptr) {
-			for (uint16_t i = (currentTrackIndexInPlaylist + 1); i < _playlist.size(); ++i) { // Iterate through playlist and start with current track +1
-				std::string_view basepathOfTrackToLookUp = SdCard_Basepath(_playlist[i]);
-				if (basepathOfTrackToLookUp != basepathOfCurrentTrack) {
-					Log_Printf(LOGLEVEL_DEBUG, jumpForwardsToFolder, basepathOfTrackToLookUp.data(), "\n");
-					return i; // Return first track after basepath change
-				}
-			}
-		} else {
-			return -1;
-		}
+	// // Look forwards
+	// if (direction == SearchDirection::Forward) {
+	// 	if (_playlist[currentTrackIndexInPlaylist] != nullptr) {
+	// 		for (uint16_t i = (currentTrackIndexInPlaylist + 1); i < _playlist.size(); ++i) { // Iterate through playlist and start with current track +1
+	// 			std::string_view basepathOfTrackToLookUp = SdCard_Basepath(_playlist[i]);
+	// 			if (basepathOfTrackToLookUp != basepathOfCurrentTrack) {
+	// 				Log_Printf(LOGLEVEL_DEBUG, jumpForwardsToFolder, basepathOfTrackToLookUp.data(), "\n");
+	// 				return i; // Return first track after basepath change
+	// 			}
+	// 		}
+	// 	} else {
+	// 		return -1;
+	// 	}
 
-		// Look backwards
-	} else if (direction == SearchDirection::Backward) {
-		//  Go back as long as we don't hit 0
-		if (!currentTrackIndexInPlaylist) {
-			return currentTrackIndexInPlaylist;
-		}
+	// 	// Look backwards
+	// } else if (direction == SearchDirection::Backward) {
+	// 	//  Go back as long as we don't hit 0
+	// 	if (!currentTrackIndexInPlaylist) {
+	// 		return currentTrackIndexInPlaylist;
+	// 	}
 
-		if (_playlist[currentTrackIndexInPlaylist] != nullptr) {
-			for (uint16_t i = (currentTrackIndexInPlaylist - 1); i > 0; i--) {
-				std::string_view basepathOfTrackToLookUp = SdCard_Basepath(_playlist[i]);
-				if (basepathOfTrackToLookUp != basepathOfCurrentTrack) { // Look for the 1st basepath change...
-					for (uint16_t j = i - 1; j > 0; j--) {
-						std::string_view basepathOfTrackToLookUpInner = SdCard_Basepath(_playlist[j]);
-						if (basepathOfTrackToLookUpInner != basepathOfTrackToLookUp) { // ...but keep on looking for the 2nd change...
-							Log_Printf(LOGLEVEL_DEBUG, jumpBackwardsToFolder, basepathOfTrackToLookUpInner.data(), "\n");
-							return j + 1; // ...just to add +1 to get the previous element before the 2nd change
-						}
-					}
-				}
-			}
-		} else {
-			return -1;
-		}
-		// If index 0 (first track) was hit meanwhile -> return it!
-		return 0;
-	}
+	// 	if (_playlist[currentTrackIndexInPlaylist] != nullptr) {
+	// 		for (uint16_t i = (currentTrackIndexInPlaylist - 1); i > 0; i--) {
+	// 			std::string_view basepathOfTrackToLookUp = SdCard_Basepath(_playlist[i]);
+	// 			if (basepathOfTrackToLookUp != basepathOfCurrentTrack) { // Look for the 1st basepath change...
+	// 				for (uint16_t j = i - 1; j > 0; j--) {
+	// 					std::string_view basepathOfTrackToLookUpInner = SdCard_Basepath(_playlist[j]);
+	// 					if (basepathOfTrackToLookUpInner != basepathOfTrackToLookUp) { // ...but keep on looking for the 2nd change...
+	// 						Log_Printf(LOGLEVEL_DEBUG, jumpBackwardsToFolder, basepathOfTrackToLookUpInner.data(), "\n");
+	// 						return j + 1; // ...just to add +1 to get the previous element before the 2nd change
+	// 					}
+	// 				}
+	// 			}
+	// 		}
+	// 	} else {
+	// 		return -1;
+	// 	}
+	// 	// If index 0 (first track) was hit meanwhile -> return it!
+	// 	return 0;
+	// }
 
 	// If no jump possible, return -1
 	return -1;
