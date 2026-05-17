@@ -392,58 +392,56 @@ std::string_view SdCard_Basepath(std::string_view filepath) {
 // CMD_PREVFOLDER (backwards) and CMD_NEXTFOLDER (forwards) to previous / next folder in playlist.
 // Returns -1 if no prev or next folder was found or no playlist is available
 // Returns >=0 if folderjump is possible. Number represents the index of the current playlist's track to jump to.
-
-// TODO: rewrite
-int16_t SdCard_findNextOrPrevDirectoryTrack(const Playlist &_playlist, size_t currentTrackIndexInPlaylist, SearchDirection direction) {
-	// Look if index requested is out of bounds
-	if (currentTrackIndexInPlaylist >= _playlist.size()) {
+int16_t SdCard_findNextOrPrevDirectoryTrack(const Playlist &playlist, size_t currentIdx, SearchDirection direction) {
+	if (currentIdx >= playlist.size() || playlist[currentIdx].empty()) {
 		return -1;
 	}
+	const std::string_view currentBase = SdCard_Basepath(playlist[currentIdx]);
 
-	// std::string_view basepathOfCurrentTrack = SdCard_Basepath(_playlist[currentTrackIndexInPlaylist]); // Get basepath of current track
+	switch (direction) {
+		case SearchDirection::Forward: {
+			for (size_t i = currentIdx + 1; i < playlist.size(); ++i) {
+				const std::string_view base = SdCard_Basepath(playlist[i]);
+				if (base != currentBase) {
+					Log_Printf(LOGLEVEL_DEBUG, jumpForwardsToFolder, static_cast<int>(base.size()), base.data());
+					return static_cast<int16_t>(i);
+				}
+			}
+			return -1;
+		}
 
-	// // Look forwards
-	// if (direction == SearchDirection::Forward) {
-	// 	if (_playlist[currentTrackIndexInPlaylist] != nullptr) {
-	// 		for (uint16_t i = (currentTrackIndexInPlaylist + 1); i < _playlist.size(); ++i) { // Iterate through playlist and start with current track +1
-	// 			std::string_view basepathOfTrackToLookUp = SdCard_Basepath(_playlist[i]);
-	// 			if (basepathOfTrackToLookUp != basepathOfCurrentTrack) {
-	// 				Log_Printf(LOGLEVEL_DEBUG, jumpForwardsToFolder, basepathOfTrackToLookUp.data(), "\n");
-	// 				return i; // Return first track after basepath change
-	// 			}
-	// 		}
-	// 	} else {
-	// 		return -1;
-	// 	}
+		case SearchDirection::Backward: {
+			// Single backward pass: find the first basepath change (= start of previous folder),
+			// then keep walking until the next change (= folder before that). prevStart tracks the
+			// first track of the previous folder so we can return it even when the playlist begins
+			// with that folder (i.e. no second change exists).
+			std::string_view prevBase;
+			size_t prevStart = 0;
+			bool inPrev = false;
+			for (size_t i = currentIdx; i > 0; --i) {
+				const size_t idx = i - 1;
+				const std::string_view base = SdCard_Basepath(playlist[idx]);
+				if (!inPrev) {
+					if (base != currentBase) {
+						prevBase = base;
+						prevStart = idx;
+						inPrev = true;
+					}
+				} else if (base != prevBase) {
+					Log_Printf(LOGLEVEL_DEBUG, jumpBackwardsToFolder, static_cast<int>(prevBase.size()), prevBase.data());
+					return static_cast<int16_t>(i);
+				} else {
+					prevStart = idx;
+				}
+			}
+			if (inPrev) {
+				Log_Printf(LOGLEVEL_DEBUG, jumpBackwardsToFolder, static_cast<int>(prevBase.size()), prevBase.data());
+				return static_cast<int16_t>(prevStart);
+			}
+			return -1;
+		}
+	}
 
-	// 	// Look backwards
-	// } else if (direction == SearchDirection::Backward) {
-	// 	//  Go back as long as we don't hit 0
-	// 	if (!currentTrackIndexInPlaylist) {
-	// 		return currentTrackIndexInPlaylist;
-	// 	}
-
-	// 	if (_playlist[currentTrackIndexInPlaylist] != nullptr) {
-	// 		for (uint16_t i = (currentTrackIndexInPlaylist - 1); i > 0; i--) {
-	// 			std::string_view basepathOfTrackToLookUp = SdCard_Basepath(_playlist[i]);
-	// 			if (basepathOfTrackToLookUp != basepathOfCurrentTrack) { // Look for the 1st basepath change...
-	// 				for (uint16_t j = i - 1; j > 0; j--) {
-	// 					std::string_view basepathOfTrackToLookUpInner = SdCard_Basepath(_playlist[j]);
-	// 					if (basepathOfTrackToLookUpInner != basepathOfTrackToLookUp) { // ...but keep on looking for the 2nd change...
-	// 						Log_Printf(LOGLEVEL_DEBUG, jumpBackwardsToFolder, basepathOfTrackToLookUpInner.data(), "\n");
-	// 						return j + 1; // ...just to add +1 to get the previous element before the 2nd change
-	// 					}
-	// 				}
-	// 			}
-	// 		}
-	// 	} else {
-	// 		return -1;
-	// 	}
-	// 	// If index 0 (first track) was hit meanwhile -> return it!
-	// 	return 0;
-	// }
-
-	// If no jump possible, return -1
 	return -1;
 }
 
