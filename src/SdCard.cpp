@@ -9,8 +9,10 @@
 #include "MemX.h"
 #include "System.h"
 
+#include <algorithm>
 #include <esp_random.h>
 #include <esp_vfs_fat.h>
+#include <string_view>
 
 #ifdef SD_MMC_1BIT_MODE
 fs::FS gFSystem = (fs::FS) SD_MMC;
@@ -144,10 +146,10 @@ void SdCard_PrintInfo() {
 }
 
 // Check if file-type is correct
-bool fileValid(const char *_fileItem) {
+bool fileValid(std::string_view _fileItem) {
 	// clang-format off
 	// all supported extension
-	constexpr std::array audioFileSufix = {
+	constexpr std::string_view audioFileSufix[] = {
 		".mp3",
 		".aac",
 		".m4a",
@@ -163,63 +165,59 @@ bool fileValid(const char *_fileItem) {
 		".asx"
 	};
 	// clang-format on
-	constexpr size_t maxExtLen = strlen(*std::max_element(audioFileSufix.begin(), audioFileSufix.end(), [](const char *a, const char *b) {
-		return strlen(a) < strlen(b);
-	}));
+	constexpr size_t maxExtLen = std::max_element(std::begin(audioFileSufix), std::end(audioFileSufix), [](std::string_view a, std::string_view b) {
+		return a.size() < b.size();
+	})->size();
 
-	if (!_fileItem || !strlen(_fileItem)) {
+	if (_fileItem.empty()) {
 		// invalid entry
 		return false;
 	}
 
 	// check for streams
-	if (strncmp(_fileItem, "http://", strlen("http://")) == 0 || strncmp(_fileItem, "https://", strlen("https://")) == 0) {
+	if (_fileItem.starts_with("http://") || _fileItem.starts_with("https://")) {
 		// this is a stream
 		return true;
 	}
 
-	// check for files which start with "/."
-	const char *lastSlashPtr = strrchr(_fileItem, '/');
-	if (lastSlashPtr == nullptr) {
-		// we have a relative filename without any slashes...
-		// set the pointer so that it points to the first character AFTER a +1
-		lastSlashPtr = _fileItem - 1;
+	// extract filename from path
+	size_t lastSlashPos = _fileItem.find_last_of('/');
+	std::string_view filename = (lastSlashPos == std::string_view::npos) ? _fileItem : _fileItem.substr(lastSlashPos + 1);
+	if (filename.empty()) {
+		// invalid entry
+		return false;
 	}
-	if (*(lastSlashPtr + 1) == '.') {
-		// we have a hidden file
-		// Log_Printf(LOGLEVEL_DEBUG, "File is hidden: %s", _fileItem);
+
+	// check for a hidden file (filename starts with a dot)
+	if (filename[0] == '.') {
 		return false;
 	}
 
 	// extract the file extension
-	const char *extStartPtr = strrchr(_fileItem, '.');
-	if (extStartPtr == nullptr) {
+	size_t dotPos = filename.find_last_of('.');
+	if (dotPos == std::string_view::npos) {
 		// no extension found
-		// Log_Printf(LOGLEVEL_DEBUG, "File has no extension: %s", _fileItem);
 		return false;
 	}
-	const size_t extLen = strlen(extStartPtr);
-	if (extLen > maxExtLen) {
-		// extension too long, we do not care anymore
-		// Log_Printf(LOGLEVEL_DEBUG, "File not supported (extension to long): %s", _fileItem);
-		return false;
-	}
-	char extBuffer[maxExtLen + 1] = {0};
-	memcpy(extBuffer, extStartPtr, extLen);
+	std::string extension {filename.substr(dotPos)};
 
-	// make the extension lower case (without using non standard C functions)
-	for (size_t i = 0; i < extLen; i++) {
-		extBuffer[i] = tolower(extBuffer[i]);
+	// check extension length, if it's too long, it's definitly not supported
+	if (extension.size() > maxExtLen) {
+		return false;
 	}
 
 	// check extension against all supported values
+	std::transform(extension.begin(), extension.end(), extension.begin(), [](unsigned char c) {
+		return std::tolower(c);
+	});
+
 	for (const auto &e : audioFileSufix) {
-		if (strcmp(extBuffer, e) == 0) {
+		if (extension == e) {
 			// hit we found the extension
 			return true;
 		}
 	}
-	// miss, we did not find the extension
+
 	// Log_Printf(LOGLEVEL_DEBUG, "File not supported: %s", _fileItem);
 	return false;
 }
