@@ -9,6 +9,9 @@
 #include "System.h"
 
 #include <FastLED.h>
+#include <algorithm>
+#include <array>
+#include <iterator>
 
 bool gButtonInitComplete = false;
 uint8_t gShutdownButton = 99; // index into buttons[], 99 = no shutdown button configured
@@ -27,29 +30,86 @@ GpioPin buttons[] = {
 	GpioPin {5, BUTTON_5, BUTTON_5_ACTIVE_STATE, BUTTON_5_SHORT, BUTTON_5_LONG}
 };
 
-// Multi-button combination configuration: {btn1, btn2, prefsKey, defaultCmd}
-static const struct {
-	uint8_t btn1;
-	uint8_t btn2;
-	const char *prefsKey;
-	uint8_t defaultCmd;
-} multiButtonCombos[] = {
-	{0, 1, "btnMulti01", BUTTON_MULTI_01},
-	{0, 2, "btnMulti02", BUTTON_MULTI_02},
-	{0, 3, "btnMulti03", BUTTON_MULTI_03},
-	{0, 4, "btnMulti04", BUTTON_MULTI_04},
-	{0, 5, "btnMulti05", BUTTON_MULTI_05},
-	{1, 2, "btnMulti12", BUTTON_MULTI_12},
-	{1, 3, "btnMulti13", BUTTON_MULTI_13},
-	{1, 4, "btnMulti14", BUTTON_MULTI_14},
-	{1, 5, "btnMulti15", BUTTON_MULTI_15},
-	{2, 3, "btnMulti23", BUTTON_MULTI_23},
-	{2, 4, "btnMulti24", BUTTON_MULTI_24},
-	{2, 5, "btnMulti25", BUTTON_MULTI_25},
-	{3, 4, "btnMulti34", BUTTON_MULTI_34},
-	{3, 5, "btnMulti35", BUTTON_MULTI_35},
-	{4, 5, "btnMulti45", BUTTON_MULTI_45},
+struct MultiButtonAction {
+	uint8_t btn1 {99};
+	uint8_t btn2 {99};
+	const char *cfg {nullptr};
+	uint8_t cmd {CMD_NOTHING};
+
+	constexpr MultiButtonAction(uint8_t btn1, uint8_t btn2, const char *cfg, uint8_t cmd)
+		: btn1(btn1)
+		, btn2(btn2)
+		, cfg(cfg)
+		, cmd(cmd) { }
+	constexpr MultiButtonAction() { }
 };
+
+/**
+ * @brief Creates the array of MultiButtonActions of all combinations which are enabled
+ *
+ * This function purges all multi button combinations with CMD_NOTHING and returns the remaining active commands as a constexpr std::array of MultiButtonActions.
+ * @return constexpr std::array<MultiButtonAction, [numActions]>
+ */
+consteval auto createMultiButtonArray() {
+	// this is needed since we need to know all the button combination from the settings file
+	constexpr MultiButtonAction buttonToArray[] = {
+		// Button 0 combies
+		{0, 1, "btnMulti01", BUTTON_MULTI_01},
+		{0, 2, "btnMulti02", BUTTON_MULTI_02},
+		{0, 3, "btnMulti03", BUTTON_MULTI_03},
+		{0, 4, "btnMulti04", BUTTON_MULTI_04},
+		{0, 5, "btnMulti05", BUTTON_MULTI_05},
+
+		// Button 1 combies
+		{1, 2, "btnMulti12", BUTTON_MULTI_12},
+		{1, 3, "btnMulti13", BUTTON_MULTI_13},
+		{1, 4, "btnMulti14", BUTTON_MULTI_14},
+		{1, 5, "btnMulti15", BUTTON_MULTI_15},
+
+		// Button 2 combies
+		{2, 3, "btnMulti23", BUTTON_MULTI_23},
+		{2, 4, "btnMulti24", BUTTON_MULTI_24},
+		{2, 5, "btnMulti25", BUTTON_MULTI_25},
+
+		// Button 3 combies
+		{3, 4, "btnMulti34", BUTTON_MULTI_34},
+		{3, 5, "btnMulti35", BUTTON_MULTI_35},
+
+		// Button 4 combies
+		{4, 5, "btnMulti45", BUTTON_MULTI_45},
+	};
+
+	const auto isActive = [](uint8_t pin) {
+		if (GPIO_IS_VALID_EXPANDER_GPIO(pin)) {
+			return true; // port-expander pin
+		}
+		return GPIO_IS_VALID_GPIO(static_cast<gpio_num_t>(pin));
+	};
+
+	constexpr uint8_t buttonPins[] = {BUTTON_0, BUTTON_1, BUTTON_2, BUTTON_3, BUTTON_4, BUTTON_5};
+
+	// this lambda calculates the final size of the command array, we are only interested in combos whose buttons are both wired up
+	constexpr size_t numMultiEvents = std::count_if(std::begin(buttonToArray), std::end(buttonToArray), [&isActive, &buttonPins](const MultiButtonAction &e) {
+		return isActive(buttonPins[e.btn1]) && isActive(buttonPins[e.btn2]);
+	});
+
+	// create the return array...
+	std::array<MultiButtonAction, numMultiEvents> btnActionArray {};
+	size_t idx = 0;
+
+	// and populate it with all combinations with cmd != CMD_NOTHING
+	for (const auto &e : buttonToArray) {
+		if (isActive(buttonPins[e.btn1]) && isActive(buttonPins[e.btn2])) {
+			// add element to array
+			btnActionArray[idx] = e;
+			idx++;
+		}
+	}
+
+	// and return it
+	return btnActionArray;
+}
+auto multiButtonCombos = createMultiButtonArray();
 
 static void Button_UpdateState(GpioPin &btn, unsigned long currentTimestamp);
 static void Button_DoButtonActions(void);
@@ -144,7 +204,7 @@ static bool Button_HandleMultiButtonPress(void) {
 		if (buttons[combo.btn1].isPressed && buttons[combo.btn2].isPressed) {
 			buttons[combo.btn1].isPressed = false;
 			buttons[combo.btn2].isPressed = false;
-			Cmd_Action(gPrefsSettings.getUChar(combo.prefsKey, combo.defaultCmd));
+			Cmd_Action(combo.cmd);
 			return true;
 		}
 	}
