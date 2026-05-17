@@ -14,14 +14,13 @@
 #include <iterator>
 
 bool gButtonInitComplete = false;
-uint8_t gShutdownButton = 99; // index into buttons[], 99 = no shutdown button configured
 uint16_t gLongPressTime = 0;
 
 #ifdef PORT_EXPANDER_ENABLE
 extern bool Port_AllowReadFromPortExpander;
 #endif
 
-GpioPin buttons[] = {
+static GpioPin buttons[] = {
 	GpioPin {0, BUTTON_0, BUTTON_0_ACTIVE_STATE, BUTTON_0_SHORT, BUTTON_0_LONG},
 	GpioPin {1, BUTTON_1, BUTTON_1_ACTIVE_STATE, BUTTON_1_SHORT, BUTTON_1_LONG},
 	GpioPin {2, BUTTON_2, BUTTON_2_ACTIVE_STATE, BUTTON_2_SHORT, BUTTON_2_LONG},
@@ -114,6 +113,12 @@ auto multiButtonCombos = createMultiButtonArray();
 static void Button_UpdateState(GpioPin &btn, unsigned long currentTimestamp);
 static void Button_DoButtonActions(void);
 
+const GpioPin *Button_GetShutdownButton() {
+	auto it = std::find_if(std::begin(buttons), std::end(buttons),
+		[](const GpioPin &b) { return b.longPressCmd == CMD_SLEEPMODE; });
+	return (it != std::end(buttons)) ? &*it : nullptr;
+}
+
 void Button_Init() {
 	for (const auto &btn : buttons) {
 		if (!btn.expanderPin) {
@@ -131,13 +136,6 @@ void Button_Init() {
 	}
 	// load short- and long-press commands from NVS
 	Button_LoadConfig();
-	// find the shutdown button (first one with CMD_SLEEPMODE assigned to its long-press)
-	for (const auto &btn : buttons) {
-		if (btn.longPressCmd == CMD_SLEEPMODE) {
-			gShutdownButton = btn.index;
-			break;
-		}
-	}
 	gButtonInitComplete = true;
 }
 

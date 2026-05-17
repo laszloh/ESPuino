@@ -39,10 +39,9 @@ struct GpioPin {
 	}
 };
 
-extern GpioPin buttons[];
-extern uint8_t gShutdownButton;
 extern bool gButtonInitComplete;
 
 void Button_Init(void);
 void Button_Cyclic(void);
 void Button_LoadConfig();
+const GpioPin *Button_GetShutdownButton();

@@ -379,8 +379,9 @@ void Led_DrawIdleDots(CRGBSet &leds, uint8_t offset, CRGB::HTMLColorCode color) 
 }
 
 bool CheckForPowerButtonAnimation() {
-	if (gShutdownButton < (sizeof(buttons) / sizeof(buttons[0]))) { // Only show animation, if CMD_SLEEPMODE was assigned to BUTTON_n_LONG + button is pressed
-		if (buttons[gShutdownButton].isPressed && (millis() - buttons[gShutdownButton].firstPressedTimestamp >= 150) && gButtonInitComplete) {
+	auto shutdownBtn = Button_GetShutdownButton();
+	if (shutdownBtn) { // Only show animation, if CMD_SLEEPMODE was assigned to BUTTON_n_LONG + button is pressed
+		if (shutdownBtn->isPressed && (millis() - shutdownBtn->firstPressedTimestamp >= 150)) {
 			return true;
 		}
 	}
@@ -659,6 +660,7 @@ AnimationReturnType Animation_Shutdown(const bool startNewAnimation, CRGBSet &le
 	// return values
 	bool animationActive = true;
 	int32_t animationDelay = 0;
+	const GpioPin *shutdownBtn = Button_GetShutdownButton();
 	// static vars
 	static bool singleLedStatus = false;
 	static uint32_t animationIndex = 0;
@@ -666,9 +668,13 @@ AnimationReturnType Animation_Shutdown(const bool startNewAnimation, CRGBSet &le
 		animationIndex = 0;
 	}
 
+	if (!shutdownBtn) {
+		return AnimationReturnType(false, 0, true); // no shutdown button assigned, so we can't show an animation
+	}
+
 	if (gLedSettings.numIndicatorLeds == 1) {
 		leds = CRGB::Black;
-		if (millis() - buttons[gShutdownButton].firstPressedTimestamp <= intervalToLongPress) {
+		if (shutdownBtn && millis() - shutdownBtn->firstPressedTimestamp <= intervalToLongPress) {
 			leds[0] = CRGB::Red;
 			animationDelay = 5;
 		} else {
@@ -680,9 +686,9 @@ AnimationReturnType Animation_Shutdown(const bool startNewAnimation, CRGBSet &le
 		}
 		animationActive = false;
 	} else {
-		if ((millis() - buttons[gShutdownButton].firstPressedTimestamp >= intervalToLongPress) && (animationIndex >= leds.size())) {
+		if ((millis() - shutdownBtn->firstPressedTimestamp >= intervalToLongPress) && (animationIndex >= leds.size())) {
 			animationDelay = 50;
-			if (!buttons[gShutdownButton].isPressed) {
+			if (!shutdownBtn->isPressed) {
 				// increase animation index to bail out, if we had a kombi-button
 				animationIndex++;
 				if (animationIndex >= leds.size() + 3) {
@@ -695,7 +701,7 @@ AnimationReturnType Animation_Shutdown(const bool startNewAnimation, CRGBSet &le
 			}
 			if (animationIndex < leds.size()) {
 				leds[Led_Address(animationIndex)] = CRGB::Red;
-				if (buttons[gShutdownButton].currentState) {
+				if (shutdownBtn->currentState) {
 					animationDelay = 5;
 					animationActive = false;
 				} else {
