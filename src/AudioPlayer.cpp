@@ -194,7 +194,7 @@ void Audio_InfoCallback(Audio::msg_t m) {
 			if (!gPlayProperties.playlist || gPlayProperties.currentTrackNumber >= gPlayProperties.playlist->size()) {
 				break;
 			}
-			const char *fileName = gPlayProperties.playlist->at(gPlayProperties.currentTrackNumber);
+			const char *fileName = gPlayProperties.playlist->at(gPlayProperties.currentTrackNumber).c_str();
 			File file = gFSystem.open(fileName, FILE_READ);
 			if (!file) {
 				Log_Printf(LOGLEVEL_ERROR, "Failed to open file: %s", fileName);
@@ -785,7 +785,7 @@ void AudioPlayer_Loop() {
 						}
 						audio->stopSong();
 						Led_Indicate(LedIndicatorType::Rewind);
-						audioReturnCode = audio->connecttoFS(gFSystem, gPlayProperties.playlist->at(gPlayProperties.currentTrackNumber));
+						audioReturnCode = audio->connecttoFS(gFSystem, gPlayProperties.playlist->at(gPlayProperties.currentTrackNumber).c_str());
 						// consider track as finished, when audio lib call was not successful
 						if (!audioReturnCode) {
 							System_IndicateError();
@@ -937,7 +937,7 @@ void AudioPlayer_Loop() {
 			}
 		}
 
-		if (!strncmp("http", gPlayProperties.playlist->at(gPlayProperties.currentTrackNumber), 4)) {
+		if (!strncmp("http", gPlayProperties.playlist->at(gPlayProperties.currentTrackNumber).c_str(), 4)) {
 			gPlayProperties.isWebstream = true;
 		} else {
 			gPlayProperties.isWebstream = false;
@@ -946,13 +946,13 @@ void AudioPlayer_Loop() {
 		audioReturnCode = false;
 
 		if (gPlayProperties.playMode == WEBSTREAM || (gPlayProperties.playMode == LOCAL_M3U && gPlayProperties.isWebstream)) { // Webstream
-			audioReturnCode = audio->connecttohost(gPlayProperties.playlist->at(gPlayProperties.currentTrackNumber));
+			audioReturnCode = audio->connecttohost(gPlayProperties.playlist->at(gPlayProperties.currentTrackNumber).c_str());
 			gPlayProperties.playlistFinished = false;
 			gTriedToConnectToHost = true;
 		} else if (gPlayProperties.playMode != WEBSTREAM && !gPlayProperties.isWebstream) {
 			// Files from SD
-			if (!gFSystem.exists(gPlayProperties.playlist->at(gPlayProperties.currentTrackNumber))) { // Check first if file/folder exists
-				Log_Printf(LOGLEVEL_ERROR, dirOrFileDoesNotExist, gPlayProperties.playlist->at(gPlayProperties.currentTrackNumber));
+			if (!gFSystem.exists(gPlayProperties.playlist->at(gPlayProperties.currentTrackNumber).c_str())) { // Check first if file/folder exists
+				Log_Printf(LOGLEVEL_ERROR, dirOrFileDoesNotExist, gPlayProperties.playlist->at(gPlayProperties.currentTrackNumber).c_str());
 				gPlayProperties.trackFinished = true;
 				return;
 			} else {
@@ -963,7 +963,7 @@ void AudioPlayer_Loop() {
 					gPlayProperties.startAtFilePos = 0;
 				}
 				audioReturnCode
-					= audio->connecttoFS(gFSystem, gPlayProperties.playlist->at(gPlayProperties.currentTrackNumber), fileStartTime);
+					= audio->connecttoFS(gFSystem, gPlayProperties.playlist->at(gPlayProperties.currentTrackNumber).c_str(), fileStartTime);
 				// consider track as finished, when audio lib call was not successful
 			}
 		}
@@ -976,7 +976,7 @@ void AudioPlayer_Loop() {
 			if (gPlayProperties.currentTrackNumber) {
 				Led_Indicate(LedIndicatorType::PlaylistProgress);
 			}
-			const char *title = gPlayProperties.playlist->at(gPlayProperties.currentTrackNumber);
+			const char *title = gPlayProperties.playlist->at(gPlayProperties.currentTrackNumber).c_str();
 			if (gPlayProperties.isWebstream) {
 				title = "Webradio";
 			}
@@ -986,7 +986,7 @@ void AudioPlayer_Loop() {
 				Audio_setTitle("%s", title);
 			}
 			AudioPlayer_ClearCover();
-			Log_Printf(LOGLEVEL_NOTICE, currentlyPlaying, gPlayProperties.playlist->at(gPlayProperties.currentTrackNumber), (gPlayProperties.currentTrackNumber + 1), gPlayProperties.playlist->size());
+			Log_Printf(LOGLEVEL_NOTICE, currentlyPlaying, gPlayProperties.playlist->at(gPlayProperties.currentTrackNumber).c_str(), (gPlayProperties.currentTrackNumber + 1), gPlayProperties.playlist->size());
 			gPlayProperties.playlistFinished = false;
 		}
 	}
@@ -1434,18 +1434,7 @@ size_t AudioPlayer_NvsRfidWriteWrapper(const char *_rfidCardId, const uint32_t _
 // Adds webstream to playlist; same like SdCard_ReturnPlaylist() but always only one entry
 std::optional<Playlist *> AudioPlayer_ReturnPlaylistFromWebstream(const char *_webUrl) {
 	Playlist *playlist = allocatePlaylist();
-	const size_t len = strlen(_webUrl) + 1;
-	char *entry = static_cast<char *>(x_malloc(len));
-	if (!entry) {
-		// OOM
-		Log_Println(unableToAllocateMemForLinearPlaylist, LOGLEVEL_ERROR);
-		freePlaylist(playlist);
-		return std::nullopt;
-	}
-	strncpy(entry, _webUrl, len);
-	entry[len - 1] = '\0';
-	playlist->push_back(entry);
-
+	playlist->emplace_back(_webUrl);
 	return playlist;
 }
 

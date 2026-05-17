@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdlib.h>
+#include <string>
 #include <vector>
 
 // Custom allocator for PSRAM if available
@@ -37,7 +38,8 @@ bool operator!=(const PSRAMAllocator<T> &, const PSRAMAllocator<U> &) {
 	return false;
 }
 
-using Playlist = std::vector<char *, PSRAMAllocator<char *>>;
+using PlaylistString = std::basic_string<char, std::char_traits<char>, PSRAMAllocator<char>>;
+using Playlist = std::vector<PlaylistString, PSRAMAllocator<PlaylistString>>;
 
 // Allocate Playlist in PSRAM if available
 inline Playlist *allocatePlaylist() {
@@ -54,9 +56,6 @@ inline Playlist *allocatePlaylist() {
 inline void freePlaylist(Playlist *(&playlist)) {
 	if (playlist == nullptr) {
 		return;
-	}
-	for (auto e : *playlist) {
-		free(e);
 	}
 	playlist->~Playlist(); // Call destructor explicitly
 	free(playlist); // Use free instead of delete since it might be ps_malloc'd

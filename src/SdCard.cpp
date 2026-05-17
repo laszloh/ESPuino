@@ -273,18 +273,9 @@ const String SdCard_pickRandomSubdirectory(const char *_directory) {
 }
 
 static bool SdCard_allocAndSave(Playlist *playlist, const String &s) {
-	const size_t len = s.length() + 1;
-	char *entry = static_cast<char *>(x_malloc(len));
-	if (!entry) {
-		// OOM, free playlist and return
-		Log_Println(unableToAllocateMemForLinearPlaylist, LOGLEVEL_ERROR);
-		freePlaylist(playlist);
-		return false;
-	}
-	s.toCharArray(entry, len);
-	playlist->push_back(entry);
+	playlist->emplace_back(s.c_str());
 	return true;
-};
+}
 
 static std::optional<Playlist *> SdCard_ParseM3UPlaylist(File file) {
 	Playlist *playlist = allocatePlaylist();

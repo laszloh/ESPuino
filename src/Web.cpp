@@ -2482,7 +2482,7 @@ static void handleCoverImageRequest(AsyncWebServerRequest *request) {
 	if (gPlayProperties.currentTrackNumber >= gPlayProperties.playlist->size()) {
 		return;
 	}
-	const char *coverFileName = gPlayProperties.playlist->at(gPlayProperties.currentTrackNumber);
+	const char *coverFileName = gPlayProperties.playlist->at(gPlayProperties.currentTrackNumber).c_str();
 	String decodedCover = "/.cache";
 	decodedCover.concat(coverFileName);
 
