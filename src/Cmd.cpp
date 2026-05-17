@@ -229,8 +229,11 @@ void Cmd_Action(const uint16_t mod) {
 		}
 #endif
 
-#ifdef FTP_ENABLE
 		case CMD_ENABLE_FTP_SERVER: {
+			if(!isFtpCompiled()) {
+				System_IndicateError();
+				break;
+			}
 			if (millis() <= 30000) { // Only allow to enable FTP within the first 30s after start (to prevent children it mess it up)
 				Ftp_EnableServer();
 			} else {
@@ -239,7 +242,6 @@ void Cmd_Action(const uint16_t mod) {
 			}
 			break;
 		}
-#endif
 
 		case CMD_TELL_IP_ADDRESS: {
 			if (Wlan_IsConnected()) {

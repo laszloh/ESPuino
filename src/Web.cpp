@@ -1211,16 +1211,14 @@ static void settingsToJSON(JsonObject obj, const String section) {
 		batSettings["voltageCheckInterval"].set(s_batteryCheckInterval);
 #endif
 	}
-// FTP
-#ifdef FTP_ENABLE
-	if ((section == "") || (section == "ftp")) {
+	// FTP
+	if (isFtpCompiled() && ((section == "") || (section == "ftp"))) {
 		JsonObject ftpObj = obj["ftp"].to<JsonObject>();
 		ftpObj["username"] = gPrefsSettings.getString("ftpuser", "-1");
 		ftpObj["password"] = gPrefsSettings.getString("ftppassword", "-1");
 		ftpObj["maxUserLength"].set(ftpUserLength - 1);
 		ftpObj["maxPwdLength"].set(ftpUserLength - 1);
 	}
-#endif
 	// MQTT
 	if (isMqttCompiled() && ((section == "") || (section == "mqtt"))) {
 		JsonObject mqttObj = obj["mqtt"].to<JsonObject>();

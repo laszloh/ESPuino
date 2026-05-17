@@ -13,18 +13,15 @@
 
 #ifdef FTP_ENABLE
 	#include "ESP-FTP-Server-Lib.h"
-#endif
 
 // FTP
 String Ftp_User = "esp32"; // FTP-user (default; can be changed later via GUI)
 String Ftp_Password = "esp32"; // FTP-password (default; can be changed later via GUI)
 
 // FTP
-#ifdef FTP_ENABLE
 FTPServer *ftpSrv; // Heap-alloction takes place later (when needed)
 bool ftpEnableLastStatus = false;
 bool ftpEnableCurrentStatus = false;
-#endif
 
 void ftpManager(void);
 
@@ -52,7 +49,6 @@ void Ftp_Init(void) {
 }
 
 void Ftp_Cyclic(void) {
-#ifdef FTP_ENABLE
 	ftpManager();
 
 	if (WL_CONNECTED == WiFi.status()) {
@@ -66,17 +62,11 @@ void Ftp_Cyclic(void) {
 			System_UpdateActivityTimer(); // Re-adjust timer while client is connected to avoid ESP falling asleep
 		}
 	}
-#endif
 }
 
 void Ftp_EnableServer(void) {
-#ifdef FTP_ENABLE
 	if (Wlan_IsConnected() && !ftpEnableLastStatus && !ftpEnableCurrentStatus) {
 		ftpEnableLastStatus = true;
-#else
-	if (Wlan_IsConnected()) {
-#endif
-
 		System_IndicateOk();
 	} else {
 		Log_Println(unableToStartFtpServer, LOGLEVEL_ERROR);
@@ -86,7 +76,6 @@ void Ftp_EnableServer(void) {
 
 // Creates FTP-instance only when requested
 void ftpManager(void) {
-#ifdef FTP_ENABLE
 	if (ftpEnableLastStatus && !ftpEnableCurrentStatus) {
 		Log_Printf(LOGLEVEL_DEBUG, freeHeapWithoutFtp, ESP.getFreeHeap());
 		ftpEnableCurrentStatus = true;
@@ -97,5 +86,6 @@ void ftpManager(void) {
 		Log_Printf(LOGLEVEL_DEBUG, freeHeapWithFtp, ESP.getFreeHeap());
 		Log_Println(ftpServerStarted, LOGLEVEL_NOTICE);
 	}
-#endif
 }
+
+#endif // FTP_ENABLE
