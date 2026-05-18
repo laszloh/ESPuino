@@ -30,8 +30,11 @@
 
 #include <Update.h>
 #include <WiFi.h>
+#include <atomic>
 #include <esp_task_wdt.h>
+#include <memory>
 #include <nvs.h>
+#include <string>
 
 typedef struct {
 	char nvsKey[13];
@@ -44,21 +47,104 @@ AsyncEventSource events("/events");
 
 static bool webserverStarted = false;
 
+class UploadDoubleBuffer {
+public:
+	static constexpr size_t kNumBuffers = 2; // at least two buffers. No speed improvement yet with more than two.
 #ifdef BOARD_HAS_PSRAM
-static const uint32_t start_chunk_size = 16384; // bigger chunks increase write-performance to SD-Card
+	static constexpr size_t kStartChunkSize = 16384; // bigger chunks increase write-performance to SD-Card
 #else
-static const uint32_t start_chunk_size = 4096; // save memory if no PSRAM is available
+	static constexpr size_t kStartChunkSize = 4096; // save memory if no PSRAM is available
 #endif
+	static constexpr size_t kRetryCount = 2; // how often we retry if a malloc fails (also the times we halve the chunk size)
 
-static constexpr uint32_t nr_of_buffers = 2; // at least two buffers. No speed improvement yet with more than two.
-static constexpr size_t retry_count = 2; // how often we retry is a malloc fails (also the times we halfe the chunk_size)
+	UploadDoubleBuffer() noexcept { resetState(); }
 
-uint8_t *buffer[nr_of_buffers];
-size_t chunk_size;
-volatile uint32_t size_in_buffer[nr_of_buffers];
-volatile bool buffer_full[nr_of_buffers];
-uint32_t index_buffer_write = 0;
-uint32_t index_buffer_read = 0;
+	bool allocate(size_t startChunkSize = kStartChunkSize, size_t retries = kRetryCount) {
+		if (isAllocated()) {
+			// idempotent: buffers from a previous upload are reused
+			return true;
+		}
+
+		chunkSize_ = startChunkSize;
+		while (retries) {
+			if (chunkSize_ < 256) {
+				// give up, since there is not even 256 bytes of memory left
+				break;
+			}
+			bool success = true;
+			for (size_t i = 0; i < kNumBuffers; i++) {
+				// allocate in faster internal RAM, not PSRAM
+				auto *p = static_cast<uint8_t *>(heap_caps_aligned_alloc(32, chunkSize_, MALLOC_CAP_DEFAULT | MALLOC_CAP_INTERNAL));
+				if (!p) {
+					success = false;
+					break;
+				}
+				buffers_[i].reset(p);
+			}
+			if (success) {
+				return true;
+			}
+			// one of our buffers went OOM --> free all buffers and retry with less chunk size
+			const size_t halved = chunkSize_ / 2;
+			destroy();
+			chunkSize_ = halved;
+			retries--;
+		}
+		destroy();
+		return false;
+	}
+
+	void destroy() noexcept {
+		for (auto &p : buffers_) {
+			p.reset();
+		}
+		chunkSize_ = 0;
+	}
+
+	void resetState() noexcept {
+		writeIdx = 0;
+		readIdx = 0;
+		for (size_t i = 0; i < kNumBuffers; i++) {
+			sizeInBuffer[i].store(0);
+			bufferFull[i].store(false);
+		}
+	}
+
+	bool isAllocated() const noexcept { return buffers_[0] != nullptr; }
+	size_t chunkSize() const noexcept { return chunkSize_; }
+
+	uint8_t *slot(size_t i) noexcept { return buffers_[i].get(); }
+	const uint8_t *slot(size_t i) const noexcept { return buffers_[i].get(); }
+
+	// Shared producer/consumer flags. SPSC handshake: producer writes data + sizeInBuffer, then bufferFull=true (release);
+	// consumer waits on bufferFull (acquire), reads, then bufferFull=false. Default seq_cst is correct and cheap here.
+	std::atomic<uint32_t> sizeInBuffer[kNumBuffers] {};
+	std::atomic<bool> bufferFull[kNumBuffers] {};
+
+	// Owned by their respective task (writer by producer, reader by consumer), never shared writes.
+	uint32_t writeIdx = 0;
+	uint32_t readIdx = 0;
+
+	// Target file path for the current upload. Set once on the first chunk; read by the storage task.
+	// The single-upload-at-a-time design (one storage task handle, semaphore-synchronized) prevents overlap.
+	std::string filePath;
+
+private:
+	// heap_caps_aligned_alloc allocates from ESP-IDF's heap-capabilities allocator (with 32-byte alignment and
+	// MALLOC_CAP_INTERNAL placement). Its matching free function is heap_caps_free. A bare
+	// std::unique_ptr<uint8_t[]> would call delete[] in its default deleter, which is the wrong allocator and
+	// corrupts the heap. CapsFree wraps heap_caps_free as a unique_ptr-compatible deleter so RAII works without
+	// losing the must-free-with-matching-API invariant.
+	struct CapsFree {
+		void operator()(uint8_t *p) const noexcept { heap_caps_free(p); }
+	};
+	using BufferPtr = std::unique_ptr<uint8_t, CapsFree>;
+
+	BufferPtr buffers_[kNumBuffers];
+	size_t chunkSize_ = 0;
+};
+
+static UploadDoubleBuffer gUploadBuffer;
 
 static SemaphoreHandle_t explorerFileUploadFinished;
 static TaskHandle_t fileStorageTaskHandle;
@@ -122,49 +208,6 @@ struct SpiRamAllocator : ArduinoJson::Allocator {
 		return ps_realloc(ptr, new_size);
 	}
 };
-
-static void destroyDoubleBuffer() {
-	for (size_t i = 0; i < nr_of_buffers; i++) {
-		free(buffer[i]);
-		buffer[i] = nullptr;
-	}
-}
-
-static bool allocateDoubleBuffer() {
-	const auto checkAndAlloc = [](uint8_t *&ptr, const size_t memSize) -> bool {
-		if (ptr) {
-			// memory is there, so nothing to do
-			return true;
-		}
-		// try to allocate buffer in faster internal RAM, not in PSRAM
-		// ptr = (uint8_t *) malloc(memSize);
-		ptr = (uint8_t *) heap_caps_aligned_alloc(32, memSize, MALLOC_CAP_DEFAULT | MALLOC_CAP_INTERNAL);
-		return (ptr != nullptr);
-	};
-
-	chunk_size = start_chunk_size;
-	size_t retries = retry_count;
-	while (retries) {
-		if (chunk_size < 256) {
-			// give up, since there is not even 256 bytes of memory left
-			break;
-		}
-		bool success = true;
-		for (size_t i = 0; i < nr_of_buffers; i++) {
-			success &= checkAndAlloc(buffer[i], chunk_size);
-		}
-		if (success) {
-			return true;
-		} else {
-			// one of our buffer went OOM --> free all buffer and retry with less chunk size
-			destroyDoubleBuffer();
-			chunk_size /= 2;
-			retries--;
-		}
-	}
-	destroyDoubleBuffer();
-	return false;
-}
 
 void handleUploadError(AsyncWebServerRequest *request, int code) {
 	if (request->_tempObject) {
@@ -547,7 +590,7 @@ void webserverStart(void) {
 			"/explorer", HTTP_POST, [](AsyncWebServerRequest *request) {
 				// we are finished with the upload
 				if (!request->_tempObject) {
-					request->onDisconnect([]() { destroyDoubleBuffer(); });
+					request->onDisconnect([]() { gUploadBuffer.destroy(); });
 					request->send(200);
 				}
 			},
@@ -1611,7 +1654,7 @@ void explorerHandleFileUpload(AsyncWebServerRequest *request, String filename, s
 
 		Log_Printf(LOGLEVEL_INFO, writingFile, filePath);
 
-		if (!allocateDoubleBuffer()) {
+		if (!gUploadBuffer.allocate()) {
 			// we failed to allocate enough memory
 			Log_Println(unableToAllocateMem, LOGLEVEL_ERROR);
 			handleUploadError(request, 500);
@@ -1623,21 +1666,15 @@ void explorerHandleFileUpload(AsyncWebServerRequest *request, String filename, s
 			explorerFileUploadFinished = xSemaphoreCreateBinary();
 		}
 
-		// reset buffers
-		index_buffer_write = 0;
-		index_buffer_read = 0;
-		for (uint32_t i = 0; i < nr_of_buffers; i++) {
-			size_in_buffer[i] = 0;
-			buffer_full[i] = false;
-		}
+		gUploadBuffer.resetState();
+		gUploadBuffer.filePath = filePath;
 
 		// Create Task for handling the storage of the data
-		const char *filePathCopy = x_strdup(filePath);
 		xTaskCreatePinnedToCore(
 			explorerHandleFileStorageTask, /* Function to implement the task */
 			"fileStorageTask", /* Name of the task */
 			4000, /* Stack size in words */
-			(void *) filePathCopy, /* Task input parameter */
+			&gUploadBuffer, /* Task input parameter: which UploadDoubleBuffer to drain (prep for multiple parallel uploads). */
 			2 | portPRIVILEGE_BIT, /* Priority of the task */
 			&fileStorageTaskHandle, /* Task handle. */
 			1 /* Core where the task should run */
@@ -1651,44 +1688,46 @@ void explorerHandleFileUpload(AsyncWebServerRequest *request, String filename, s
 		});
 	}
 
+	auto &b = gUploadBuffer;
+
 	if (len) {
 		// wait till buffer is ready
-		while (buffer_full[index_buffer_write]) {
+		while (b.bufferFull[b.writeIdx].load()) {
 			vTaskDelay(2u);
 		}
 
 		size_t len_to_write = len;
-		size_t space_left = chunk_size - size_in_buffer[index_buffer_write];
+		size_t space_left = b.chunkSize() - b.sizeInBuffer[b.writeIdx].load();
 		if (space_left < len_to_write) {
 			len_to_write = space_left;
 		}
 		// write content to buffer
-		memcpy(buffer[index_buffer_write] + size_in_buffer[index_buffer_write], data, len_to_write);
-		size_in_buffer[index_buffer_write] = size_in_buffer[index_buffer_write] + len_to_write;
+		memcpy(b.slot(b.writeIdx) + b.sizeInBuffer[b.writeIdx].load(), data, len_to_write);
+		b.sizeInBuffer[b.writeIdx].fetch_add(len_to_write);
 
 		// check if buffer is filled. If full, signal that ready and change buffers
-		if (size_in_buffer[index_buffer_write] == chunk_size) {
+		if (b.sizeInBuffer[b.writeIdx].load() == b.chunkSize()) {
 			// signal, that buffer is ready. Increment index
-			buffer_full[index_buffer_write] = true;
-			index_buffer_write = (index_buffer_write + 1) % nr_of_buffers;
+			b.bufferFull[b.writeIdx].store(true);
+			b.writeIdx = (b.writeIdx + 1) % UploadDoubleBuffer::kNumBuffers;
 
 			// if still content left, put it into next buffer
 			if (len_to_write < len) {
 				// wait till new buffer is ready
-				while (buffer_full[index_buffer_write]) {
+				while (b.bufferFull[b.writeIdx].load()) {
 					vTaskDelay(2u);
 				}
 				size_t len_left_to_write = len - len_to_write;
-				memcpy(buffer[index_buffer_write], data + len_to_write, len_left_to_write);
-				size_in_buffer[index_buffer_write] = len_left_to_write;
+				memcpy(b.slot(b.writeIdx), data + len_to_write, len_left_to_write);
+				b.sizeInBuffer[b.writeIdx].store(len_left_to_write);
 			}
 		}
 	}
 
 	if (final) {
 		// if file not completely done yet, signal that buffer is filled
-		if (size_in_buffer[index_buffer_write] > 0) {
-			buffer_full[index_buffer_write] = true;
+		if (b.sizeInBuffer[b.writeIdx].load() > 0) {
+			b.bufferFull[b.writeIdx].store(true);
 		}
 		// notify storage task that last data was stored on the ring buffer
 		xTaskNotify(fileStorageTaskHandle, 1u, eSetValueWithOverwrite);
@@ -1715,9 +1754,11 @@ void feedTheDog(void) {
 }
 
 // task for writing uploaded data from buffer to SD
-// parameter contains the target file path and must be freed by the task.
+// parameter: pointer to the UploadDoubleBuffer this task should drain.
+// The buffer carries the target file path and the producer/consumer state.
 void explorerHandleFileStorageTask(void *parameter) {
-	const char *filePath = (const char *) parameter;
+	auto &b = *static_cast<UploadDoubleBuffer *>(parameter);
+	const char *filePath = b.filePath.c_str();
 	File uploadFile;
 	size_t bytesOk = 0;
 	size_t bytesNok = 0;
@@ -1729,7 +1770,7 @@ void explorerHandleFileStorageTask(void *parameter) {
 	BaseType_t uploadFileNotification;
 	uint32_t uploadFileNotificationValue;
 	uploadFile = gFSystem.open(filePath, "w", true); // open file with create=true to make sure parent directories are created
-	uploadFile.setBufferSize(chunk_size);
+	uploadFile.setBufferSize(b.chunkSize());
 
 	// pause some tasks to get more free CPU time for the upload
 	Audio_TaskPause();
@@ -1739,21 +1780,21 @@ void explorerHandleFileStorageTask(void *parameter) {
 	for (;;) {
 		// check buffer is full with enough data or all data already sent
 		uploadFileNotification = xTaskNotifyWait(0, 0, &uploadFileNotificationValue, 0);
-		if ((buffer_full[index_buffer_read]) || (uploadFileNotification == pdPASS && uploadFileNotificationValue == 1u)) {
+		if ((b.bufferFull[b.readIdx].load()) || (uploadFileNotification == pdPASS && uploadFileNotificationValue == 1u)) {
 
-			while (buffer_full[index_buffer_read]) {
+			while (b.bufferFull[b.readIdx].load()) {
 				chunkCount++;
-				size_t item_size = size_in_buffer[index_buffer_read];
-				if (!uploadFile.write(buffer[index_buffer_read], item_size)) {
+				size_t item_size = b.sizeInBuffer[b.readIdx].load();
+				if (!uploadFile.write(b.slot(b.readIdx), item_size)) {
 					bytesNok += item_size;
 					feedTheDog();
 				} else {
 					bytesOk += item_size;
 				}
 				// update handling of buffers
-				size_in_buffer[index_buffer_read] = 0;
-				buffer_full[index_buffer_read] = 0;
-				index_buffer_read = (index_buffer_read + 1) % nr_of_buffers;
+				b.sizeInBuffer[b.readIdx].store(0);
+				b.bufferFull[b.readIdx].store(false);
+				b.readIdx = (b.readIdx + 1) % UploadDoubleBuffer::kNumBuffers;
 				// update timestamp
 				lastUpdateTimestamp = millis();
 			}
@@ -1768,13 +1809,12 @@ void explorerHandleFileStorageTask(void *parameter) {
 		} else {
 			if (lastUpdateTimestamp + maxUploadDelay * 1000 < millis() || (uploadFileNotification == pdPASS && uploadFileNotificationValue == 2u)) {
 				Log_Println(webTxCanceled, LOGLEVEL_ERROR);
-				free(parameter);
 				// resume the paused tasks
 				Led_TaskResume();
 				Audio_TaskResume();
 				Rfid_TaskResume();
 				// destroy double buffer memory, since the upload was interrupted
-				destroyDoubleBuffer();
+				b.destroy();
 				// just delete task without signaling (abort)
 				vTaskDelete(NULL);
 				return;
@@ -1783,7 +1823,6 @@ void explorerHandleFileStorageTask(void *parameter) {
 			continue;
 		}
 	}
-	free(parameter);
 	// resume the paused tasks
 	Led_TaskResume();
 	Audio_TaskResume();
