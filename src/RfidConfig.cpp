@@ -3,7 +3,6 @@
 #include "RfidConfig.h"
 
 #include "Log.h"
-#include "MemX.h"
 #include "System.h"
 
 #include <MFRC522.h>

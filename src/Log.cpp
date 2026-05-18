@@ -4,7 +4,6 @@
 #include "Log.h"
 
 #include "LogRingBuffer.h"
-#include "MemX.h"
 
 static LogRingBuffer *Log_RingBuffer = NULL;
 

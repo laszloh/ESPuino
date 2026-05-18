@@ -15,7 +15,6 @@
 #include "IrReceiver.h"
 #include "Led.h"
 #include "Log.h"
-#include "MemX.h"
 #include "Mqtt.h"
 #include "Port.h"
 #include "Power.h"

@@ -4,7 +4,6 @@
 #include "Ftp.h"
 
 #include "Log.h"
-#include "MemX.h"
 #include "SdCard.h"
 #include "System.h"
 #include "Wlan.h"

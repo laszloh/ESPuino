@@ -16,7 +16,6 @@
 #include "HallEffectSensor.h"
 #include "Led.h"
 #include "Log.h"
-#include "MemX.h"
 #include "Mqtt.h"
 #include "Rfid.h"
 #include "RotaryEncoder.h"
@@ -543,16 +542,15 @@ void webserverStart(void) {
 			// show tasklist
 			response->println("Tasklist:<div class='text'><pre>");
 			response->println("Taskname\tState\tPrio\tStack\tNum\tCore");
-			char *pbuffer = x_calloc(2048, 1);
-			vTaskList(pbuffer);
-			response->println(pbuffer);
+			auto pbuffer = std::make_unique<char[]>(2048);
+			vTaskList(pbuffer.get());
+			response->println(pbuffer.get());
 			response->println("</pre></div><br><br>Runtime statistics:<div class='text'><pre>");
 			response->println("Taskname\tRuntime\tPercentage");
 			// show runtime stats
-			vTaskGetRunTimeStats(pbuffer);
-			response->println(pbuffer);
+			vTaskGetRunTimeStats(pbuffer.get());
+			response->println(pbuffer.get());
 			response->println("</pre></div></body></html>");
-			free(pbuffer);
 			// send the response last
 			request->send(response);
 		});

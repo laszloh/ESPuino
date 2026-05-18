@@ -4,7 +4,6 @@
 #include "AudioPlayer.h"
 #include "HallEffectSensor.h"
 #include "Log.h"
-#include "MemX.h"
 #include "Queues.h"
 #include "Rfid.h"
 #include "RfidConfig.h"

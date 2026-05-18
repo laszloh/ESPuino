@@ -5,7 +5,6 @@
 #include "Cmd.h"
 #include "Common.h"
 #include "Log.h"
-#include "MemX.h"
 #include "Mqtt.h"
 #include "Queues.h"
 #include "Rfid.h"

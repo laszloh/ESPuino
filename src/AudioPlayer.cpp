@@ -10,7 +10,6 @@
 #include "EnumUtils.h"
 #include "Led.h"
 #include "Log.h"
-#include "MemX.h"
 #include "Mqtt.h"
 #include "Port.h"
 #include "Queues.h"
@@ -27,6 +26,7 @@
 #include <FastLED.h>
 #include <esp_task_wdt.h>
 #include <freertos/task.h>
+#include <memory>
 #include <random>
 
 #define AUDIOPLAYER_VOLUME_MAX	21u
@@ -1501,7 +1501,7 @@ void audio_oggimage(File &file, std::vector<uint32_t> v) {
 		coverFile.write(flacMarker, std::char_traits<uint8_t>::length(flacMarker));
 
 		const size_t chunkSize = 2048; // must be base64 compatible, i.e. a multiple of 4
-		uint8_t *encodedChunk = (uint8_t *) x_malloc(chunkSize);
+		auto encodedChunk = std::make_unique<uint8_t[]>(chunkSize);
 		size_t decodedLength;
 		size_t currentRemainder = 0;
 		size_t currentPosition = file.position(); // save current position in audio file otherwise playback will result in an error
@@ -1515,8 +1515,8 @@ void audio_oggimage(File &file, std::vector<uint32_t> v) {
 			file.seek(v[i]);
 			for (size_t chunk = 0; chunk < numChunks; chunk++) {
 				file.readBytes(reinterpret_cast<char *>(&encodedChunk[remainder]), chunkSize - remainder);
-				decodedLength = b64decode(encodedChunk, encodedChunk, chunkSize);
-				coverFile.write(encodedChunk, decodedLength);
+				decodedLength = b64decode(encodedChunk.get(), encodedChunk.get(), chunkSize);
+				coverFile.write(encodedChunk.get(), decodedLength);
 				remainder = 0;
 			}
 
@@ -1525,12 +1525,11 @@ void audio_oggimage(File &file, std::vector<uint32_t> v) {
 			if (currentRemainder) {
 				file.readBytes(reinterpret_cast<char *>(&encodedChunk[remainder]), currentRemainder - remainder);
 				if (i == v.size() - 2) {
-					decodedLength = b64decode(encodedChunk, encodedChunk, currentRemainder);
-					coverFile.write(encodedChunk, decodedLength);
+					decodedLength = b64decode(encodedChunk.get(), encodedChunk.get(), currentRemainder);
+					coverFile.write(encodedChunk.get(), decodedLength);
 				}
 			}
 		}
-		free(encodedChunk);
 		coverFile.close();
 		file.seek(currentPosition);
 		gFSystem.rename(tmpDecodedCover, decodedCover);

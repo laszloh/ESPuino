@@ -6,7 +6,6 @@
 #include "Common.h"
 #include "Led.h"
 #include "Log.h"
-#include "MemX.h"
 #include "System.h"
 
 #include <algorithm>

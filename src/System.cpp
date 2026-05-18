@@ -7,7 +7,6 @@
 #include "AudioPlayer.h"
 #include "Led.h"
 #include "Log.h"
-#include "MemX.h"
 #include "Mqtt.h"
 #include "Port.h"
 #include "Power.h"
@@ -18,6 +17,7 @@
 #include "freertos/task.h"
 
 #include <esp_random.h>
+#include <memory>
 
 constexpr const char prefsRfidNamespace[] = "rfidTags"; // Namespace used to save IDs of rfid-tags
 constexpr const char prefsSettingsNamespace[] = "settings"; // Namespace used for generic settings
@@ -270,10 +270,9 @@ void System_ShowWakeUpReason() {
 
 void System_esp_print_tasks(void) {
 #ifdef CONFIG_FREERTOS_USE_TRACE_FACILITY
-	char *pbuffer = x_calloc(2048, 1);
-	vTaskGetRunTimeStats(pbuffer);
-	Serial.printf("=====\n%s\n=====", pbuffer);
-	free(pbuffer);
+	auto pbuffer = std::make_unique<char[]>(2048);
+	vTaskGetRunTimeStats(pbuffer.get());
+	Serial.printf("=====\n%s\n=====", pbuffer.get());
 #else
 	Serial.println("Enable CONFIG_FREERTOS_USE_TRACE_FACILITY to use vTaskGetRunTimeStats()!");
 #endif

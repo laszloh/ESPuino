@@ -6,7 +6,6 @@
 #include "AudioPlayer.h"
 #include "Led.h"
 #include "Log.h"
-#include "MemX.h"
 #include "Queues.h"
 #include "System.h"
 #include "Wlan.h"
